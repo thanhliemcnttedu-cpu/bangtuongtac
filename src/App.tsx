@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Archive, Plus, School, Share2, Users } from 'lucide-react';
+import { Archive, LayoutDashboard, Plus } from 'lucide-react';
 import { Logo } from './components/Logo';
+import { BoardSwitcher } from './components/BoardSwitcher';
+import { Dashboard } from './components/Dashboard';
 import type { BoardData, ViewerRole } from './types/board';
 import type { BoardTemplate } from './data/boardTemplates';
 import { useAccounts } from './hooks/useAccounts';
@@ -18,6 +20,8 @@ export default function App() {
   const [role, setRole] = useState<ViewerRole>('owner');
   const [creating, setCreating] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  // Trang Tổng quan: bật sẵn khi giáo viên có nhiều bảng (từ 4 bảng của mình trở lên) để không phải chọn từng bảng.
+  const [home, setHome] = useState<boolean | null>(null);
 
   const { boards } = store;
   // Bảng trong thùng rác không hiện; bảng đã đóng chỉ hiện khi đang được mở xem.
@@ -43,14 +47,22 @@ export default function App() {
     access === 'viewer' ? 'viewer' : access === 'guest' ? (role === 'viewonly' ? 'viewonly' : 'guest') : role;
   const canCreate = store.isReal ? accounts.current !== null : true;
 
+  const ownCount = owned.filter((b) => !b.deletedAt && !b.archivedAt).length;
+  // Học sinh / khách chỉ thấy đúng bảng của mình: không hiện Tổng quan và danh sách bảng khác.
+  const teacherNav = canCreate && !store.linkToken && effectiveRole !== 'guest' && effectiveRole !== 'viewonly';
+  const showHome = teacherNav && (home ?? ownCount >= 4);
+  const pick = (id: string): void => { setActiveId(id); setHome(false); };
+
   const createBoard = async (title: string, template: BoardTemplate, extras: { lessonTitle?: string; program?: string }): Promise<void> => {
     const b = await store.createBoard(title, template, extras);
     setActiveId(b.id);
+    setHome(false);
     setRole('owner');
     setCreating(false);
   };
 
   const renderBody = () => {
+    if (showHome && !store.loading) return <Dashboard boards={navBoards} currentId={board?.id} canCreate={canCreate} onOpen={pick} onCreate={() => setCreating(true)} />;
     if (board) return <BoardWorkspace key={board.id} board={board} store={store} role={effectiveRole} onSelectBoard={setActiveId} myEmail={accounts.current?.email ?? ''} />;
     if (store.loading) return <p className="p-10 text-center text-ink-2" role="status">Đang tải dữ liệu…</p>;
     if (store.error) return <p className="p-10 text-center font-bold text-rose-700" role="alert">{store.error}</p>;
@@ -73,28 +85,10 @@ export default function App() {
             <span className="text-base font-extrabold tracking-tight">Bảng tương tác</span>
           </div>
 
-          {navBoards.length > 0 && (
-            <nav aria-label="Chọn bảng" className="order-3 flex w-full gap-1 overflow-x-auto rounded-full bg-brand-50 p-1 sm:order-none sm:w-auto sm:max-w-[60vw]">
-              {navBoards.map((b, i) => {
-                const on = board?.id === b.id;
-                const shared = (b.access ?? 'owner') !== 'owner';
-                const Icon = shared ? Share2 : b.mode === 'classroom' ? School : Users;
-                const firstShared = shared && !navBoards.slice(0, i).some((x) => (x.access ?? 'owner') !== 'owner');
-                return (
-                  <span key={b.id} className="flex shrink-0 items-center gap-1">
-                    {b.program && b.program !== navBoards[i - 1]?.program && <span className="chip shrink-0 bg-violet-100 text-violet-800 ring-violet-200" title={`Chương trình: ${b.program}`}>{b.program}</span>}
-                    {firstShared && i > 0 && <span className="mx-1 h-5 w-px bg-brand-300" aria-hidden />}
-                    <button type="button" aria-pressed={on} onClick={() => setActiveId(b.id)}
-                      title={shared ? `${b.title} — được chia sẻ bởi ${b.ownerEmail ?? 'giáo viên khác'}` : b.title}
-                      className={`btn btn-sm !min-h-[40px] shrink-0 flex-1 sm:flex-none ${on ? 'bg-white text-brand-700 shadow-soft' : 'text-ink-2 hover:bg-white/70'} ${shared ? 'italic' : ''}`}>
-                      <Icon className="h-4 w-4" aria-hidden />
-                      <span className="max-w-[160px] truncate">{store.isReal || shared ? b.title : b.mode === 'classroom' ? 'Lớp học' : 'Tập huấn'}</span>
-                    </button>
-                  </span>
-                );
-              })}
-            </nav>
+          {teacherNav && navBoards.length > 1 && (
+            <button type="button" aria-pressed={showHome} onClick={() => setHome(!showHome)} className={`btn !min-h-[52px] !rounded-2xl border-[1.5px] ${showHome ? 'border-transparent bg-gradient-to-b from-brand-500 to-brand-600 text-white shadow-glow' : 'border-brand-200 bg-white text-brand-700 hover:-translate-y-0.5 hover:bg-brand-50'}`}><LayoutDashboard className="h-5 w-5" aria-hidden /> Tổng quan</button>
           )}
+          {teacherNav && <BoardSwitcher boards={navBoards} currentId={showHome ? undefined : board?.id} onSelect={pick} />}
 
           <div className="ml-auto flex items-center gap-2">
             {canCreate && !store.linkToken && (
@@ -116,7 +110,7 @@ export default function App() {
 
       {creating && <CreateBoardModal extraTemplates={myTemplates} onCreate={createBoard} onClose={() => setCreating(false)} />}
       {archiveOpen && (
-        <ArchiveManagerModal boards={owned} onClose={() => setArchiveOpen(false)} onOpen={setActiveId}
+        <ArchiveManagerModal boards={owned} onClose={() => setArchiveOpen(false)} onOpen={pick}
           onReopen={(id) => store.setArchived(id, false)} onRestore={(id) => store.setTrashed(id, false)} onDeleteForever={store.deleteForever} />
       )}
     </div>

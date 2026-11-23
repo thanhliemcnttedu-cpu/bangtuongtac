@@ -74,14 +74,15 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
   const [view, setView] = useState<ViewMode>(savedBoard.settings.defaultView);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [shareTab, setShareTab] = useState<'students' | 'teachers'>('students');
-  const [modal, setModal] = useState<'post' | 'share' | 'roster' | 'resource' | 'duplicate' | 'activity' | 'gradebook' | 'details' | 'lesson' | 'task' | 'material' | 'confirm-lesson' | 'confirm-task' | 'confirm-material' | 'confirm-clear' | 'confirm-trash' | 'confirm-archive' | null>(null);
+  const [modal, setModal] = useState<'post' | 'share' | 'roster' | 'resource' | 'duplicate' | 'activity' | 'gradebook' | 'details' | 'lesson' | 'task' | 'material' | 'confirm-card' | 'confirm-cards' | 'confirm-lesson' | 'confirm-task' | 'confirm-material' | 'confirm-clear' | 'confirm-trash' | 'confirm-archive' | null>(null);
   const [slideStart, setSlideStart] = useState<string | null>(null);
   // Đối tượng đang soạn trong các hộp Bài học / Bài tập / Tài liệu.
   const [editLesson, setEditLesson] = useState<Lesson | undefined>();
   const [editTask, setEditTask] = useState<TaskItem | undefined>();
   const [taskLesson, setTaskLesson] = useState<string | null>(null);
   const [materialLesson, setMaterialLesson] = useState<string | null>(null);
-  const [toDelete, setToDelete] = useState<{ lesson?: Lesson; task?: TaskItem; resource?: PinnedResource }>({});
+  const [materialMM, setMaterialMM] = useState(false);
+  const [toDelete, setToDelete] = useState<{ lesson?: Lesson; task?: TaskItem; resource?: PinnedResource; card?: SubmissionCard; cardIds?: string[] }>({});
   const [postTask, setPostTask] = useState<string | undefined>();
   const [myPosts, setMyPosts] = useState<Record<string, number>>({});
   const [toast, setToast] = useState('');
@@ -201,7 +202,11 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
     onOpen: (id: string) => setSlideStart(id),
     onSetStatus: setStatus,
     deletableIds,
-    onDelete: deleteCard,
+    // Giáo viên: hỏi xác nhận rồi xóa vĩnh viễn; học sinh xóa bài của mình (trong 15 phút) như cũ.
+    onDelete: (cardId: string) => {
+      const c = savedBoard.cards.find((x) => x.id === cardId);
+      if (canManage && c) { setToDelete({ card: c }); setModal('confirm-card'); } else deleteCard(cardId);
+    },
   };
 
   const closed = !!savedBoard.archivedAt;
@@ -299,16 +304,18 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
             onAddTask: (lessonId) => { setEditTask(undefined); setTaskLesson(lessonId); setModal('task'); },
             onEditTask: (t) => { setEditTask(t); setTaskLesson(null); setModal('task'); },
             onDeleteTask: (t) => { setToDelete({ task: t }); setModal('confirm-task'); },
-            onAddMaterial: (lessonId) => { setMaterialLesson(lessonId); setModal('material'); },
+            onAddMaterial: (lessonId, opts) => { setMaterialLesson(lessonId); setMaterialMM(!!opts?.mindmap); setModal('material'); },
             onDeleteMaterial: (r) => { setToDelete({ resource: r }); setModal('confirm-material'); },
             onSubmitTo: (taskId) => { setPostTask(taskId); setModal('post'); },
             onViewSubmissions: (taskId) => { patchFilters({ taskId }); document.querySelector('section[aria-label="Bài nộp và sản phẩm"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
           }} />
 
-        {canView && <DataBoardSummary kpis={kpis} active={filters.progress} onSelect={(p) => patchFilters({ progress: p })} />}
+        {canView && <DataBoardSummary kpis={kpis} active={filters.progress} hasRoster={savedBoard.roster.length > 0} onSelect={(p) => patchFilters({ progress: p })} />}
 
         <MultiFilterBar board={visibleBoard} filters={filters} view={effectiveView} resultCount={filtered.length}
-          onChange={patchFilters} onViewChange={setView} onClear={clearFilters} isFiltered={isFiltered(filters)} allowedViews={allowedViews} />
+          onChange={patchFilters} onViewChange={setView} onClear={clearFilters} isFiltered={isFiltered(filters)} allowedViews={allowedViews}
+          deletableCount={canManage ? filtered.filter((r) => r.card).length : 0}
+          onDeleteShown={canManage ? () => { setToDelete({ cardIds: filtered.flatMap((r) => (r.card ? [r.card.id] : [])) }); setModal('confirm-cards'); } : undefined} />
 
         {!canView && (
           <p className="rounded-2xl bg-brand-50 px-4 py-2 text-sm text-brand-800">
@@ -399,8 +406,23 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
           setModal(null);
           showToast(n > 0 ? `Đã lưu và giao thêm cho ${n} lớp khác.` : editTask ? 'Đã lưu thay đổi.' : 'Đã giao bài.');
         }} />}
-      {modal === 'material' && <MaterialModal board={savedBoard} defaultLessonId={materialLesson} onClose={() => setModal(null)}
+      {modal === 'material' && <MaterialModal board={savedBoard} defaultLessonId={materialLesson} startMindMap={materialMM} onClose={() => setModal(null)}
         onAdd={async (input) => { await store.addResource(savedBoard.id, input); setModal(null); showToast('Đã thêm tài liệu.'); }} />}
+      {modal === 'confirm-card' && toDelete.card && (
+        <ConfirmModal title="Xóa bài nộp này?" confirmLabel="Xóa bài" danger onClose={() => setModal(null)}
+          onConfirm={async () => { await store.deleteCard(savedBoard.id, toDelete.card!.id, true); setModal(null); showToast('Đã xóa bài nộp.'); }}>
+          <p>Bài “{toDelete.card.title}” của <b className="text-ink">{toDelete.card.authorName}</b> ({toDelete.card.unit}) sẽ bị xóa vĩnh viễn, kể cả tệp đính kèm, điểm và nhận xét. <b className="text-ink">Không thể hoàn tác.</b></p>
+        </ConfirmModal>
+      )}
+      {modal === 'confirm-cards' && toDelete.cardIds && (
+        <ConfirmModal title={`Xóa ${toDelete.cardIds.length} bài nộp?`} confirmLabel={`Xóa ${toDelete.cardIds.length} bài`} danger requireText="XOA" onClose={() => setModal(null)}
+          onConfirm={async () => {
+            for (const id of toDelete.cardIds!) await store.deleteCard(savedBoard.id, id, true);
+            setModal(null); showToast(`Đã xóa ${toDelete.cardIds!.length} bài nộp.`);
+          }}>
+          <p>Mọi bài đang hiển thị theo bộ lọc hiện tại (<b className="text-ink">{toDelete.cardIds.length} bài</b>) sẽ bị xóa vĩnh viễn, kể cả tệp, điểm và nhận xét. <b className="text-ink">Không thể hoàn tác.</b> Hãy kiểm tra kỹ bộ lọc trước khi xóa.</p>
+        </ConfirmModal>
+      )}
       {modal === 'confirm-lesson' && toDelete.lesson && (
         <ConfirmModal title="Xóa bài học?" confirmLabel="Xóa bài học" danger onClose={() => setModal(null)}
           onConfirm={async () => { await store.removeLesson(savedBoard.id, toDelete.lesson!.id); setModal(null); showToast('Đã xóa bài học.'); }}>

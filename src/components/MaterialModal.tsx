@@ -1,16 +1,19 @@
 import { useRef, useState } from 'react';
 import type { ChangeEvent, DragEvent, FormEvent } from 'react';
-import { Link2, Trash2, Upload } from 'lucide-react';
+import { Link2, Network, Trash2, Upload } from 'lucide-react';
+import { MindMapEditor } from './mindmap/MindMapEditor';
 import type { BoardData, ResourceKind } from '../types/board';
 import type { MaterialInput } from '../hooks/useBoardStore';
 import { ACCEPT_ATTR, formatSize, validateFile } from '../lib/media';
-import { linkToAttachment } from '../lib/embeds';
+import { linkToAttachment, normalizeLink } from '../lib/embeds';
 import { ModalShell } from './ModalShell';
 
 interface Props {
   board: BoardData;
   /** Bài học chọn sẵn; null = tài liệu chung của lớp. */
   defaultLessonId: string | null;
+  /** Mở ngay trình thiết kế sơ đồ tư duy khi vào hộp thoại. */
+  startMindMap?: boolean;
   onAdd: (input: MaterialInput) => Promise<void>;
   onClose: () => void;
 }
@@ -23,7 +26,8 @@ const KINDS: { id: ResourceKind | 'auto'; label: string }[] = [
 const MAX_ITEMS = 10;
 
 /** Giáo viên / giảng viên cung cấp tài liệu: tải nhiều tệp đa phương tiện (Word, Excel, PowerPoint, PDF, ảnh, âm thanh, video) và/hoặc dán liên kết. */
-export function MaterialModal({ board, defaultLessonId, onAdd, onClose }: Props) {
+export function MaterialModal({ board, defaultLessonId, startMindMap = false, onAdd, onClose }: Props) {
+  const [mm, setMm] = useState(startMindMap);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [kind, setKind] = useState<ResourceKind | 'auto'>('auto');
@@ -34,7 +38,7 @@ export function MaterialModal({ board, defaultLessonId, onAdd, onClose }: Props)
   const [busy, setBusy] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
-  const links = linkText.split(/\s+/).map((l) => l.trim()).filter(Boolean);
+  const links = linkText.split(/\s+/).map((l) => normalizeLink(l)).filter(Boolean);
 
   const addFiles = (list: File[]): void => {
     const problems: string[] = [];
@@ -62,6 +66,13 @@ export function MaterialModal({ board, defaultLessonId, onAdd, onClose }: Props)
     setBusy(true);
     try { await onAdd({ title, description, kind, lessonId: lessonId || null, files, links }); }
     catch (err) { setError(err instanceof Error ? err.message : 'Không thêm được tài liệu.'); setBusy(false); }
+  };
+
+  const mindMapDone = (f: File): void => {
+    addFiles([f]);
+    if (!title.trim()) setTitle('Sơ đồ tư duy');
+    if (kind === 'auto') setKind('sample');
+    setMm(false);
   };
 
   return (
@@ -93,6 +104,7 @@ export function MaterialModal({ board, defaultLessonId, onAdd, onClose }: Props)
 
         <div onDragOver={(e) => e.preventDefault()} onDrop={onDrop} className="rounded-2xl border-2 border-dashed border-brand-200 bg-brand-50/60 p-3">
           <input ref={input} type="file" multiple accept={ACCEPT_ATTR} onChange={onPick} className="sr-only" aria-label="Chọn tệp tài liệu" />
+          <button type="button" onClick={() => setMm(true)} className="btn-primary mb-2 w-full"><Network className="h-4 w-4" aria-hidden /> Tạo sơ đồ tư duy ngay trên bảng</button>
           <button type="button" onClick={() => input.current?.click()} className="btn-ghost w-full"><Upload className="h-4 w-4" aria-hidden /> Tải nhiều tệp (hoặc kéo thả vào đây)</button>
           <p className="mt-1 text-center text-xs text-ink-2">Word, Excel, PowerPoint, PDF, ảnh, âm thanh, video · tối đa 25 MB mỗi tệp</p>
           {files.length > 0 && (
@@ -119,6 +131,7 @@ export function MaterialModal({ board, defaultLessonId, onAdd, onClose }: Props)
           <button type="submit" disabled={busy} className="btn-primary">{busy ? 'Đang tải lên…' : 'Thêm tài liệu'}</button>
         </div>
       </form>
+      {mm && <MindMapEditor title={title.trim() || 'Sơ đồ tư duy'} rootText={title.trim() || 'Ý chính'} onDone={mindMapDone} onClose={() => setMm(false)} />}
     </ModalShell>
   );
 }

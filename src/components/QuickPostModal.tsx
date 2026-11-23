@@ -90,34 +90,36 @@ export function QuickPostModal({ board, initialName = '', initialUnit = '', init
     if (!isEditable(e.target) && text) { e.preventDefault(); ingest([], text); }
   };
 
+  const inp = isClass ? 'input !min-h-[54px] !text-base' : 'input';
+  const lbl = isClass ? 'field-label !text-base' : 'field-label';
   const mark = (id: keyof Errors) => ({ 'aria-invalid': !!errors[id], 'aria-describedby': errors[id] ? `qp-${id}-err` : undefined });
 
   return (
-    <ModalShell title={isClass ? 'Nộp bài của em' : 'Nộp sản phẩm tập huấn'} onClose={onClose} onPaste={onPaste}>
-      <form onSubmit={(e) => void submit(e)} noValidate className="space-y-3">
+    <ModalShell title={isClass ? 'Nộp bài của em' : 'Nộp sản phẩm tập huấn'} onClose={onClose} onPaste={onPaste} maxWidth={isClass ? 'max-w-2xl' : 'max-w-lg'} large={isClass}>
+      <form onSubmit={(e) => void submit(e)} noValidate className={isClass ? 'space-y-4' : 'space-y-3'}>
         <div>
-          <label htmlFor="qp-name" className="field-label">{isClass ? 'Họ tên / Nhóm *' : 'Họ tên giáo viên *'}</label>
-          <input id="qp-name" className="input" value={draft.authorName} onChange={(e) => set('authorName', e.target.value)}
+          <label htmlFor="qp-name" className={lbl}>{isClass ? 'Em tên là gì? *' : 'Họ tên giáo viên *'}</label>
+          <input id="qp-name" className={inp} value={draft.authorName} onChange={(e) => set('authorName', e.target.value)}
             {...mark('authorName')} autoComplete="name" placeholder={isClass ? 'Ví dụ: Nguyễn Gia Bảo' : 'Ví dụ: Nguyễn Thị Hằng'} />
           {errors.authorName && <p id="qp-authorName-err" className="mt-1 text-xs font-bold text-rose-700" role="alert">{errors.authorName}</p>}
         </div>
         <div>
-          <label htmlFor="qp-unit" className="field-label">{isClass ? 'Tổ / Lớp *' : 'Trường / Đơn vị *'}</label>
+          <label htmlFor="qp-unit" className={lbl}>{isClass ? 'Em học tổ nào? (hoặc lớp nào?) *' : 'Trường / Đơn vị *'}</label>
           {targets.length > 0 ? (
-            <select id="qp-unit" className="input" value={draft.unit} onChange={(e) => set('unit', e.target.value)} {...mark('unit')}>
+            <select id="qp-unit" className={inp} value={draft.unit} onChange={(e) => set('unit', e.target.value)} {...mark('unit')}>
               <option value="">{isClass ? 'Chọn tổ / nhóm được giao…' : 'Chọn đơn vị được giao…'}</option>
               {targets.map((u) => <option key={u} value={u}>{u}</option>)}
             </select>
           ) : (
-            <input id="qp-unit" className="input" value={draft.unit} onChange={(e) => set('unit', e.target.value)}
+            <input id="qp-unit" className={inp} value={draft.unit} onChange={(e) => set('unit', e.target.value)}
               {...mark('unit')} placeholder={isClass ? 'Ví dụ: Tổ 2 – Lớp 4A' : 'Ví dụ: TH Kim Đồng'} />
           )}
           {errors.unit && <p id="qp-unit-err" className="mt-1 text-xs font-bold text-rose-700" role="alert">{errors.unit}</p>}
         </div>
         <div className={`grid grid-cols-1 gap-3 ${board.tasks.length > 0 ? 'sm:grid-cols-2' : ''}`}>
           {board.tasks.length > 0 && <div>
-            <label htmlFor="qp-task" className="field-label">{isClass ? 'Nhiệm vụ' : 'Chủ đề / Nhiệm vụ'}</label>
-            <select id="qp-task" className="input" value={draft.taskId} onChange={(e) => pickTask(e.target.value)} {...mark('task')}>
+            <label htmlFor="qp-task" className={lbl}>{isClass ? 'Em nộp bài nào?' : 'Chủ đề / Nhiệm vụ'}</label>
+            <select id="qp-task" className={inp} value={draft.taskId} onChange={(e) => pickTask(e.target.value)} {...mark('task')}>
               {groupTasks(board.lessons, board.tasks).filter((g) => g.tasks.length > 0).map(({ lesson, tasks }) => (
                 lesson ? (
                   <optgroup key={lesson.id} label={lesson.title}>
@@ -129,8 +131,8 @@ export function QuickPostModal({ board, initialName = '', initialUnit = '', init
             {errors.task && <p id="qp-task-err" className="mt-1 text-xs font-bold text-rose-700" role="alert">{errors.task}</p>}
           </div>}
           <div>
-            <label htmlFor="qp-title" className="field-label">{draft.poll ? 'Câu hỏi thăm dò *' : 'Tiêu đề sản phẩm *'}</label>
-            <input id="qp-title" className="input" value={draft.title} onChange={(e) => set('title', e.target.value)}
+            <label htmlFor="qp-title" className={lbl}>{draft.poll ? 'Câu hỏi thăm dò *' : isClass ? 'Đặt tên cho bài của em *' : 'Tiêu đề sản phẩm *'}</label>
+            <input id="qp-title" className={inp} value={draft.title} onChange={(e) => set('title', e.target.value)}
               {...mark('title')} placeholder={draft.poll ? 'Em thích hoạt động nào nhất?' : 'Tên bài của bạn'} />
             {errors.title && <p id="qp-title-err" className="mt-1 text-xs font-bold text-rose-700" role="alert">{errors.title}</p>}
           </div>
@@ -145,8 +147,8 @@ export function QuickPostModal({ board, initialName = '', initialUnit = '', init
           </div>
         )}
         <div>
-          <label htmlFor="qp-body" className="field-label">Nội dung <span className="font-normal text-ink-2">(không bắt buộc)</span></label>
-          <textarea id="qp-body" className="input min-h-[88px] py-2" value={draft.body} onChange={(e) => set('body', e.target.value)}
+          <label htmlFor="qp-body" className={lbl}>{isClass ? 'Em muốn viết thêm gì không?' : 'Nội dung'} <span className="font-normal text-ink-2">(không bắt buộc)</span></label>
+          <textarea id="qp-body" className={`${inp} min-h-[100px] py-2`} value={draft.body} onChange={(e) => set('body', e.target.value)}
             placeholder="Viết hoặc dán nội dung bài nộp…" />
         </div>
 
@@ -164,8 +166,8 @@ export function QuickPostModal({ board, initialName = '', initialUnit = '', init
         {errors.submit && <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700" role="alert">{errors.submit}</p>}
 
         <div className="flex justify-end gap-2 pt-1">
-          <button type="button" onClick={onClose} className="btn-ghost">Hủy</button>
-          <button type="submit" disabled={busy} className="btn-primary"><Send className="h-4 w-4" aria-hidden /> {busy ? 'Đang gửi…' : 'Nộp bài'}</button>
+          <button type="button" onClick={onClose} className={isClass ? 'btn-ghost !min-h-[54px] !px-6 text-base' : 'btn-ghost'}>Hủy</button>
+          <button type="submit" disabled={busy} className={isClass ? 'btn-primary !min-h-[54px] !px-8 text-lg' : 'btn-primary'}><Send className="h-4 w-4" aria-hidden /> {busy ? 'Đang gửi…' : 'Nộp bài'}</button>
         </div>
       </form>
     </ModalShell>

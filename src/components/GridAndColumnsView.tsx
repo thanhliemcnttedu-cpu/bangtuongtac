@@ -118,9 +118,9 @@ export function Tile({ row, board, compact, wall, canManage, onOpen, onSetStatus
       {(canManage || deletableIds?.has(card.id)) && (
         <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-brand-100 px-3 py-2">
           {canManage && <CardQuickActions row={row} onSetStatus={onSetStatus} />}
-          {deletableIds?.has(card.id) && onDelete && (
-            <button type="button" onClick={() => onDelete(card.id)} className="btn btn-sm ml-auto text-rose-700 hover:bg-rose-50">
-              <Trash2 className="h-3.5 w-3.5" aria-hidden /> Xóa bài của tôi
+          {(canManage || deletableIds?.has(card.id)) && onDelete && (
+            <button type="button" onClick={() => onDelete(card.id)} aria-label={canManage ? `Xóa bài ${card.title} của ${card.authorName}` : 'Xóa bài của tôi'} className="btn btn-sm ml-auto text-rose-700 hover:bg-rose-50">
+              <Trash2 className="h-3.5 w-3.5" aria-hidden /> {canManage ? 'Xóa bài' : 'Xóa bài của tôi'}
             </button>
           )}
         </div>

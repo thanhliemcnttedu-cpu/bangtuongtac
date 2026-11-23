@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  BookOpen, CalendarClock, ChevronDown, ExternalLink, FileText, Image as ImageIcon, Link2, ListChecks, Mic, Paperclip, Pencil, Plus, Presentation,
+  BookOpen, CalendarClock, ChevronDown, ExternalLink, FileText, Image as ImageIcon, Link2, ListChecks, Mic, Network, Paperclip, Pencil, Plus, Presentation,
   Sparkles, Trash2, Users, Video, X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -15,7 +15,7 @@ export interface LessonsPanelActions {
   onAddTask: (lessonId: string | null) => void;
   onEditTask: (t: TaskItem) => void;
   onDeleteTask: (t: TaskItem) => void;
-  onAddMaterial: (lessonId: string | null) => void;
+  onAddMaterial: (lessonId: string | null, opts?: { mindmap?: boolean }) => void;
   onDeleteMaterial: (r: PinnedResource) => void;
   /** Học sinh bấm "Nộp bài" ở một bài tập: mở form nộp với bài tập đã chọn. */
   onSubmitTo: (taskId: string) => void;
@@ -65,6 +65,18 @@ function MaterialCard({ r, canManage, onOpen, onDelete }: { r: PinnedResource; c
   );
 }
 
+
+/** Mỗi bài học một màu riêng (vạch trên, nền, số thứ tự, viền bài tập) để học sinh nhỏ dễ phân biệt các bài. */
+const PALETTES = [
+  { name: 'xanh dương', bar: 'linear-gradient(90deg,#1668f2,#5c9bf8,#1668f2)', box: 'border-brand-300 bg-brand-50/80', num: 'bg-brand-600', text: 'text-brand-700', task: 'border-brand-200 border-l-brand-600', soft: 'bg-brand-100 text-brand-800' },
+  { name: 'cam', bar: 'linear-gradient(90deg,#ea580c,#fbbf24,#ea580c)', box: 'border-orange-300 bg-orange-50/80', num: 'bg-orange-500', text: 'text-orange-700', task: 'border-orange-200 border-l-orange-500', soft: 'bg-orange-100 text-orange-900' },
+  { name: 'xanh lá', bar: 'linear-gradient(90deg,#16a34a,#86efac,#16a34a)', box: 'border-emerald-300 bg-emerald-50/80', num: 'bg-emerald-600', text: 'text-emerald-700', task: 'border-emerald-200 border-l-emerald-600', soft: 'bg-emerald-100 text-emerald-900' },
+  { name: 'tím', bar: 'linear-gradient(90deg,#7c3aed,#c4b5fd,#7c3aed)', box: 'border-violet-300 bg-violet-50/80', num: 'bg-violet-600', text: 'text-violet-700', task: 'border-violet-200 border-l-violet-600', soft: 'bg-violet-100 text-violet-900' },
+  { name: 'hồng', bar: 'linear-gradient(90deg,#e11d48,#fda4af,#e11d48)', box: 'border-rose-300 bg-rose-50/80', num: 'bg-rose-500', text: 'text-rose-700', task: 'border-rose-200 border-l-rose-500', soft: 'bg-rose-100 text-rose-900' },
+  { name: 'vàng', bar: 'linear-gradient(90deg,#d97706,#fcd34d,#d97706)', box: 'border-amber-300 bg-amber-50/80', num: 'bg-amber-500', text: 'text-amber-700', task: 'border-amber-200 border-l-amber-500', soft: 'bg-amber-100 text-amber-900' },
+] as const;
+type Palette = (typeof PALETTES)[number];
+
 function PhaseChip({ task, now }: { task: TaskItem; now: number }) {
   const phase = taskPhase(task, now);
   if (phase === 'scheduled') return <span className="chip bg-slate-100 text-slate-700 ring-slate-200"><CalendarClock className="h-3.5 w-3.5" aria-hidden /> Giao lúc {formatDateTime(task.assignedAt)}</span>;
@@ -92,21 +104,23 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
   const looseTasks = groups.find((g) => g.lesson === null)?.tasks ?? [];
   const submissions = (taskId: string): number => board.cards.filter((c) => c.taskId === taskId).length;
 
-  const taskRow = (t: TaskItem) => {
+  const kid = canSubmit && !canManage;
+  const taskRow = (t: TaskItem, pal: Palette = PALETTES[0], ti = 0) => {
     const phase = taskPhase(t, now);
     const mayPost = canSubmit && !canManage && phase !== 'scheduled' && !(phase === 'overdue' && !t.allowLate);
     const targets = t.targetUnits ?? [];
     return (
-      <li key={t.id} className="rounded-2xl border border-brand-100 bg-white p-3">
+      <li key={t.id} className={`rounded-2xl border-2 border-l-[10px] bg-white p-3 transition duration-200 hover:-translate-y-0.5 hover:shadow-soft ${kid ? 'sm:p-4' : ''} ${pal.task}`}>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="flex flex-wrap items-center gap-2">
+              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-extrabold text-white ${pal.num}`} aria-hidden>{ti + 1}</span>
               <span className={`chip ${t.kind === 'requirement' ? 'bg-violet-100 text-violet-800 ring-violet-200' : 'bg-brand-100 text-brand-800 ring-brand-200'}`}>
                 <ListChecks className="h-3.5 w-3.5" aria-hidden /> {KIND_LABEL[t.kind ?? 'assignment']}
               </span>
-              <span className="text-sm font-extrabold">{t.label}</span>
+              <span className={`${kid ? 'text-lg' : 'text-sm'} font-extrabold`}>{t.label}</span>
             </p>
-            {t.instructions && <p className="mt-1 text-sm text-ink-2">{t.instructions}</p>}
+            {t.instructions && <p className={`mt-1 ${kid ? 'text-base text-ink' : 'text-sm text-ink-2'}`}>{t.instructions}</p>}
           </div>
           <PhaseChip task={t} now={now} />
         </div>
@@ -116,7 +130,7 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
           <span>{submissions(t.id)} bài nộp</span>
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
-          {mayPost && <button type="button" onClick={() => actions.onSubmitTo(t.id)} className="btn-primary btn-sm">Nộp bài</button>}
+          {mayPost && <button type="button" onClick={() => actions.onSubmitTo(t.id)} className={kid ? 'btn-primary !min-h-[52px] !px-6 text-base' : 'btn-primary btn-sm'}>Nộp bài</button>}
           <button type="button" onClick={() => actions.onViewSubmissions(t.id)} className="btn-ghost btn-sm">Xem bài nộp</button>
           {canManage && (
             <>
@@ -163,6 +177,7 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
                 <button type="button" onClick={actions.onAddLesson} className="btn-primary btn-sm"><Plus className="h-3.5 w-3.5" aria-hidden /> Thêm {w.lessonLower}</button>
                 <button type="button" onClick={() => actions.onAddTask(null)} className="btn-ghost btn-sm"><ListChecks className="h-3.5 w-3.5" aria-hidden /> Giao bài tập / yêu cầu</button>
                 <button type="button" onClick={() => actions.onAddMaterial(null)} className="btn-ghost btn-sm"><Paperclip className="h-3.5 w-3.5" aria-hidden /> Thêm tài liệu</button>
+                <button type="button" onClick={() => actions.onAddMaterial(null, { mindmap: true })} className="btn-ghost btn-sm"><Network className="h-3.5 w-3.5" aria-hidden /> Tạo sơ đồ tư duy</button>
               </div>
             )}
 
@@ -190,17 +205,19 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
               </ol>
             ) : looseTasks.length === 0 && <p className="rounded-2xl bg-white/80 p-3 text-sm text-ink-3">Giáo viên chưa đăng {w.lessonLower} nào.</p>)}
 
-            {groups.filter((g) => g.lesson !== null).map(({ lesson, tasks }) => {
+            {groups.filter((g) => g.lesson !== null).map(({ lesson, tasks }, idx) => {
               if (!lesson) return null;
+              const pal = PALETTES[idx % PALETTES.length];
               const mats = board.pinned.filter((r) => r.lessonId === lesson.id);
               const collapsed = !!closedLessons[lesson.id];
               return (
-                <article key={lesson.id} className="rounded-3xl border border-teal2-100 bg-white/70 p-3 sm:p-4">
+                <article key={lesson.id} style={{ ['--bar' as string]: pal.bar }} className={`rounded-3xl border-2 p-3 pt-4 sm:p-4 sm:pt-5 ${pal.box}`}>
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <button type="button" aria-expanded={!collapsed} onClick={() => setClosedLessons((m) => ({ ...m, [lesson.id]: !collapsed }))} className="flex min-w-0 items-start gap-2 text-left">
-                      <ChevronDown className={`mt-1 h-4 w-4 shrink-0 transition-transform ${collapsed ? '-rotate-90' : ''}`} aria-hidden />
+                      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base font-extrabold text-white shadow-soft ${pal.num}`} aria-hidden>{idx + 1}</span>
+                      <ChevronDown className={`mt-2 h-4 w-4 shrink-0 transition-transform ${collapsed ? '-rotate-90' : ''}`} aria-hidden />
                       <span className="min-w-0">
-                        <span className="block text-base font-extrabold">{lesson.title}</span>
+                        <span className={`block ${kid ? 'text-xl' : 'text-base'} font-extrabold ${pal.text}`}>{lesson.title}</span>
                         {(lesson.startsAt || lesson.endsAt) && (
                           <span className="mt-0.5 flex items-center gap-1 text-xs text-ink-2"><CalendarClock className="h-3.5 w-3.5" aria-hidden /> {formatDateTime(lesson.startsAt)}{lesson.endsAt ? ` – ${formatDateTime(lesson.endsAt)}` : ''}</span>
                         )}
@@ -210,6 +227,7 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
                     {canManage && (
                       <span className="flex flex-wrap gap-1.5">
                         <button type="button" onClick={() => actions.onAddMaterial(lesson.id)} className="btn-ghost btn-sm"><Paperclip className="h-3.5 w-3.5" aria-hidden /> Tài liệu</button>
+                        <button type="button" onClick={() => actions.onAddMaterial(lesson.id, { mindmap: true })} className="btn-ghost btn-sm"><Network className="h-3.5 w-3.5" aria-hidden /> Sơ đồ tư duy</button>
                         <button type="button" onClick={() => actions.onAddTask(lesson.id)} className="btn-ghost btn-sm"><ListChecks className="h-3.5 w-3.5" aria-hidden /> Giao bài</button>
                         <button type="button" onClick={() => actions.onEditLesson(lesson)} aria-label={`Sửa ${lesson.title}`} className="btn-ghost btn-sm !px-2.5"><Pencil className="h-3.5 w-3.5" aria-hidden /></button>
                         <button type="button" onClick={() => actions.onDeleteLesson(lesson)} aria-label={`Xóa ${lesson.title}`} className="btn-ghost btn-sm !px-2.5 hover:!border-rose-300 hover:!text-rose-700"><Trash2 className="h-3.5 w-3.5" aria-hidden /></button>
@@ -218,10 +236,10 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
                   </div>
                   {!collapsed && (
                     <div className="mt-3 space-y-3">
-                      {mats.length > 0 && <div><h4 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-teal2-700">Tài liệu</h4>{materialList(mats)}</div>}
+                      {mats.length > 0 && <div><h4 className={`mb-2 inline-block rounded-full px-3 py-1 text-xs font-extrabold uppercase tracking-wide ${pal.soft}`}>Tài liệu</h4>{materialList(mats)}</div>}
                       <div>
-                        <h4 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-brand-700">Bài tập & yêu cầu</h4>
-                        {tasks.length === 0 ? <p className="text-sm text-ink-3">Chưa có bài tập hoặc yêu cầu.</p> : <ul className="space-y-2">{tasks.map(taskRow)}</ul>}
+                        <h4 className={`mb-2 inline-block rounded-full px-3 py-1 text-xs font-extrabold uppercase tracking-wide ${pal.soft}`}>Bài tập & yêu cầu</h4>
+                        {tasks.length === 0 ? <p className="text-sm text-ink-3">Chưa có bài tập hoặc yêu cầu.</p> : <ul className="space-y-3">{tasks.map((t, ti) => taskRow(t, pal, ti))}</ul>}
                       </div>
                     </div>
                   )}
@@ -232,7 +250,7 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
             {looseTasks.length > 0 && (
               <div>
                 <h3 className="mb-2 text-sm font-extrabold text-brand-700">Bài tập & yêu cầu chưa xếp vào {w.lessonLower}</h3>
-                <ul className="space-y-2">{looseTasks.map(taskRow)}</ul>
+                <ul className="space-y-3">{looseTasks.map((t, ti) => taskRow(t, PALETTES[ti % PALETTES.length], ti))}</ul>
               </div>
             )}
           </div>

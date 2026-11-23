@@ -3,6 +3,7 @@ import type {
   ActivityEntry, Attachment, BoardData, CardComment, ModerationMode, CardLayoutPatch, CardLocation, CardStatus, CollabRole, LinkMode, Lesson, PinnedResource, ResourceKind, RosterMember, SubmissionCard, TaskItem,
 } from '../types/board';
 import { MOCK_BOARDS } from '../data/mockBoardData';
+import { buildLargeDemo } from '../data/demoLarge';
 import type { BoardTemplate } from '../data/boardTemplates';
 import { isSupabaseConfigured } from '../lib/supabase';
 import * as api from '../lib/boardApi';
@@ -152,7 +153,7 @@ const randomToken = (): string => Math.random().toString(36).slice(2, 12);
 export function useBoardStore(userId: string | null, actor: string): BoardStore {
   const isReal = isSupabaseConfigured;
   const linkToken = isReal ? tokenFromPath() : null;
-  const [boards, setBoards] = useState<BoardData[]>(isReal ? [] : MOCK_BOARDS);
+  const [boards, setBoards] = useState<BoardData[]>(isReal ? [] : typeof location !== 'undefined' && location.search.includes('demo=full') ? buildLargeDemo() : MOCK_BOARDS);
   const [loading, setLoading] = useState(isReal);
   const [error, setError] = useState('');
   const [mockLog, setMockLog] = useState<Record<string, ActivityEntry[]>>({});

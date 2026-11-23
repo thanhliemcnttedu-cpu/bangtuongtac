@@ -7,6 +7,8 @@ interface Props {
   active: ProgressFilter;
   /** Bấm thẻ KPI → lọc danh sách theo trạng thái tương ứng (bấm lại thẻ đang chọn → bỏ lọc). */
   onSelect: (filter: ProgressFilter) => void;
+  /** Lớp có danh sách học sinh nhập sẵn. Không có thì chỉ đếm những người đã nộp bài. */
+  hasRoster?: boolean;
 }
 
 interface Item {
@@ -19,17 +21,19 @@ interface Item {
   tone: string;
 }
 
-export function DataBoardSummary({ kpis, active, onSelect }: Props) {
-  const items: Item[] = [
-    { key: 'total', filter: 'all', label: 'Tổng người tham gia', value: String(kpis.total), hint: 'Theo danh sách sĩ số', icon: <Users className="h-5 w-5" />, tone: 'text-brand-700 bg-brand-100' },
+export function DataBoardSummary({ kpis, active, onSelect, hasRoster = true }: Props) {
+  const all: Item[] = [
+    { key: 'total', filter: 'all', label: hasRoster ? 'Tổng người tham gia' : 'Người đã nộp bài', value: String(kpis.total), hint: hasRoster ? 'Theo danh sách sĩ số' : 'Tên hiện khi nộp bài', icon: <Users className="h-5 w-5" />, tone: 'text-brand-700 bg-brand-100' },
     { key: 'submitted', filter: 'submitted', label: 'Đã nộp bài', value: String(kpis.submitted), hint: 'Có ít nhất 1 bài', icon: <CheckCircle2 className="h-5 w-5" />, tone: 'text-emerald-700 bg-emerald-100' },
     { key: 'waiting', filter: 'waiting', label: 'Chờ duyệt / Đang làm', value: String(kpis.waiting), hint: 'Cần giáo viên xem', icon: <Hourglass className="h-5 w-5" />, tone: 'text-amber-800 bg-amber-100' },
     { key: 'not', filter: 'not_submitted', label: 'Chưa nộp', value: String(kpis.notSubmitted), hint: 'Nhắc bài cuối giờ', icon: <Clock3 className="h-5 w-5" />, tone: 'text-rose-700 bg-rose-100' },
     { key: 'done', filter: 'done', label: 'Tỉ lệ hoàn thành', value: `${kpis.completionPct}%`, hint: 'Đã duyệt + tiêu biểu', icon: <Target className="h-5 w-5" />, tone: 'text-teal2-700 bg-teal2-100' },
   ];
+  // Chưa nhập danh sách lớp thì không biết ai chưa nộp: ẩn thẻ trùng và thẻ "Chưa nộp".
+  const items = hasRoster ? all : all.filter((i) => i.key !== 'submitted' && i.key !== 'not');
 
   return (
-    <section aria-label="Tổng hợp số liệu" className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+    <section aria-label="Tổng hợp số liệu" className={`grid grid-cols-2 gap-3 md:grid-cols-3 ${hasRoster ? 'xl:grid-cols-5' : 'xl:grid-cols-3'}`}>
       {items.map((it) => {
         const selected = active === it.filter;
         return (

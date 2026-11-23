@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { taskTitle } from '../lib/lessons';
-import { Rows3, Search, X } from 'lucide-react';
+import { Rows3, Search, Trash2, X } from 'lucide-react';
 import type { BoardData, FilterState, ProgressFilter, TimeFilter, ViewMode } from '../types/board';
 import { normalize } from '../lib/boardLogic';
 import { LayoutMenu } from './LayoutMenu';
@@ -16,6 +16,9 @@ interface Props {
   isFiltered: boolean;
   /** Người xem không phải giáo viên chỉ có Lưới thẻ + Chia cột. */
   allowedViews: ViewMode[];
+  /** Giáo viên: xóa mọi bài đang hiển thị theo bộ lọc (số bài, hàm mở hộp xác nhận). */
+  deletableCount?: number;
+  onDeleteShown?: () => void;
 }
 
 
@@ -39,8 +42,7 @@ const TIME_OPTIONS: { value: TimeFilter; label: string }[] = [
 ];
 
 export function MultiFilterBar({
-  board, filters, view, resultCount, onChange, onViewChange, onClear, isFiltered, allowedViews,
-}: Props) {
+  board, filters, view, resultCount, onChange, onViewChange, onClear, isFiltered, allowedViews, deletableCount, onDeleteShown }: Props) {
   const [focused, setFocused] = useState(false);
 
   const titles = useMemo(() => [...new Set(board.cards.map((c) => c.title))], [board.cards]);
@@ -131,6 +133,11 @@ export function MultiFilterBar({
             <Rows3 className="h-4 w-4" aria-hidden />
             Hiển thị <b className="text-ink">{resultCount}</b> kết quả
           </span>
+          {onDeleteShown && (deletableCount ?? 0) > 0 && (
+            <button type="button" onClick={onDeleteShown} className="btn-ghost btn-sm hover:!border-rose-300 hover:!bg-rose-50 hover:!text-rose-700">
+              <Trash2 className="h-3.5 w-3.5" aria-hidden /> Xóa {deletableCount} bài đang hiển thị
+            </button>
+          )}
           {filters.time === 'session' && (
             <button type="button" onClick={onClear} disabled={!isFiltered} className="btn-ghost btn-sm">
               <X className="h-3.5 w-3.5" aria-hidden /> Xóa bộ lọc

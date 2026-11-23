@@ -71,6 +71,13 @@ export function parseEmbed(raw: string): Attachment | null {
 }
 
 /** Liên kết bất kỳ → tệp đính kèm: nhúng được thì nhúng, không thì giữ dạng liên kết thường. */
+/** Học sinh nhỏ hay quên "https://": thấy dạng tên miền (có dấu chấm, không có khoảng trắng) thì tự thêm vào. */
+export function normalizeLink(raw: string): string {
+  const t = raw.trim();
+  if (!t || /^[a-z][a-z0-9+.-]*:/i.test(t)) return t;
+  return /^[^\s/@]+\.[^\s/@]{2,}(\/\S*)?$/.test(t) ? `https://${t}` : t;
+}
+
 export function linkToAttachment(raw: string): Attachment {
   const e = parseEmbed(raw);
   if (e) return e;

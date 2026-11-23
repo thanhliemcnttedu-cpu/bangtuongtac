@@ -152,7 +152,8 @@ export const CLASS_BOARD: BoardData = {
   ],
   tasks: classTasks,
   sessions: classSessions,
-  roster: classRoster,
+  // Không tạo sẵn danh sách học sinh: tên chỉ xuất hiện khi học sinh nộp bài (giáo viên có thể nhập danh sách lớp nếu muốn theo dõi ai chưa nộp).
+  roster: [],
   cards: classCards,
   settings: { ...DEFAULT_SETTINGS, icon: 'book' },
   ownerEmail: 'co.lan.tieuhoc@gmail.com',
@@ -237,7 +238,7 @@ export const TRAIN_BOARD: BoardData = {
   ],
   tasks: trainTasks,
   sessions: trainSessions,
-  roster: trainRoster,
+  roster: [],
   cards: trainCards,
   settings: { ...DEFAULT_SETTINGS, icon: 'cap' },
   ownerEmail: 'co.lan.tieuhoc@gmail.com',

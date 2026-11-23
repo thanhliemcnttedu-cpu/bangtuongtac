@@ -71,8 +71,6 @@
   .btn-sm { @apply min-h-[36px] px-3.5 text-xs; --edge-h: 4px; }
 
   /* Nút nổi: lơ lửng nhẹ, quầng sáng xung quanh. */
-  button.fixed.btn-primary { animation: float-y 3.2s ease-in-out infinite; }
-  button.fixed.btn-primary:hover { animation-play-state: paused; }
 
   .field-label { @apply mb-1 block text-[0.92rem] font-extrabold text-ink; }
   .input {
@@ -141,22 +139,22 @@ main > *, main section { animation: fade-up .5s cubic-bezier(.2,.8,.2,1) both; }
 /* ---- Hiệu ứng tham khảo từ trang Tải plugin: quầng sáng trôi, tiêu đề ánh sắc, thẻ có vạch màu và quầng theo con trỏ ---- */
 body::before, body::after {
   content: ''; position: fixed; z-index: -1; pointer-events: none; border-radius: 50%; filter: blur(70px); opacity: .5;
-  width: 38vw; height: 38vw; animation: orb 18s ease-in-out infinite;
+  width: 38vw; height: 38vw;
 }
 body::before { left: -10vw; top: -12vw; background: #bcd6ff; }
-body::after { right: -10vw; bottom: -14vw; background: #d9ccff; animation-delay: -9s; }
+body::after { right: -10vw; bottom: -14vw; background: #d9ccff; }
 @keyframes orb { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(3vw,2.5vw) scale(1.1); } }
 
 h1 {
   background: linear-gradient(90deg, #0a1730 0%, #1668f2 45%, #129a4b 70%, #0a1730 100%); background-size: 220% 100%;
-  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: shine 9s linear infinite;
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
 }
 @keyframes shine { to { background-position: 220% 0; } }
 
 article.rounded-3xl { position: relative; --mx: 50%; --my: 0%; }
 article.rounded-3xl::before {
   content: ''; position: absolute; inset: 0 0 auto 0; height: 5px; z-index: 1; pointer-events: none;
-  background: linear-gradient(90deg, #1668f2, #7aa8ff, #14b8a6, #1668f2); background-size: 200% 100%; transition: height .25s;
+  background: var(--bar, linear-gradient(90deg, #1668f2, #7aa8ff, #14b8a6, #1668f2)); background-size: 200% 100%; transition: height .25s;
 }
 article.rounded-3xl::after {
   content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .25s;
@@ -164,7 +162,7 @@ article.rounded-3xl::after {
 }
 @media (hover: hover) and (pointer: fine) {
   article.rounded-3xl:hover { transform: translateY(-6px); }
-  article.rounded-3xl:hover::before { height: 7px; animation: bar 2.2s linear infinite; }
+  article.rounded-3xl:hover::before { height: 7px; }
   article.rounded-3xl:hover::after { opacity: 1; }
 }
 @keyframes bar { to { background-position: 200% 0; } }

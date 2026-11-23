@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import type { CardLocation } from '../types/board';
-import { linkToAttachment } from '../lib/embeds';
+import { linkToAttachment, normalizeLink } from '../lib/embeds';
 import { MAX_TOTAL_BYTES, formatSize, validateFile } from '../lib/media';
 
 export const MAX_ATTACHMENTS = 10;
@@ -71,7 +71,7 @@ export function usePostDraft(initial: PostDraft) {
     const cur = ref.current;
     const links = [...cur.links];
     const problems: string[] = [];
-    urls.map((u) => u.trim()).filter(Boolean).forEach((u) => {
+    urls.map((u) => normalizeLink(u)).filter(Boolean).forEach((u) => {
       const a = linkToAttachment(u);
       if (a.type === 'link' && !a.url) { problems.push(`“${u.slice(0, 40)}” chưa phải liên kết (cần bắt đầu bằng https://).`); return; }
       if (links.includes(u)) return;

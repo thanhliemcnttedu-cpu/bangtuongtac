@@ -1,15 +1,16 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import {
-  BarChart3, Camera, ClipboardPaste, FileText, Link2, MapPin, Mic, MonitorUp, PenLine, Plus, Trash2, Upload, Video, X,
+  BarChart3, Camera, ClipboardPaste, FileText, Link2, MapPin, Mic, MonitorUp, Network, PenLine, Plus, Trash2, Upload, Video, X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { ACCEPT_ATTR, DOC_LABEL, attachmentTypeOf, docKindOf, formatSize } from '../../lib/media';
-import { linkToAttachment } from '../../lib/embeds';
+import { linkToAttachment, normalizeLink } from '../../lib/embeds';
 import { MAX_ATTACHMENTS } from '../../hooks/usePostDraft';
 import { CameraCapture } from './CameraCapture';
 import { RecorderPanel } from './RecorderPanel';
 import type { RecorderKind } from './RecorderPanel';
 import { DrawingPad } from './DrawingPad';
+import { MindMapEditor } from '../mindmap/MindMapEditor';
 import type { CardLocation } from '../../types/board';
 
 // Bản đồ chỉ nạp khi người dùng bấm “Vị trí”.
@@ -31,7 +32,7 @@ interface Props {
   onIngest: (files: File[], text: string) => void;
 }
 
-type Tool = 'camera' | 'video' | 'audio' | 'screen' | 'draw' | 'link' | 'poll' | 'location';
+type Tool = 'camera' | 'video' | 'audio' | 'screen' | 'draw' | 'mindmap' | 'link' | 'poll' | 'location';
 
 const TOOLS: { id: Tool | 'file'; label: string; Icon: LucideIcon }[] = [
   { id: 'file', label: 'Tải nhiều tệp', Icon: Upload },
@@ -127,6 +128,7 @@ export function AttachmentPicker({ files, links, poll, location, onLocation, err
   );
 
   let panel: React.ReactNode = null;
+  const mindmap = tool === 'mindmap' ? <MindMapEditor title="Sơ đồ tư duy của em" rootText="Ý chính" onDone={take} onClose={() => setTool(null)} /> : null;
   if (tool === 'camera') panel = <CameraCapture onCapture={take} onClose={() => setTool(null)} />;
   else if (tool === 'video' || tool === 'audio' || tool === 'screen') panel = <RecorderPanel kind={tool as RecorderKind} onDone={take} onClose={() => setTool(null)} />;
   else if (tool === 'draw') panel = <DrawingPad onDone={take} onClose={() => setTool(null)} />;
@@ -137,14 +139,16 @@ export function AttachmentPicker({ files, links, poll, location, onLocation, err
       </Suspense>
     );
   } else if (tool === 'link') {
-    const first = linkText.trim().split(/\s+/)[0] ?? '';
+    const first = normalizeLink(linkText.trim().split(/\s+/)[0] ?? '');
     const rec = first ? linkToAttachment(first) : null;
+    const badLink = !!rec && rec.type === 'link' && !rec.url;
     panel = (
       <div className="space-y-2">
         <label htmlFor="ap-link" className="field-label">Dán một hoặc nhiều liên kết</label>
         <textarea id="ap-link" rows={2} className="input min-h-[64px] py-2" value={linkText} autoFocus onChange={(e) => setLinkText(e.target.value)}
           placeholder="YouTube, Google Drive, Slides, Spotify hoặc trang web… (mỗi liên kết một dòng)" />
-        {rec && <p className="text-xs font-bold text-emerald-700" role="status">{rec.type === 'embed' ? `Nhận dạng: ${rec.name} — sẽ phát/xem ngay trong bài.` : `Liên kết trang web: ${rec.name}`}</p>}
+        {rec && badLink && <p className="text-xs font-bold text-rose-700" role="status">Chưa phải liên kết. Em hãy dán địa chỉ trang web (ví dụ: https://www.youtube.com/…).</p>}
+        {rec && !badLink && <p className="text-xs font-bold text-emerald-700" role="status">{rec.type === 'embed' ? `Nhận dạng: ${rec.name} — sẽ phát/xem ngay trong bài.` : `Liên kết trang web: ${rec.name}`}</p>}
         <div className="flex justify-between gap-2">
           <button type="button" onClick={() => { setTool(null); setLinkText(''); }} className="btn-ghost btn-sm">Đóng</button>
           <button type="button" disabled={!linkText.trim()} onClick={() => { onAddLinks(linkText.split(/\s+/)); setLinkText(''); setTool(null); }} className="btn-primary btn-sm">Thêm liên kết</button>
@@ -183,8 +187,10 @@ export function AttachmentPicker({ files, links, poll, location, onLocation, err
         <button type="button" onClick={() => void pasteFromClipboard()} className="btn-ghost btn-sm"><ClipboardPaste className="h-3.5 w-3.5" aria-hidden /> Dán từ bộ nhớ tạm</button>
       </div>
 
+      {mindmap}
       {panel ? <div className="rounded-2xl bg-white/70 p-3">{panel}</div> : (
         <>
+          <button type="button" disabled={full} onClick={() => pick('mindmap')} className="btn-primary mb-3 !min-h-[56px] w-full !rounded-2xl text-base"><Network className="h-6 w-6" aria-hidden /> Vẽ sơ đồ tư duy ngay tại đây</button>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
             {TOOLS.map(({ id, label, Icon }) => {
               const disabled = full && id !== 'poll';
