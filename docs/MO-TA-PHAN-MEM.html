@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Bảng tương tác lớp học và tập huấn – Mô tả chức năng và lộ trình phát triển</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 18mm 16mm; @bottom-center { content: "Trang " counter(page) " / " counter(pages); font: 9pt 'Segoe UI', Arial, sans-serif; color: #6b7a93; } }
+  :root { --blue:#1668f2; --blue-d:#0b4fd0; --ink:#0a1730; --ink2:#46556e; --line:#cfe0fb; --soft:#eef5ff; --teal:#0d9488; --ok:#129a4b; --warn:#b45309; --bad:#be123c; }
+  * { box-sizing: border-box; }
+  html { font-family: 'Be Vietnam Pro', 'Segoe UI', Arial, sans-serif; color: var(--ink); font-size: 10pt; line-height: 1.5; }
+  body { margin: 0; }
+  h1 { font-size: 15pt; margin: 0 0 4mm; padding-bottom: 2mm; border-bottom: 2px solid var(--blue); color: var(--ink); break-after: avoid; }
+  h2 { font-size: 12pt; margin: 6mm 0 2mm; color: var(--blue-d); break-after: avoid; }
+  h3 { font-size: 10.5pt; margin: 4mm 0 1.5mm; break-after: avoid; }
+  p { margin: 0 0 2.5mm; }
+  ul, ol { margin: 0 0 3mm; padding-left: 5mm; }
+  li { margin-bottom: 1mm; }
+  section.page { break-before: page; }
+  .cover { height: 250mm; display: flex; flex-direction: column; justify-content: center; }
+  .cover .tag { display: inline-block; background: var(--soft); color: var(--blue-d); font-weight: 700; padding: 1.5mm 4mm; border-radius: 999px; width: max-content; margin-bottom: 8mm; }
+  .cover h1 { font-size: 26pt; border: 0; line-height: 1.2; margin-bottom: 6mm; }
+  .cover .sub { font-size: 13pt; color: var(--ink2); margin-bottom: 14mm; }
+  .cover table { width: 100%; }
+  .cover td { border: 0; padding: 1.2mm 0; }
+  .bar { height: 3mm; background: linear-gradient(90deg, #2f80ff, #14b8a6); border-radius: 2mm; margin-bottom: 10mm; }
+  table { width: 100%; border-collapse: collapse; margin: 0 0 4mm; font-size: 9pt; }
+  th, td { border: 0.4mm solid var(--line); padding: 1.4mm 2mm; vertical-align: top; text-align: left; }
+  th { background: var(--soft); color: var(--ink); font-weight: 700; }
+  tr { break-inside: avoid; }
+  .st-ok { color: var(--ok); font-weight: 700; white-space: nowrap; }
+  .st-part { color: var(--warn); font-weight: 700; white-space: nowrap; }
+  .st-no { color: var(--bad); font-weight: 700; white-space: nowrap; }
+  .p1 { color: var(--bad); font-weight: 700; } .p2 { color: var(--warn); font-weight: 700; } .p3 { color: var(--ink2); font-weight: 700; }
+  .note { background: var(--soft); border-left: 1.2mm solid var(--blue); padding: 2mm 3mm; margin: 0 0 4mm; border-radius: 1mm; break-inside: avoid; }
+  .warn { background: #fff7ed; border-left-color: #f59e0b; }
+  .small { font-size: 8.5pt; color: var(--ink2); }
+  code { font-family: Consolas, 'Courier New', monospace; font-size: 8.5pt; background: #f3f6fb; padding: 0 1mm; border-radius: 0.8mm; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
+  .legend span { margin-right: 4mm; }
+</style>
+</head>
+<body>
+
+<!-- ====================== BÌA ====================== -->
+<section class="cover">
+  <span class="tag">TÀI LIỆU MÔ TẢ PHẦN MỀM · PHIÊN BẢN BẢN MẪU 0.1</span>
+  <h1>Bảng tương tác<br>lớp học và tập huấn giáo viên</h1>
+  <div class="bar"></div>
+  <p class="sub">Mô tả đầy đủ chức năng hiện có và lộ trình các tính năng cần phát triển</p>
+  <table>
+    <tr><td style="width:38mm"><b>Ngày lập</b></td><td>22/11/2026</td></tr>
+    <tr><td><b>Thư mục dự án</b></td><td><code>D:\DATA_BOARD_LOP_HOC</code></td></tr>
+    <tr><td><b>Công nghệ</b></td><td>React 18 · TypeScript · Tailwind CSS · Vite · Supabase (Đăng nhập Google, CSDL Postgres, Kho tệp) · Vercel</td></tr>
+    <tr><td><b>Trạng thái</b></td><td>Bản mẫu chạy đầy đủ giao diện với dữ liệu giả lập. Phần nối Supabase đã viết mã nhưng <b>chưa thử với Supabase thật</b>.</td></tr>
+    <tr><td><b>Đối tượng đọc</b></td><td>Chủ phần mềm, giáo viên và báo cáo viên thử nghiệm, người sẽ tiếp tục phát triển</td></tr>
+  </table>
+</section>
+
+<!-- ====================== 1. TỔNG QUAN ====================== -->
+<section class="page">
+<h1>1. Tổng quan phần mềm</h1>
+
+<h2>1.1 Mục tiêu</h2>
+<p>Ứng dụng web bảng tương tác dùng cho hai bối cảnh: <b>lớp học của học sinh</b> (đặc biệt học sinh tiểu học, nút to, dễ bấm) và <b>lớp tập huấn chuyên môn cho giáo viên</b> (quản lý bài nộp theo trường/đơn vị). Phần mềm lấy ý tưởng từ Padlet nhưng khắc phục các điểm yếu: bài bị trôi, khó đối chiếu ai đã nộp, khó xuất báo cáo, giao diện chưa tối ưu để chiếu lên tivi và máy chiếu.</p>
+
+<h2>1.2 Ba nhóm người dùng</h2>
+<table>
+  <tr><th style="width:36mm">Nhóm</th><th>Cần đăng nhập?</th><th>Làm được gì</th></tr>
+  <tr><td><b>Giáo viên / báo cáo viên (chủ bảng)</b></td><td>Có, bằng Gmail (Google)</td><td>Toàn quyền: tạo và cài đặt bảng, ghim tài liệu, nhập danh sách sĩ số, duyệt/gắn sao/yêu cầu sửa bài, chấm điểm, xem nhật ký, xuất báo cáo, đóng bảng, nhân bản, xóa.</td></tr>
+  <tr><td><b>Học sinh / học viên</b></td><td>Không</td><td>Mở link hoặc quét mã QR, xem bài đã duyệt, bấm nút <b>+</b> nộp bài, bình chọn trong thăm dò, tự xóa bài của mình trong 15 phút đầu.</td></tr>
+  <tr><td><b>Khách / phụ huynh / dự giờ</b></td><td>Không</td><td>Chỉ xem tài liệu và bài đã duyệt; không có nút nộp bài.</td></tr>
+</table>
+
+<h2>1.3 Kiến trúc công nghệ</h2>
+<table>
+  <tr><th style="width:36mm">Lớp</th><th>Lựa chọn</th><th>Ghi chú</th></tr>
+  <tr><td>Giao diện</td><td>React 18, TypeScript chặt, Tailwind CSS 3, Vite 5</td><td>Phông Be Vietnam Pro; biểu tượng lucide-react; mã QR bằng thư viện <code>qrcode</code>.</td></tr>
+  <tr><td>Đăng nhập</td><td>Supabase Auth, Google OAuth</td><td>Tham số <code>prompt=select_account</code> để chuyển nhiều Gmail.</td></tr>
+  <tr><td>Cơ sở dữ liệu</td><td>Supabase Postgres + Row Level Security</td><td>Tệp <code>docs/schema.sql</code>: 9 bảng, hơn 10 hàm, trigger, chính sách RLS.</td></tr>
+  <tr><td>Kho tệp</td><td>Supabase Storage (bucket <code>board-files</code>)</td><td>25 MB mỗi tệp; giới hạn loại tệp ngay tại kho.</td></tr>
+  <tr><td>Xem tệp tại chỗ</td><td>mammoth (Word), read-excel-file (Excel), pptx-preview (PowerPoint), Leaflet (bản đồ)</td><td>Các thư viện nặng chỉ nạp khi cần (lazy), trang chính khoảng 115 KB nén.</td></tr>
+  <tr><td>Triển khai</td><td>Vercel (miễn phí) + Supabase (miễn phí)</td><td>Có <code>vercel.json</code> để link <code>/b/&lt;mã&gt;</code> mở trực tiếp.</td></tr>
+</table>
+
+<h2>1.4 Cách đọc các ký hiệu trạng thái</h2>
+<p class="legend"><span><b class="st-ok">Đã thử</b> chạy và kiểm thử thật trong bản mẫu</span> <span><b class="st-part">Có mã</b> đã viết mã nhưng chưa thử với dịch vụ thật</span> <span><b class="st-no">Chưa làm</b></span></p>
+</section>
+
+<!-- ====================== 2. CHỨC NĂNG HIỆN CÓ ====================== -->
+<section class="page">
+<h1>2. Chức năng hiện có</h1>
+
+<h2>2.1 Tài khoản và đăng nhập</h2>
+<table>
+  <tr><th>Chức năng</th><th>Mô tả</th><th style="width:20mm">Trạng thái</th></tr>
+  <tr><td>Đăng nhập một chạm với Google</td><td>Nút “Tiếp tục với Google”, lấy tên, email, ảnh đại diện; trigger CSDL tự tạo hồ sơ giáo viên khi đăng nhập lần đầu.</td><td class="st-part">Có mã</td></tr>
+  <tr><td>Chuyển nhiều Gmail</td><td>Menu “Thêm / chuyển tài khoản Google khác”; danh sách Gmail đã dùng lưu cục bộ (chỉ email và tên, không lưu mã phiên); chọn lại một Gmail thì Google chọn sẵn tài khoản đó.</td><td class="st-part">Có mã</td></tr>
+  <tr><td>Chế độ mẫu (chưa có <code>.env</code>)</td><td>3 tài khoản Gmail mẫu, chuyển đổi được; dữ liệu giả lập đủ 2 bảng (Lớp 4A có 24 học sinh, Tập huấn có 20 giáo viên).</td><td class="st-ok">Đã thử</td></tr>
+  <tr><td>Chia sẻ bảng với giáo viên khác theo Gmail</td><td>Chủ bảng mời bằng Gmail với quyền <b>Đồng quản lý</b> hoặc <b>Chỉ xem</b>, đổi quyền, gỡ quyền; người được mời thấy bảng trong nhóm “Được chia sẻ với tôi”, có thể tự rời bảng; tối đa 20 người mỗi bảng; nút soạn sẵn thư mời. Quyền kiểm tra ở cả giao diện lẫn RLS.</td><td class="st-ok">Đã thử (bản mẫu)</td></tr>
+  <tr><td>Thử quyền theo vai trò</td><td>Trong menu tài khoản chọn xem bảng như giáo viên, học sinh hoặc phụ huynh để kiểm tra quyền.</td><td class="st-ok">Đã thử</td></tr>
+</table>
+
+<h2>2.2 Tạo bảng và cài đặt</h2>
+<ul>
+  <li><b>Tạo bảng từ 9 mẫu có sẵn:</b> Lớp học trống, Tập huấn giáo viên, Phiếu cuối giờ, Thảo luận nhóm, Triển lãm sản phẩm, Dòng thời gian, Bản đồ lớp học, So sánh bằng Venn, Sơ đồ ý tưởng. Mẫu quyết định sẵn nhiệm vụ, lời dẫn, kiểu xem, nền và phông chữ. Bảng giáo viên đánh dấu “mẫu” cũng xuất hiện ở đây.</li>
+  <li><b>Hộp Cài đặt bảng</b> (ngăn kéo bên phải, <b>xem trước trực tiếp</b> trên bảng phía sau; Hủy thì quay về như cũ): tên bảng, lời dẫn, 8 biểu tượng, 5 màu nền, 3 phông chữ (Hiện đại, Có chân, Viết tay), cỡ thẻ (tiêu chuẩn / rộng để chiếu tivi), kiểu xem mặc định, 4 cách sắp xếp, ẩn/hiện tên người nộp, ẩn/hiện thời gian, tên hai vòng Venn.</li>
+  <li><b>Hai chế độ bảng:</b> Lớp học (Họ tên/Nhóm, Tổ/Lớp) và Tập huấn (Họ tên giáo viên, Trường/Đơn vị).</li>
+</ul>
+<p><b class="st-ok">Đã thử</b> trong bản mẫu; phần lưu CSDL <b class="st-part">có mã</b>.</p>
+
+<h2>2.3 Hai khu vực tách bạch</h2>
+<ul>
+  <li><b>Khu vực 1 – Bài học và tài liệu ghim:</b> ghim cố định phía trên, có nút Thu gọn / Mở rộng; ghim PDF, slide, video, liên kết, bài mẫu; giáo viên thêm bằng nút “Ghim tài liệu”.</li>
+  <li><b>Khu vực 2 – Bài nộp và sản phẩm:</b> thanh lọc, 11 bố cục, Data Board; bấm thẻ để mở chế độ trình chiếu.</li>
+</ul>
+
+<h2>2.4 Nộp bài không cần tài khoản (nút “+”)</h2>
+<table>
+  <tr><th style="width:44mm">Nội dung</th><th>Chi tiết</th></tr>
+  <tr><td>Trường bắt buộc</td><td>Họ tên hoặc nhóm; Tổ/Lớp (hoặc Trường/Đơn vị); Tiêu đề sản phẩm. Gửi thiếu thì báo lỗi dưới từng ô và đưa con trỏ tới ô lỗi đầu tiên. <b>Nội dung và đính kèm không bắt buộc.</b></td></tr>
+  <tr><td>Nhiều đính kèm cùng lúc</td><td>Mỗi bài tối đa 10 mục: nhiều tệp, ảnh chụp, video, ghi âm, hình vẽ, nhiều liên kết, văn bản, một thăm dò, một vị trí. Mỗi tệp tối đa 25 MB, cả bài tối đa 60 MB. Ảnh tự nén (tối đa 1600 px) trước khi tải.</td></tr>
+  <tr><td>Chọn tệp, kéo thả, dán</td><td>Tải nhiều tệp một lần; kéo thả vào khung; dán (Ctrl+V) ảnh, liên kết, đoạn văn ở bất cứ đâu trong form (đang gõ trong ô thì dán chữ bình thường); nút “Dán từ bộ nhớ tạm” cho điện thoại. Ảnh dán được đặt tên riêng để không trùng.</td></tr>
+  <tr><td>Công cụ đính kèm</td><td>Tải tệp · Chụp ảnh (camera trước/sau) · Quay video · Ghi âm · Quay màn hình (giới hạn 2 phút, ghi âm 5 phút, xem lại trước khi dùng) · Vẽ tay (6 màu, 3 cỡ nét, tẩy, hoàn tác) · Dán liên kết (YouTube, Vimeo, Google Drive/Docs/Slides, Spotify được nhận dạng và nhúng) · Thăm dò ý kiến (2–6 lựa chọn) · Vị trí trên bản đồ.</td></tr>
+  <tr><td>Quyền sửa bài của người nộp</td><td>Trình duyệt giữ mã riêng; học sinh xóa được bài của mình trong 15 phút đầu. Nhớ tên và tổ lần trước.</td></tr>
+  <tr><td>Chống lạm dụng</td><td>Tối đa 5 bài / 10 phút mỗi trình duyệt; giới hạn độ dài chữ; kiểm tra loại tệp và dung lượng ở cả trình duyệt lẫn kho; tùy chọn “Duyệt bài trước khi hiển thị công khai”.</td></tr>
+</table>
+<p>Trạng thái: giao diện và kiểm tra dữ liệu <b class="st-ok">đã thử</b>; camera, micro, quay màn hình chỉ thử đến mức báo lỗi quyền truy cập (khung trình duyệt trong ứng dụng chặn thiết bị) nên <b class="st-part">cần thử trên Chrome thật</b>; tải lên kho Supabase thật <b class="st-part">có mã</b>.</p>
+</section>
+
+<section class="page">
+<h2>2.5 Xem trực tiếp mọi loại tệp (không cần tải về)</h2>
+<table>
+  <tr><th style="width:42mm">Loại</th><th>Cách xem trong bài và trong chế độ trình chiếu</th><th style="width:20mm">Trạng thái</th></tr>
+  <tr><td>Word (.docx)</td><td>Đổi sang văn bản có tiêu đề, danh sách, bảng, ảnh; HTML được làm sạch (bỏ script, liên kết <code>javascript:</code>).</td><td class="st-ok">Đã thử</td></tr>
+  <tr><td>Excel (.xlsx)</td><td>Hiện thành bảng, có thẻ chuyển giữa các trang tính (tối đa 300 dòng, 30 cột).</td><td class="st-ok">Đã thử</td></tr>
+  <tr><td>PowerPoint (.pptx)</td><td>Dựng từng trang chiếu, có nút chuyển trang.</td><td class="st-ok">Đã thử (1 trang đơn giản)</td></tr>
+  <tr><td>PDF</td><td>Nhúng bằng trình xem PDF của trình duyệt, kèm liên kết mở tab mới.</td><td class="st-ok">Đã thử</td></tr>
+  <tr><td>Ảnh PNG, JPG, GIF, WebP, BMP, AVIF</td><td>Xem trực tiếp, nén trước khi tải lên.</td><td class="st-ok">Đã thử</td></tr>
+  <tr><td>Âm thanh MP3, WAV, M4A, AAC, OGG</td><td>Trình phát có điều khiển.</td><td class="st-ok">Đã thử (phần tử phát)</td></tr>
+  <tr><td>Video MP4, MOV, WebM</td><td>Trình phát có điều khiển; thẻ hiện khung hình đầu.</td><td class="st-ok">Đã thử (phần tử phát)</td></tr>
+  <tr><td>Văn bản .txt, CSV</td><td>Hiện nguyên nội dung; CSV thành bảng (200 dòng đầu).</td><td class="st-ok">Đã thử</td></tr>
+  <tr><td>Web và nhúng</td><td>YouTube, Vimeo, Drive/Docs/Slides, Spotify nhúng phát ngay (khung có sandbox); trang web khác mở tab mới.</td><td class="st-ok">Đã thử</td></tr>
+</table>
+<p>Nhận dạng loại tệp theo đuôi tên khi hệ điều hành không báo loại (thường gặp với .docx, .m4a trên Windows). Thẻ bài tô màu theo loại: PDF đỏ, Word xanh dương, Excel xanh lá, PowerPoint cam.</p>
+<div class="note warn"><b>Giới hạn đã biết:</b> file đời cũ .doc, .xls, .ppt chỉ hiện nút tải xuống; AVI, WMV, MKV, FLV bị từ chối vì trình duyệt không phát được; ảnh HEIC của iPhone chưa xem được (nên đổi JPG hoặc chụp lại bằng nút Chụp ảnh); PowerPoint có hiệu ứng, SmartArt, biểu đồ phức tạp có thể hiển thị khác bản gốc.</div>
+
+<h2>2.6 Data Board, tìm kiếm và bộ lọc (dành cho giáo viên)</h2>
+<ul>
+  <li><b>Năm thẻ chỉ số:</b> Tổng người tham gia · Đã nộp · Chờ duyệt/Đang làm · Chưa nộp · Tỉ lệ hoàn thành (%). Bấm thẻ nào thì lọc đúng nhóm đó.</li>
+  <li><b>Ghép với sĩ số:</b> giáo viên dán danh sách lớp (mỗi dòng 1 người, kèm tổ/đơn vị sau dấu phẩy, Tab hoặc |); hệ thống đối chiếu tên không phân biệt hoa thường và dấu; người nộp ngoài danh sách được gắn nhãn “Ngoài danh sách”.</li>
+  <li><b>Bộ lọc đồng thời:</b> tìm tên (có gợi ý theo tổ/đơn vị), lọc theo Tên bài, Nhiệm vụ, Tiến trình (Chưa nộp, Đang làm, Chờ duyệt, Đã duyệt, Tiêu biểu, Cần sửa), Thời gian (Hôm nay, 24 giờ, 7 ngày, Theo buổi); nút Xóa bộ lọc.</li>
+</ul>
+
+<h2>2.7 Mười một bố cục</h2>
+<p>Chọn trong một menu “Bố cục” (trên điện thoại hiện như ngăn kéo ở đáy màn hình):</p>
+<table>
+  <tr><th style="width:34mm">Bố cục</th><th>Mô tả</th><th style="width:30mm">Ai dùng được</th></tr>
+  <tr><td>Tường</td><td>Thẻ cao thấp tự nhiên, xếp khít như gạch.</td><td>Mọi người</td></tr>
+  <tr><td>Lưới thẻ</td><td>Thẻ đều nhau; số cột 1 → 2 → 3 → 4 tại các mốc 480, 768, 1024 px.</td><td>Mọi người</td></tr>
+  <tr><td>Chia cột</td><td>Cột theo tiến trình hoặc theo nhiệm vụ.</td><td>Mọi người</td></tr>
+  <tr><td>Bảng danh sách</td><td>STT, họ tên, tổ/đơn vị, trạng thái, thời gian nộp, điểm, thao tác; lọc Đã nộp/Chưa nộp; sao chép danh sách chưa nộp để nhắc bài; xuất CSV.</td><td>Giáo viên</td></tr>
+  <tr><td>Tổng hợp nhóm</td><td>Tỉ lệ hoàn thành từng tổ/đơn vị, thanh tiến độ ba màu.</td><td>Giáo viên</td></tr>
+  <tr><td>Dòng thời gian</td><td>Bài gom theo ngày nộp trên một trục dọc.</td><td>Mọi người</td></tr>
+  <tr><td>Bản đồ</td><td>Bài có vị trí hiện thành ghim trên OpenStreetMap; giáo viên đặt vị trí cho bài chưa có bằng cách bấm lên bản đồ.</td><td>Mọi người (đặt vị trí: giáo viên)</td></tr>
+  <tr><td>Bảng trắng</td><td>Thẻ đặt tự do; giáo viên kéo thanh tay cầm để đổi chỗ, vị trí được lưu; nút Xếp lại tự động.</td><td>Mọi người (kéo: giáo viên)</td></tr>
+  <tr><td>Sơ đồ động não</td><td>Tên bảng ở giữa, nhánh theo nhiệm vụ, lá là từng bài; thu gọn / mở rộng nhánh.</td><td>Mọi người</td></tr>
+  <tr><td>Biểu đồ Venn</td><td>Hai vòng: giáo viên kéo thả hoặc chọn danh sách để xếp bài vào “Chỉ A”, “Cả hai”, “Chỉ B”.</td><td>Mọi người (xếp: giáo viên)</td></tr>
+  <tr><td>Thuyết trình</td><td>Mỗi bài là một trang chiếu: danh sách trang + nội dung đầy đủ + phím ← →.</td><td>Mọi người</td></tr>
+</table>
+<p>Tất cả bố cục <b class="st-ok">đã thử</b> trong bản mẫu ở khổ máy tính và điện thoại 390 px (không tràn ngang). Ảnh nền bản đồ cần mạng, chưa xác nhận hiển thị đủ trong khung trình duyệt thử.</p>
+</section>
+
+<section class="page">
+<h2>2.8 Chế độ trình chiếu</h2>
+<ul>
+  <li>Khung toàn màn hình, chữ lớn, tối giản; thoát bằng nút hoặc phím Esc.</li>
+  <li>Nút <b>Bài trước / Bài sau</b> và phím ← →; chỉ báo vị trí “Bài 3 / 18”.</li>
+  <li>Giáo viên gắn <b>Tiêu biểu</b>, <b>Duyệt bài</b> ngay lúc chiếu; hiện điểm và nhận xét (điểm chỉ giáo viên thấy).</li>
+  <li>Hiện đủ mọi đính kèm của bài: ảnh, video, âm thanh, tệp Office/PDF, bản nhúng, liên kết, thăm dò có bình chọn trực tiếp.</li>
+  <li>Nút “Toàn màn hình” dùng chế độ toàn màn hình của trình duyệt.</li>
+</ul>
+
+<h2>2.9 Chia sẻ, mã QR và quyền của link</h2>
+<ul>
+  <li>Mỗi bảng có link riêng dạng <code>/b/&lt;mã&gt;</code> và mã QR; nút “Chiếu mã QR lớn” cho cả hội trường.</li>
+  <li><b>Ba chế độ link:</b> Chỉ xem · Mở link là nộp bài (không cần tài khoản) · Khóa nộp bài.</li>
+  <li>Công tắc “Duyệt bài trước khi hiển thị công khai”.</li>
+  <li>Bảng đã đóng hoặc trong thùng rác tự khóa việc nộp bài và bình chọn ở cấp CSDL.</li>
+</ul>
+
+<h2>2.10 Quản lý bài và bảng (giáo viên)</h2>
+<table>
+  <tr><th style="width:42mm">Chức năng</th><th>Mô tả</th></tr>
+  <tr><td>Duyệt / Tiêu biểu / Cần sửa</td><td>Nút nhanh trên thẻ, trong bảng và trong trình chiếu; bài chờ duyệt không hiện công khai.</td></tr>
+  <tr><td>Sổ điểm</td><td>Chấm điểm thang 10 (nhập <code>9,5</code> hoặc <code>9.5</code>) và nhận xét từng bài, tự lưu khi rời ô, báo lỗi nếu ngoài 0–10; thống kê đã chấm, trung bình, cao nhất, thấp nhất. Điểm không bao giờ đưa ra cho khách (đã loại khỏi dữ liệu công khai).</td></tr>
+  <tr><td>Nhật ký hoạt động</td><td>Ai làm gì, lúc nào (150 sự kiện gần nhất): nộp bài, đổi trạng thái, chấm điểm, xóa bài, đổi cài đặt, đóng/mở bảng… Sự kiện về bài nộp do trigger CSDL ghi nên không giả mạo được.</td></tr>
+  <tr><td>Nhân bản bảng</td><td>Chép kiểu bảng, lời dẫn, cài đặt, nhiệm vụ; tùy chọn giữ tài liệu ghim và sĩ số; không chép bài nộp; link chia sẻ mới.</td></tr>
+  <tr><td>Đánh dấu là mẫu</td><td>Bảng hiện thành “mẫu của bạn” trong hộp Tạo bảng.</td></tr>
+  <tr><td>Chi tiết bảng</td><td>Chủ bảng, ngày tạo, số bài và đính kèm, phân bố trạng thái.</td></tr>
+  <tr><td>Đóng bảng</td><td>Bảng chỉ xem, ngừng nhận bài; hiện biểu ngữ; mở lại bất cứ lúc nào.</td></tr>
+  <tr><td>Xóa hết bài nộp</td><td>Phải gõ <code>XÓA</code> mới bấm được; nhắc xuất báo cáo trước.</td></tr>
+  <tr><td>Thùng rác</td><td>Link ngừng hoạt động; khôi phục trong 30 ngày rồi tự xóa vĩnh viễn (hàm CSDL dọn khi giáo viên mở trang); xóa vĩnh viễn phải gõ <code>XÓA</code>.</td></tr>
+  <tr><td>Xuất báo cáo</td><td>CSV có BOM UTF-8 (Excel mở đúng tiếng Việt), chống chèn công thức; cột: STT, họ tên, tổ/đơn vị, trạng thái, tên bài, nhiệm vụ, số đính kèm, thời gian nộp, điểm, nhận xét.</td></tr>
+  <tr><td>In / Lưu PDF, Toàn màn hình</td><td>Khi in tự ẩn thanh công cụ, bộ lọc và nút nổi.</td></tr>
+</table>
+<p><b class="st-ok">Đã thử</b> trong bản mẫu (chấm điểm, nhật ký, nhân bản, mẫu, đóng/mở, xóa hết, thùng rác, khôi phục); phần lưu Supabase <b class="st-part">có mã</b>.</p>
+
+<h2>2.11 Bảo mật và an toàn dữ liệu</h2>
+<ul>
+  <li><b>Row Level Security</b> trên mọi bảng; khách không đăng nhập chỉ ghi được bài nộp hợp lệ (chính sách INSERT kiểm tra qua hàm <code>guest_can_post</code>), không đọc được bài chờ duyệt, không sửa hay xóa trực tiếp.</li>
+  <li>Hàm CSDL <code>SECURITY DEFINER</code> cho xem bảng công khai, bình chọn, sửa/xóa bài của chính mình bằng mã sửa; chống spam bằng trigger.</li>
+  <li>Kho tệp: giới hạn 25 MB và danh sách loại tệp ngay tại kho; chỉ ghi vào thư mục của bảng đang nhận bài; tên tệp là UUID ngẫu nhiên.</li>
+  <li>Hiển thị an toàn: làm sạch HTML từ Word, chặn địa chỉ <code>javascript:</code>/<code>data:</code>, địa chỉ nhúng luôn dựng lại từ danh sách nhà cung cấp cố định và khung nhúng có sandbox.</li>
+  <li>Khóa <code>anon</code> được phép nằm ở trình duyệt; không bao giờ dùng khóa <code>service_role</code> trong mã giao diện. Tệp <code>.env</code> đã nằm trong <code>.gitignore</code>.</li>
+</ul>
+
+<h2>2.12 Giao diện, trải nghiệm và khả năng truy cập</h2>
+<ul>
+  <li>Phông Be Vietnam Pro đủ dấu tiếng Việt; nền sáng xanh băng, thẻ kính mờ, chuyển động 200–300 ms, tôn trọng chế độ giảm chuyển động.</li>
+  <li>Vùng chạm ≥ 44 px (nút nhỏ phụ 36 px), viền tập trung khi dùng bàn phím, nhãn <code>aria</code>, thông báo lỗi gắn với ô nhập.</li>
+  <li>Kiểm thử đã chạy ở: máy tính 1366×768, 1920×1080; máy tính bảng 820×1180; điện thoại 390×844; các mốc 479/480, 767/768, 1023/1024.</li>
+</ul>
+</section>
+
+<!-- ====================== 3. MỨC ĐỘ HOÀN THIỆN ====================== -->
+<section class="page">
+<h1>3. Mức độ hoàn thiện và những gì chưa kiểm thử</h1>
+<table>
+  <tr><th style="width:55mm">Hạng mục</th><th style="width:22mm">Trạng thái</th><th>Ghi chú</th></tr>
+  <tr><td>Toàn bộ giao diện và luồng nghiệp vụ với dữ liệu mẫu</td><td class="st-ok">Đã thử</td><td>Kiểm tra kiểu TypeScript và build đều đạt; chạy thử thao tác thật qua trình duyệt.</td></tr>
+  <tr><td>Đăng nhập Gmail thật (Google OAuth + Supabase)</td><td class="st-part">Có mã</td><td>Cần Client ID Google và dự án Supabase của chủ phần mềm. Hướng dẫn: <code>docs/HUONG-DAN-GOOGLE-SUPABASE.md</code>.</td></tr>
+  <tr><td>Toàn bộ <code>docs/schema.sql</code> trên Supabase thật</td><td class="st-part">Có mã</td><td>Chưa chạy trên CSDL thật; cần chạy cả tệp trên dự án trống và thử từng quyền (khách, chủ bảng, đồng quản lý).</td></tr>
+  <tr><td>Tải tệp lên kho, đọc lại để xem trực tiếp (kể cả CORS của PDF/Office)</td><td class="st-part">Có mã</td><td>Phần xem đã thử bằng tệp cục bộ; chưa thử với địa chỉ kho thật.</td></tr>
+  <tr><td>Camera, micro, quay màn hình</td><td class="st-part">Cần thử</td><td>Chỉ thử đến thông báo xin quyền.</td></tr>
+  <tr><td>Safari / iPhone thật, khổ 2K và 3K, màn ngang điện thoại và máy tính bảng</td><td class="st-no">Chưa thử</td><td>Khung trình duyệt thử là Chromium.</td></tr>
+  <tr><td>Kiểm thử tự động (đơn vị, đầu-cuối)</td><td class="st-no">Chưa có</td><td>Hiện kiểm thử bằng thao tác tay và mã chạy trong trang.</td></tr>
+  <tr><td>Hiệu năng với lớp rất đông (hàng trăm bài, nhiều ảnh lớn)</td><td class="st-no">Chưa đo</td><td>Chưa có phân trang, ảnh thu nhỏ phía máy chủ.</td></tr>
+</table>
+</section>
+
+<!-- ====================== 4. LỘ TRÌNH ====================== -->
+<section class="page">
+<h1>4. Tính năng cần phát triển (lộ trình đề xuất)</h1>
+<p class="legend"><span class="p1">Ưu tiên 1</span> bắt buộc trước khi dùng thật · <span class="p2">Ưu tiên 2</span> nên có sớm · <span class="p3">Ưu tiên 3</span> mở rộng. Công sức: <b>S</b> nhỏ (≤ 1 ngày) · <b>M</b> vừa (2–4 ngày) · <b>L</b> lớn (&gt; 1 tuần).</p>
+
+<h2>4.1 Hoàn thiện nền tảng (Ưu tiên 1)</h2>
+<table>
+  <tr><th style="width:8mm">#</th><th style="width:50mm">Tính năng</th><th>Mô tả và lý do</th><th style="width:12mm">Công</th></tr>
+  <tr><td>1</td><td>Kết nối và kiểm thử Supabase thật</td><td>Tạo dự án Supabase, Client ID Google; chạy <code>schema.sql</code>; thử đăng nhập Gmail, nhiều Gmail, quyền khách/chủ bảng/đồng quản lý, kho tệp, bình chọn, nhật ký, thùng rác.</td><td>M</td></tr>
+  <tr><td>2</td><td>Triển khai và tên miền</td><td>Đưa lên Vercel, gắn tên miền, cấu hình URL đăng nhập; thử link <code>/b/&lt;mã&gt;</code> và mã QR ngoài thực tế.</td><td>S</td></tr>
+  <tr><td>3</td><td>Mời đồng quản lý trong giao diện <b class="st-ok">(đã làm giao diện và RLS; chờ thử Supabase thật)</b></td><td>Bảng và RLS đã có; cần hộp thoại mời bằng Gmail, danh sách, thu hồi quyền; mục “Bảng được chia sẻ với tôi”.</td><td>M</td></tr>
+  <tr><td>4</td><td>Sửa bài đã nộp</td><td>Hiện mới có xóa trong 15 phút. Cần sửa tiêu đề, nội dung, đính kèm; giáo viên yêu cầu “Cần sửa” thì học sinh sửa lại và nộp lại.</td><td>M</td></tr>
+  <tr><td>5</td><td>Kiểm thử thiết bị thật</td><td>Safari/iPhone, Android, màn 2K/3K, máy tính bảng ngang; camera/micro/quay màn hình; sửa các lỗi hiển thị phát hiện được.</td><td>M</td></tr>
+  <tr><td>6</td><td>Quyết định chính sách dữ liệu học sinh</td><td>Thời hạn lưu tệp, ẩn tệp khỏi người ngoài lớp hay công khai theo bài đã duyệt, thông báo cho phụ huynh; đối chiếu quy định bảo vệ dữ liệu cá nhân hiện hành.</td><td>S</td></tr>
+  <tr><td>7</td><td>Kiểm thử tự động</td><td>Bộ kiểm thử đơn vị cho logic lọc/đối chiếu/nhận dạng liên kết/đọc danh sách; kiểm thử đầu-cuối (Playwright) cho luồng nộp bài, duyệt, trình chiếu; kiểm thử RLS bằng SQL.</td><td>L</td></tr>
+</table>
+
+<h2>4.2 Nâng cao trải nghiệm và vận hành (Ưu tiên 2)</h2>
+<table>
+  <tr><th style="width:8mm">#</th><th style="width:50mm">Tính năng</th><th>Mô tả và lý do</th><th style="width:12mm">Công</th></tr>
+  <tr><td>8</td><td>Cập nhật tức thì (Realtime)</td><td>Bài mới hiện ngay trên màn chiếu không cần tải lại (Supabase Realtime), kèm âm báo nhẹ tùy chọn.</td><td>M</td></tr>
+  <tr><td>9</td><td>Bình luận và thả tim</td><td>Bảng <code>comments</code> đã có; cần giao diện, bật/tắt theo bảng, giáo viên ẩn/xóa, giới hạn độ dài và tần suất.</td><td>M</td></tr>
+  <tr><td>10</td><td>Xuất Excel (.xlsx) thật</td><td>Hiện là CSV mở bằng Excel. Cần thư viện nhỏ để tạo .xlsx có định dạng, nhiều trang (báo cáo, điểm, thống kê). Cần bạn đồng ý cài thư viện.</td><td>S</td></tr>
+  <tr><td>11</td><td>Nhập sĩ số từ file Excel/CSV</td><td>Hiện dán từng dòng. Cần nhập thẳng .xlsx, nhận cột tên và tổ.</td><td>S</td></tr>
+  <tr><td>12</td><td>Hiệu năng cho lớp đông</td><td>Phân trang hoặc cuộn ảo, ảnh thu nhỏ do máy chủ tạo, nạp ảnh dần; đo và tối ưu.</td><td>M</td></tr>
+  <tr><td>13</td><td>Thông báo cho giáo viên</td><td>Thư báo khi có bài chờ duyệt (tóm tắt theo giờ), nhắc bài cuối buổi.</td><td>M</td></tr>
+  <tr><td>14</td><td>Chống lạm dụng nâng cao</td><td>Chống bot (captcha nhẹ), giới hạn theo địa chỉ mạng, lọc từ nhạy cảm, chức năng chặn một trình duyệt vi phạm.</td><td>M</td></tr>
+  <tr><td>15</td><td>Sao lưu và xuất toàn bộ bảng</td><td>Tải gói (bài, tệp, điểm, nhật ký) để lưu trữ; sao lưu CSDL định kỳ.</td><td>M</td></tr>
+  <tr><td>16</td><td>Chuẩn truy cập (WCAG 2.1 AA)</td><td>Kiểm tra bằng trình đọc màn hình, thứ tự tab, tương phản, chú thích hình và video.</td><td>M</td></tr>
+</table>
+
+<h2>4.3 Pha 5 – dịch vụ ngoài (đã rà, chờ quyết định)</h2>
+<table>
+  <tr><th style="width:44mm">Mục</th><th>Đánh giá</th><th style="width:26mm">Đề xuất</th></tr>
+  <tr><td>Đọc to bằng giọng của trình duyệt</td><td>Giọng tiếng Việt có sẵn, miễn phí, không gửi dữ liệu đi đâu; nút “Nghe” cho bài nộp và trình chiếu.</td><td class="p1">Làm sớm (S)</td></tr>
+  <tr><td>Tìm ảnh mở</td><td>Openverse, Wikimedia Commons, không cần khóa; hiện nguồn và giấy phép; giáo viên bật cho từng bảng (lọc nội dung trẻ em).</td><td class="p2">Nên làm (M)</td></tr>
+  <tr><td>Tìm GIF</td><td>Cần khóa Tenor hoặc Giphy, giới hạn gói miễn phí; phải đặt khóa ở hàm máy chủ.</td><td class="p3">Cân nhắc</td></tr>
+  <tr><td>Giáo án AI cho giáo viên</td><td>Gọi API Claude từ hàm máy chủ Supabase (khóa không để ở trình duyệt); chỉ giáo viên dùng; đặt hạn mức theo tháng; không đưa tên học sinh vào câu lệnh. Tính phí theo lượng chữ.</td><td class="p2">Sau khi có khóa và ngân sách (M)</td></tr>
+  <tr><td>Ảnh AI, giọng AI trả phí</td><td>Nội dung khó kiểm soát, bản quyền chưa rõ, tốn phí theo lượt.</td><td class="p3">Hoãn</td></tr>
+  <tr><td>Chọn tệp từ Google Drive / OneDrive</td><td>Google đòi xác minh ứng dụng khi xin quyền đọc Drive; dán liên kết Drive/Slides/OneDrive đã nhúng xem được.</td><td class="p3">Không cần</td></tr>
+</table>
+
+<h2>4.4 Mở rộng nghiệp vụ giáo dục (Ưu tiên 3, đề xuất)</h2>
+<table>
+  <tr><th style="width:8mm">#</th><th style="width:50mm">Tính năng</th><th>Mô tả</th><th style="width:12mm">Công</th></tr>
+  <tr><td>17</td><td>Rubric chấm bài</td><td>Bảng tiêu chí có mức điểm, chấm nhanh theo tiêu chí, điểm tự tính.</td><td>M</td></tr>
+  <tr><td>18</td><td>Điểm danh theo buổi</td><td>Gắn với danh sách sĩ số và “Theo buổi” trong bộ lọc thời gian (hiện buổi chỉ có trong dữ liệu mẫu).</td><td>M</td></tr>
+  <tr><td>19</td><td>Chia nhóm tự động</td><td>Chia học sinh theo tổ, ngẫu nhiên hoặc cân bằng; mỗi nhóm một mã QR riêng.</td><td>M</td></tr>
+  <tr><td>20</td><td>Thống kê theo tuần / học kỳ</td><td>Biểu đồ tiến độ nộp bài, học sinh hay chậm, so sánh giữa các lớp hoặc đơn vị tập huấn.</td><td>M</td></tr>
+  <tr><td>21</td><td>Tải bài hàng loạt (nén .zip)</td><td>Tải toàn bộ tệp của một bảng hoặc một nhiệm vụ, tên tệp theo họ tên.</td><td>M</td></tr>
+  <tr><td>22</td><td>Bình chọn ẩn danh và câu hỏi nhanh</td><td>Thăm dò độc lập (không cần bài nộp), đồ thị kết quả, chiếu lên màn hình.</td><td>S</td></tr>
+  <tr><td>23</td><td>Ứng dụng cài được (PWA) và dùng khi mạng yếu</td><td>Cài lên điện thoại, nộp bài khi mất mạng rồi tự gửi lại.</td><td>L</td></tr>
+  <tr><td>24</td><td>Quản trị cấp trường / đơn vị</td><td>Tài khoản quản trị xem mọi bảng của tổ chuyên môn, mẫu dùng chung, thống kê toàn trường.</td><td>L</td></tr>
+  <tr><td>25</td><td>Phụ đề và dịch</td><td>Phụ đề cho video/ghi âm, dịch nội dung bài sang ngôn ngữ khác cho lớp có học sinh dân tộc thiểu số hoặc quốc tế.</td><td>L</td></tr>
+</table>
+</section>
+
+<!-- ====================== 5. QUYẾT ĐỊNH ====================== -->
+<section class="page">
+<h1>5. Các quyết định cần chủ phần mềm xác nhận</h1>
+<ol>
+  <li><b>Tệp học sinh nộp có công khai không?</b> Hiện kho đọc công khai theo địa chỉ ngẫu nhiên (không đoán được). Nếu cần ẩn tuyệt đối khỏi người ngoài lớp phải chuyển sang địa chỉ ký có thời hạn, tốn thêm công phát triển.</li>
+  <li><b>Giới hạn dung lượng và thời hạn lưu.</b> Mỗi tệp tối đa bao nhiêu MB; có cho nộp video dài; có tự xóa tệp sau khi kết thúc học kỳ (gói Supabase miễn phí khoảng 1 GB).</li>
+  <li><b>Hạng mục dịch vụ ngoài.</b> Có dùng giáo án AI không; ai đứng tên khóa API và ngân sách mỗi tháng; có cho phép tìm ảnh/GIF từ dịch vụ ngoài.</li>
+  <li><b>Tên miền và đơn vị vận hành.</b> Tên miền dùng chính thức; ai quản trị Supabase và Google Cloud; chính sách quyền riêng tư và điều khoản hiển thị cho học sinh, phụ huynh.</li>
+  <li><b>Phạm vi sử dụng thực tế.</b> Một trường hay nhiều trường; có cần quản trị cấp trường (mục 24) và nhiều giáo viên cùng một bảng (mục 3) ngay từ đầu.</li>
+</ol>
+
+<h2>Thứ tự thực hiện đề xuất</h2>
+<table>
+  <tr><th style="width:26mm">Giai đoạn</th><th>Nội dung</th><th style="width:34mm">Điều kiện hoàn thành</th></tr>
+  <tr><td><b>A</b></td><td>Mục 1, 2, 6: nối Supabase thật, triển khai Vercel, chốt chính sách dữ liệu.</td><td>Một lớp thật dùng thử được.</td></tr>
+  <tr><td><b>B</b></td><td>Mục 3, 4, 5, 8: đồng quản lý, sửa bài, kiểm thử thiết bị, cập nhật tức thì.</td><td>Không còn lỗi hiển thị trên iPhone và Android.</td></tr>
+  <tr><td><b>C</b></td><td>Mục 9, 10, 11, 12, 13: bình luận, .xlsx, nhập sĩ số, hiệu năng, thông báo; cùng “Đọc to” và “Tìm ảnh mở” của pha 5.</td><td>Lớp 40 học sinh nộp nhiều ảnh vẫn mượt.</td></tr>
+  <tr><td><b>D</b></td><td>Mục 7, 14, 15, 16 và giáo án AI: kiểm thử tự động, chống lạm dụng, sao lưu, truy cập, giáo án AI.</td><td>Sẵn sàng mở cho nhiều trường.</td></tr>
+  <tr><td><b>E</b></td><td>Mục 17–25 tùy nhu cầu thực tế.</td><td>Theo phản hồi người dùng.</td></tr>
+</table>
+
+<h1 style="margin-top:8mm">Phụ lục A. Cơ sở dữ liệu (<code>docs/schema.sql</code>)</h1>
+<table>
+  <tr><th style="width:42mm">Bảng</th><th>Vai trò</th></tr>
+  <tr><td><code>users</code></td><td>Hồ sơ giáo viên đồng bộ từ tài khoản Google.</td></tr>
+  <tr><td><code>boards</code></td><td>Bảng: chủ bảng, chế độ, lời dẫn, mã chia sẻ, chế độ link, duyệt trước, cài đặt giao diện (JSON), thời điểm đóng/xóa, đánh dấu mẫu.</td></tr>
+  <tr><td><code>board_collaborators</code></td><td>Đồng quản lý theo Gmail.</td></tr>
+  <tr><td><code>board_tasks</code>, <code>board_roster</code></td><td>Nhiệm vụ và danh sách sĩ số của bảng.</td></tr>
+  <tr><td><code>cards</code></td><td>Tài liệu ghim và bài nộp: tác giả, tổ/đơn vị, nội dung, đính kèm (JSON, tối đa 10), thăm dò, vị trí bản đồ, toạ độ Bảng trắng, vùng Venn, trạng thái, nhận xét, điểm, mã phiên và mã sửa.</td></tr>
+  <tr><td><code>card_votes</code></td><td>Phiếu bình chọn (một phiếu mỗi trình duyệt mỗi bài).</td></tr>
+  <tr><td><code>board_activity</code></td><td>Nhật ký hoạt động.</td></tr>
+  <tr><td><code>comments</code></td><td>Bình luận và thả tim (đã có bảng, chưa có giao diện).</td></tr>
+</table>
+<p class="small">Hàm chính: <code>handle_new_user</code>, <code>is_board_manager</code>, <code>get_board_public</code>, <code>submit_card</code>, <code>edit_card</code>, <code>guest_can_post</code>, <code>vote_card</code>, <code>can_upload_to_board</code>, <code>log_card_activity</code>, <code>purge_trashed_boards</code>; trigger chống spam <code>cards_guard</code>; kho tệp <code>board-files</code> với chính sách ghi riêng.</p>
+
+<h1 style="margin-top:8mm">Phụ lục B. Cấu trúc mã nguồn</h1>
+<table>
+  <tr><th style="width:52mm">Thư mục</th><th>Nội dung</th></tr>
+  <tr><td><code>src/types</code></td><td>Kiểu dữ liệu dùng chung (<code>board.ts</code>).</td></tr>
+  <tr><td><code>src/data</code></td><td>Dữ liệu mẫu và mẫu bảng.</td></tr>
+  <tr><td><code>src/lib</code></td><td>Logic thuần: đối chiếu và lọc, cài đặt bảng, nhận dạng liên kết nhúng, xử lý tệp, làm sạch HTML, CSV, báo cáo, Supabase (<code>supabase.ts</code>, <code>auth.ts</code>, <code>boardApi.ts</code>, <code>storage.ts</code>).</td></tr>
+  <tr><td><code>src/hooks</code></td><td>Kho dữ liệu duy nhất (<code>useBoardStore</code> chọn dữ liệu mẫu hay Supabase), tài khoản, trạng thái form nộp bài.</td></tr>
+  <tr><td><code>src/components</code></td><td>Hơn 30 thành phần giao diện: bộ lọc, thẻ KPI, các bố cục (<code>views/</code>), trình xem tệp, các hộp thoại, bộ đính kèm (<code>attach/</code>).</td></tr>
+  <tr><td><code>docs</code></td><td><code>schema.sql</code>, <code>KIEN-TRUC.md</code>, <code>HUONG-DAN-GOOGLE-SUPABASE.md</code>, tài liệu này.</td></tr>
+</table>
+<p class="small">Quy mô: khoảng 66 tệp TypeScript/TSX, hơn 5.000 dòng mã. Lệnh chạy: <code>npm run dev</code> (thử), <code>npm run build</code> (đóng gói, có kiểm tra kiểu).</p>
+</section>
+
+</body>
+</html>

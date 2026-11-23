@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Cỡ chữ gốc tăng nhẹ theo bề rộng: 1366→~16px, 1920→~18px, 2K→~20px, 3K→~21px; mọi khoảng cách theo rem nên cả giao diện co giãn theo. */
+  html { -webkit-text-size-adjust: 100%; font-size: clamp(16px, calc(12px + 0.3vw), 22px); }
+  body {
+    @apply font-sans text-ink antialiased;
+    min-height: 100vh;
+    background:
+      radial-gradient(900px 480px at 8% -8%, #d6e7ff 0%, transparent 60%),
+      radial-gradient(800px 460px at 96% -4%, #c9f3ea 0%, transparent 58%),
+      #f3f8ff;
+    background-attachment: fixed;
+  }
+  :focus-visible { outline: 3px solid #1668f2; outline-offset: 2px; border-radius: 8px; }
+  button, input, select, textarea { font-family: inherit; }
+}
+
+@layer components {
+  .glass {
+    @apply border border-brand-200/80 bg-white/75 shadow-soft backdrop-blur-md;
+  }
+  .btn {
+    @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-4 text-sm font-bold
+           transition duration-200 ease-out active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-gradient-to-b from-brand-500 to-brand-600 text-white shadow-glow hover:-translate-y-0.5 hover:shadow-lift;
+  }
+  .btn-ghost {
+    @apply btn border-[1.5px] border-brand-200 bg-white text-brand-700 hover:-translate-y-0.5 hover:border-brand-400 hover:bg-brand-50;
+  }
+  .btn-sm { @apply min-h-[36px] px-3 text-xs; }
+  .field-label { @apply mb-1 block text-[0.92rem] font-extrabold text-ink; }
+  .input {
+    @apply min-h-[44px] w-full rounded-xl border-2 border-brand-200 bg-white px-3 text-sm text-ink
+           transition duration-200 placeholder:text-ink-3 focus:border-brand-600 focus:outline-none focus:ring-4 focus:ring-brand-100;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+@keyframes pop-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+.pop-in { animation: pop-in .25s ease-out both; }
+
+/* In / lưu PDF: chỉ giữ nội dung bảng, bỏ thanh công cụ, bộ lọc và nút nổi. */
+@media print {
+  header.sticky, button.fixed, [role='status'].fixed, section[aria-label='Tìm kiếm và bộ lọc'], section[aria-label='Tổng hợp số liệu'] { display: none !important; }
+  body { background: #fff !important; }
+  * { box-shadow: none !important; backdrop-filter: none !important; }
+  article { break-inside: avoid; }
+}
+
+/* Màn đọc tài liệu toàn màn hình (học sinh tiểu học): bỏ giới hạn chiều cao của từng trình xem, chỉ còn một thanh cuộn,
+   chữ to theo hệ số --reader-scale do nút A−/A+ chỉnh. */
+.reader .viewer-fit { max-height: none; overflow: visible; }
+.reader .viewer-media { max-height: calc(100dvh - 12rem); }
+.reader .viewer-pdf { height: calc(100dvh - 11rem); }
+.reader .doc-html { font-size: calc(1.2rem * var(--reader-scale, 1)); line-height: 1.85; padding: clamp(1rem, 3vw, 2.5rem); }
+.reader .doc-html h1 { font-size: 1.9em; } .reader .doc-html h2 { font-size: 1.5em; } .reader .doc-html h3, .reader .doc-html h4 { font-size: 1.25em; }
+.reader pre.viewer-fit { font-size: calc(1.15rem * var(--reader-scale, 1)); line-height: 1.8; padding: 1.25rem; }
+.reader table { font-size: calc(1rem * var(--reader-scale, 1)); }
+
+/* Nội dung tài liệu Word hiển thị trong trang (đã làm sạch). */
+.doc-html { line-height: 1.65; overflow-wrap: anywhere; }
+.doc-html h1 { font-size: 1.6rem; font-weight: 800; margin: 1rem 0 .5rem; }
+.doc-html h2 { font-size: 1.35rem; font-weight: 800; margin: 1rem 0 .5rem; }
+.doc-html h3, .doc-html h4 { font-size: 1.15rem; font-weight: 700; margin: .9rem 0 .4rem; }
+.doc-html p { margin: .5rem 0; }
+.doc-html ul { list-style: disc; padding-left: 1.5rem; margin: .5rem 0; }
+.doc-html ol { list-style: decimal; padding-left: 1.5rem; margin: .5rem 0; }
+.doc-html a { color: #0b4fd0; text-decoration: underline; }
+.doc-html img { max-width: 100%; height: auto; border-radius: .75rem; }
+.doc-html table { border-collapse: collapse; margin: .75rem 0; max-width: 100%; display: block; overflow-x: auto; }
+.doc-html td, .doc-html th { border: 1px solid #cfe0fb; padding: .35rem .6rem; vertical-align: top; }
+.doc-html th { background: #eef5ff; font-weight: 700; }
+
+/* Ghim trên bản đồ (Leaflet divIcon): giọt nước xoay 45°. */
+.map-pin { display: block; width: 26px; height: 26px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--pin, #1668f2); border: 3px solid #fff; box-shadow: 0 4px 10px rgba(10, 23, 48, .35); }
+.leaflet-container { font-family: inherit; }
