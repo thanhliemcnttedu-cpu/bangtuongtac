@@ -260,8 +260,9 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
   return (
     <div className="min-h-[calc(100vh-4rem)]" style={{ background: BACKGROUNDS[board.settings.background].css, fontFamily: FONTS[board.settings.font].family }}>
       <main className="mx-auto w-full max-w-[min(100%,2800px)] space-y-5 px-4 py-5 pb-28 sm:px-6 2xl:px-10">
-        <header className="relative overflow-hidden rounded-3xl border-[1.5px] border-brand-200 bg-white/90 p-4 shadow-soft backdrop-blur-md sm:p-6">
-          <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-gradient-to-br from-brand-200/70 to-teal2-100/70 blur-2xl" aria-hidden />
+        <header className="relative z-20 rounded-3xl border-[1.5px] border-brand-200 bg-white/90 p-4 shadow-soft backdrop-blur-md sm:p-6">
+          {/* Quầng sáng trang trí được cắt trong khung riêng, để khung tiêu đề không cần overflow-hidden (nếu không, trình đơn "Thêm" bị cắt mất). */}
+          <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-3xl" aria-hidden><div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-gradient-to-br from-brand-200/70 to-teal2-100/70 blur-2xl" /></div>
           <div className="relative flex flex-wrap items-start justify-between gap-4">
             <div className="flex min-w-0 flex-1 items-start gap-4">
               <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-teal2-600 text-white shadow-glow sm:h-16 sm:w-16">
@@ -362,7 +363,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
 
       {showFab && (
         <button type="button" disabled={fabLocked} onClick={() => { setPostTask(undefined); setModal('post'); }} aria-label={fabLocked ? 'Bảng đã khóa nộp bài' : 'Thêm bài nộp'}
-          className="btn-primary fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-5 z-30 !min-h-[60px] !gap-2 !px-6 text-base sm:right-8">
+          className="btn-primary fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-5 z-[19] !min-h-[60px] !gap-2 !px-6 text-base sm:right-8">
           {fabLocked ? <Lock className="h-6 w-6" aria-hidden /> : <Plus className="h-7 w-7" strokeWidth={3} aria-hidden />}
           <span>{fabLocked ? 'Đã khóa nộp bài' : 'Nộp bài'}</span>
         </button>
