@@ -79,6 +79,11 @@
     box-shadow: inset 0 2px 4px rgba(22,104,242,.06);
   }
   .input:hover { border-color: #a8c7f8; }
+  /* iPhone / iPad: ô nhập nhỏ hơn 16px làm Safari tự phóng to khi chạm, rất khó dùng với học sinh nhỏ. */
+  @media (pointer: coarse) { .input, select.input, textarea.input { font-size: 16px; } }
+  /* Hộp thoại: dùng chiều cao thấy được thật của Safari (dvh) và chừa vùng an toàn dưới đáy khi là tờ trượt trên điện thoại. */
+  .modal-box { max-height: 92vh; max-height: 92dvh; }
+  @media (max-width: 639px) { .modal-box { padding-bottom: max(1.25rem, env(safe-area-inset-bottom)); } }
   .chip { @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset; }
 }
 

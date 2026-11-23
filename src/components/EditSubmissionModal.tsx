@@ -61,7 +61,7 @@ export function EditSubmissionModal({ boardToken, isClass, initialCode, onFind, 
     try {
       let list = (await onFindByName(text)).filter((c) => !!c.editCode);
       if (list.length === 0) { const c = await byCode(text); if (c) list = [c]; }
-      if (list.length === 0) { setError('Chưa thấy bài nào của em. Em gõ đúng tên đã ghi lúc nộp bài nhé (có dấu, đúng như lúc nộp).'); return; }
+      if (list.length === 0) { setError(isClass ? 'Chưa thấy bài nào của em. Em gõ đúng tên đã ghi lúc nộp bài nhé (có dấu, đúng như lúc nộp).' : 'Chưa thấy sản phẩm nào của bạn. Hãy gõ đúng họ tên đã ghi lúc nộp (có dấu, đúng như lúc nộp).'); return; }
       if (list.length === 1) openCard(list[0]); else setChoices(list);
     } catch (e) { setError(e instanceof Error ? e.message : 'Không mở được bài.'); } finally { setBusy(false); }
   };
@@ -80,7 +80,7 @@ export function EditSubmissionModal({ boardToken, isClass, initialCode, onFind, 
     if (!card?.editCode) return;
     if (!form.authorName.trim()) { setError(isClass ? 'Em nhớ ghi tên nhé.' : 'Vui lòng nhập họ tên.'); return; }
     if (!form.title.trim()) { setError('Bài cần có tên.'); return; }
-    if (total > MAX_ATTACHMENTS) { setError(`Mỗi bài tối đa ${MAX_ATTACHMENTS} đính kèm. Em bỏ bớt ${total - MAX_ATTACHMENTS} nhé.`); return; }
+    if (total > MAX_ATTACHMENTS) { setError(`Mỗi bài tối đa ${MAX_ATTACHMENTS} đính kèm. ${isClass ? 'Em' : 'Bạn'} bỏ bớt ${total - MAX_ATTACHMENTS} nhé.`); return; }
     setBusy(true); setError('');
     try {
       const next = await onSave(card.editCode, { title: form.title.trim(), body: form.body.trim(), authorName: form.authorName.trim(), unit: form.unit.trim(), keep, files: draft.files, links: draft.links }, false);
@@ -94,7 +94,7 @@ export function EditSubmissionModal({ boardToken, isClass, initialCode, onFind, 
     try {
       await onSave(card.editCode, { ...form, keep: [], files: [], links: [] }, true);
       forgetCode(card.editCode);
-      onDone('Đã xóa bài. Em có thể nộp lại bài mới.');
+      onDone(isClass ? 'Đã xóa bài. Em có thể nộp lại bài mới.' : 'Đã xóa sản phẩm. Bạn có thể nộp lại bài mới.');
     } catch (e) { setError(e instanceof Error ? e.message : 'Không xóa được bài.'); setBusy(false); setConfirmDel(false); }
   };
 
@@ -121,7 +121,7 @@ export function EditSubmissionModal({ boardToken, isClass, initialCode, onFind, 
           </div>
           {choices.length > 0 && (
             <div>
-              <p className="text-xs font-bold text-ink-2">Có {choices.length} bài cùng tên. Em chọn bài của mình:</p>
+              <p className="text-xs font-bold text-ink-2">Có {choices.length} bài cùng tên. {isClass ? 'Em chọn bài của mình' : 'Hãy chọn đúng bài của bạn'}:</p>
               <ul className="mt-1 space-y-1">
                 {choices.map((c) => (
                   <li key={c.id}>
@@ -136,7 +136,7 @@ export function EditSubmissionModal({ boardToken, isClass, initialCode, onFind, 
           )}
           {saved.length > 0 && choices.length === 0 && (
             <div>
-              <p className="text-xs font-bold text-ink-2">Bài em đã nộp trên máy này:</p>
+              <p className="text-xs font-bold text-ink-2">{isClass ? 'Bài em đã nộp trên máy này:' : 'Sản phẩm bạn đã nộp trên máy này:'}</p>
               <ul className="mt-1 space-y-1">
                 {saved.map((s) => (
                   <li key={s.code}>
@@ -152,7 +152,7 @@ export function EditSubmissionModal({ boardToken, isClass, initialCode, onFind, 
           {error && <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700" role="alert">{error}</p>}
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onClose} className="btn-ghost">Đóng</button>
-            <button type="submit" disabled={busy} className="btn-primary">{busy ? 'Đang tìm…' : 'Mở bài của em'}</button>
+            <button type="submit" disabled={busy} className="btn-primary">{busy ? 'Đang tìm…' : isClass ? 'Mở bài của em' : 'Mở sản phẩm của tôi'}</button>
           </div>
         </form>
       </ModalShell>
@@ -160,7 +160,7 @@ export function EditSubmissionModal({ boardToken, isClass, initialCode, onFind, 
   }
 
   return (
-    <ModalShell title="Sửa bài của em" onClose={onClose} onPaste={onPaste} maxWidth={isClass ? 'max-w-2xl' : 'max-w-lg'} large={isClass}>
+    <ModalShell title={isClass ? 'Sửa bài của em' : 'Sửa sản phẩm đã nộp'} onClose={onClose} onPaste={onPaste} maxWidth={isClass ? 'max-w-2xl' : 'max-w-lg'} large={isClass}>
       <form onSubmit={(e) => void submit(e)} className="space-y-3" noValidate>
         <p className="rounded-xl bg-brand-50 px-3 py-2 text-xs text-ink-2">Bài nộp lúc {new Date(card.submittedAt).toLocaleString('vi-VN')}{card.teacherNote ? ` · Lời cô: ${card.teacherNote}` : ''}</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

@@ -55,7 +55,7 @@ function GradeRow({ row, onSetGrade, onSetStars }: { row: Props['rows'][number];
       </td>
       <td className="px-3 py-2">
         <input aria-label={`Nhận xét cho ${member.name}`} value={note} onChange={(e) => { setNote(e.target.value); setState('idle'); }} onBlur={(e) => void commit(grade, e.currentTarget.value)}
-          className="input !min-h-[40px] min-w-[200px]" placeholder="Nhận xét (học sinh thấy)" maxLength={300} />
+          className="input !min-h-[40px] min-w-[200px]" placeholder="Nhận xét (người nộp bài thấy)" maxLength={300} />
         <p className="mt-0.5 h-4 text-xs" aria-live="polite">
           {state === 'saving' && <span className="text-ink-3">Đang lưu…</span>}
           {state === 'saved' && <span className="inline-flex items-center gap-1 text-emerald-700"><Check className="h-3 w-3" aria-hidden /> Đã lưu</span>}

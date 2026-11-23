@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
-import { KeyRound, ListChecks, Lock, Pencil, Plus, Presentation, Settings, Share2, Trash2 } from 'lucide-react';
+import { KeyRound, ListChecks, Lock, Pencil, Plus, Presentation, Settings, Share2, Star, Trash2 } from 'lucide-react';
 import type {
   BoardData, BoardRow, CardLayoutPatch, CardStatus, FilterState, Lesson, PinnedResource, RosterMember, SubmissionCard, TaskItem, ViewMode, ViewerRole,
 } from '../types/board';
@@ -160,15 +160,25 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
       ...board,
       tasks: board.tasks.filter((x) => isAssigned(x, t)),
       roster: [],
-      cards: board.cards.filter((c) => c.status === 'approved' || c.status === 'featured' || c.id in myPosts),
+      // Bài đã duyệt + bài của chính em (kể cả chờ duyệt / cần sửa, tra bằng mã đã lưu trên máy này).
+      cards: [...board.cards.filter((c) => c.status === 'approved' || c.status === 'featured' || c.id in myPosts), ...mine.filter((m) => !board.cards.some((c) => c.id === m.id) && !(m.id in myPosts))],
     };
-  }, [board, canView, myPosts]);
+  }, [board, canView, myPosts, mine]);
+
+  /** Mã các bài của chính em trên máy này (để lọc, đánh dấu và đưa lên đầu). */
+  const mineSet = useMemo(() => new Set<string>([...getMyCardIds(), ...Object.keys(myPosts), ...mine.map((c) => c.id)]), [myPosts, mine]);
+  const [onlyMine, setOnlyMine] = useState(false);
 
   const rows = useMemo(() => buildRows(visibleBoard), [visibleBoard]);
-  const filtered = useMemo(
-    () => sortRows(applyFilters(rows, filters, visibleBoard), board.settings.sortBy),
-    [rows, filters, visibleBoard, board.settings.sortBy],
-  );
+  const filtered = useMemo(() => {
+    let list = sortRows(applyFilters(rows, filters, visibleBoard), board.settings.sortBy);
+    if (!canView) {
+      // Học sinh: có thể chỉ xem bài của em; không thì bài của em nằm trên đầu để khỏi phải tìm giữa nhiều bài.
+      if (onlyMine) list = list.filter((r) => r.card && mineSet.has(r.card.id));
+      else list = [...list].sort((a, b) => Number(!!b.card && mineSet.has(b.card.id)) - Number(!!a.card && mineSet.has(a.card.id)));
+    }
+    return list;
+  }, [rows, filters, visibleBoard, board.settings.sortBy, canView, onlyMine, mineSet]);
   const kpis = useMemo(() => computeKpis(rows), [rows]);
   const slideItems = useMemo(() => filtered.filter((r): r is SlideRow => r.card !== null), [filtered]);
 
@@ -208,11 +218,11 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
       setModal(null);
       if (card.editCode && !canManage) {
         rememberCode({ code: card.editCode, title: card.title, token: savedBoard.shareToken, at: Date.now() });
-        setCodeShown({ code: card.editCode, name: card.authorName, title: card.title, note: card.status === 'pending' ? 'Bài sẽ hiện công khai sau khi giáo viên duyệt.' : undefined });
+        setCodeShown({ code: card.editCode, name: card.authorName, title: card.title, note: card.status === 'pending' ? `Bài sẽ hiện công khai sau khi ${board.mode === 'classroom' ? 'giáo viên' : 'giảng viên'} duyệt.` : undefined });
       }
       showToast(card.status !== 'pending' ? 'Đã nộp bài thành công.'
-        : savedBoard.settings.moderation === 'auto' ? 'Đã nộp bài. Hệ thống giữ bài lại để giáo viên xem rồi mới hiện công khai.'
-          : 'Đã nộp bài. Bài sẽ hiện công khai sau khi giáo viên duyệt.');
+        : savedBoard.settings.moderation === 'auto' ? `Đã nộp bài. Hệ thống giữ bài lại để ${board.mode === 'classroom' ? 'giáo viên' : 'giảng viên'} xem rồi mới hiện công khai.`
+          : `Đã nộp bài. Bài sẽ hiện công khai sau khi ${board.mode === 'classroom' ? 'giáo viên' : 'giảng viên'} duyệt.`);
       return null;
     } catch (e) {
       return e instanceof Error ? e.message : 'Không nộp được bài.';
@@ -231,7 +241,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
   const feedback: FeedbackActions = {
     canManage,
     canInteract: role === 'guest' && board.linkMode === 'guest_post' && !savedBoard.archivedAt,
-    isMine: (id) => getMyCardIds().has(id) || id in myPosts,
+    isMine: (id) => mineSet.has(id),
     onRate: (cardId, stars) => store.rateCard(savedBoard.id, cardId, stars),
     onComment: (cardId, author, body) => store.addComment(savedBoard.id, cardId, author, body),
     onDeleteOwnComment: (cardId, id) => store.deleteOwnComment(savedBoard.id, cardId, id),
@@ -342,7 +352,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
 
         {canManage && pendingComments.length > 0 && (
           <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <span><b>{pendingComments.length} nhận xét</b> của học sinh đang chờ bạn duyệt.</span>
+            <span><b>{pendingComments.length} nhận xét</b> của {board.mode === 'classroom' ? 'học sinh' : 'học viên'} đang chờ bạn duyệt.</span>
             <button type="button" onClick={() => setSlideStart(pendingComments[0].cardId)} className="btn-ghost btn-sm">Mở bài đầu tiên để duyệt</button>
           </div>
         )}
@@ -371,6 +381,22 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
 
         {canView && <DataBoardSummary kpis={kpis} active={filters.progress} hasRoster={savedBoard.roster.length > 0} onSelect={(p) => patchFilters({ progress: p })} />}
 
+        {!canView && role === 'guest' && (
+          <div className="flex flex-wrap items-center gap-3 rounded-3xl border-[1.5px] border-amber-200 bg-amber-50/80 px-4 py-3" role="group" aria-label="Tìm bài của mình">
+            {mineSet.size > 0 ? (
+              <>
+                <button type="button" aria-pressed={onlyMine} onClick={() => setOnlyMine((v) => !v)}
+                  className={`btn !min-h-[48px] border-[1.5px] text-base ${onlyMine ? 'border-transparent bg-amber-400 text-ink shadow-glow' : 'border-amber-300 bg-white text-amber-900 hover:bg-amber-100'}`}>
+                  <Star className="h-5 w-5" aria-hidden /> {board.mode === 'classroom' ? (onlyMine ? 'Đang chỉ xem bài của em' : `Chỉ xem bài của em (${mineSet.size})`) : (onlyMine ? 'Đang chỉ xem sản phẩm của tôi' : `Chỉ xem sản phẩm của tôi (${mineSet.size})`)}
+                </button>
+                <span className="text-sm text-ink-2">{onlyMine ? 'Bấm lần nữa để xem lại tất cả các bài.' : (board.mode === 'classroom' ? 'Bài của em luôn nằm trên đầu danh sách.' : 'Sản phẩm của bạn luôn nằm trên đầu danh sách.')}</span>
+              </>
+            ) : (
+              <p className="text-sm text-amber-900">{board.mode === 'classroom' ? <><b>Tìm bài của em:</b> gõ tên em vào ô tìm kiếm bên dưới, hoặc bấm “Sửa bài đã nộp” rồi gõ tên em.</> : <><b>Tìm sản phẩm của bạn:</b> gõ họ tên vào ô tìm kiếm bên dưới, hoặc bấm “Sửa bài đã nộp” rồi gõ họ tên.</>}</p>
+            )}
+          </div>
+        )}
+
         <MultiFilterBar board={visibleBoard} filters={filters} view={effectiveView} resultCount={filtered.length}
           onChange={patchFilters} onViewChange={setView} onClear={clearFilters} isFiltered={isFiltered(filters)} allowedViews={allowedViews}
           deletableCount={canManage ? filtered.filter((r) => r.card).length : 0}
@@ -390,15 +416,15 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
 
         {!canView && (
           <p className="rounded-2xl bg-brand-50 px-4 py-2 text-sm text-brand-800">
-            Bạn đang xem với vai trò {role === 'guest' ? 'học sinh / học viên' : 'khách chỉ xem'}: chỉ thấy bài đã duyệt{role === 'guest' ? ' và bài của chính bạn' : ''}.
+            Bạn đang xem với vai trò {role === 'guest' ? (board.mode === 'classroom' ? 'học sinh' : 'học viên') : 'khách chỉ xem'}: chỉ thấy bài đã duyệt{role === 'guest' ? ' và bài của chính bạn' : ''}.
           </p>
         )}
 
         {role === 'guest' && mine.filter((c) => c.status === 'needs_edit' || c.status === 'pending').map((c) => (
           <div key={c.id} className={`flex flex-wrap items-center gap-3 rounded-2xl border-[1.5px] p-3 text-sm ${c.status === 'needs_edit' ? 'border-rose-200 bg-rose-50' : 'border-amber-200 bg-amber-50'}`}>
             <div className="min-w-0 flex-1">
-              <p className="font-extrabold text-ink">{c.status === 'needs_edit' ? 'Cô giáo nhờ em sửa lại bài' : 'Bài của em đang chờ cô duyệt'}: “{c.title}”</p>
-              {c.teacherNote && <p className="mt-0.5 text-ink-2">Lời cô: {c.teacherNote}</p>}
+              <p className="font-extrabold text-ink">{board.mode === 'classroom' ? (c.status === 'needs_edit' ? 'Cô giáo nhờ em sửa lại bài' : 'Bài của em đang chờ cô duyệt') : (c.status === 'needs_edit' ? 'Giảng viên đề nghị bạn chỉnh sửa sản phẩm' : 'Sản phẩm của bạn đang chờ giảng viên duyệt')}: “{c.title}”</p>
+              {c.teacherNote && <p className="mt-0.5 text-ink-2">{board.mode === 'classroom' ? 'Lời cô' : 'Nhận xét'}: {c.teacherNote}</p>}
             </div>
             {c.status === 'needs_edit' && <button type="button" onClick={() => { setEditCodePick(c.editCode); setModal('edit-mine'); }} className="btn-primary btn-sm">Sửa ngay</button>}
           </div>
@@ -478,7 +504,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
         limits={gatewayOf(savedBoard.settings) ? { maxFile: DRIVE_MAX_BYTES, maxTotal: DRIVE_MAX_BYTES } : undefined}
         onSave={(code, input, del) => store.saveCardByCode(savedBoard.id, code, input, del)}
         onDone={(msg) => { setModal(null); showToast(msg); }} onClose={() => setModal(null)} />}
-      {codeShown && <EditCodeModal code={codeShown.code} name={codeShown.name} title={codeShown.title} note={codeShown.note} onClose={() => setCodeShown(null)} />}
+      {codeShown && <EditCodeModal kid={board.mode === 'classroom'} code={codeShown.code} name={codeShown.name} title={codeShown.title} note={codeShown.note} onClose={() => setCodeShown(null)} />}
       {modal === 'post' && <QuickPostModal board={visibleBoard} roster={rosterNames} initialName={profile.name} initialUnit={profile.unit} initialTaskId={postTask} onSubmit={submitPost} onClose={() => setModal(null)} />}
       {modal === 'share' && <ShareBoardModal board={board} canManage={canManage} access={access} myEmail={myEmail} initialTab={shareTab}
         onInvite={(email, r) => store.inviteCollaborator(savedBoard.id, email, r)}

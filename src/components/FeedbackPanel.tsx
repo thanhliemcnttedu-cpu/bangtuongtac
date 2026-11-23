@@ -7,7 +7,7 @@ import { formatGrade, parseGrade } from '../lib/grade';
 import { formatStars, getMyComments, getMyRatings, ratingAvg } from '../lib/peer';
 import { StarsDisplay, StarsInput } from './StarRating';
 import { formatEditCode } from '../lib/editCode';
-import { normalize } from '../lib/boardLogic';
+import { normalize, rosterMatcher } from '../lib/boardLogic';
 
 const PROFILE_KEY = 'bt.lastProfile';
 const COMMENT_DELETE_MS = 15 * 60_000;
@@ -47,10 +47,10 @@ function Section({ title, children, tone = 'bg-white' }: { title: string; childr
 /** Tên người nộp chưa có trong danh sách (gõ sai, viết tắt…): giáo viên gán bài cho đúng thành viên chưa nộp nhiệm vụ này. */
 function ReassignRow({ card, board, fb }: { card: SubmissionCard; board: BoardData; fb: FeedbackActions }) {
   const [busy, setBusy] = useState(false);
-  const known = new Set(board.roster.map((m) => normalize(m.name)));
-  if (board.roster.length === 0 || known.has(normalize(card.authorName))) return null;
-  const doneNames = new Set(board.cards.filter((c) => c.taskId === card.taskId && c.id !== card.id).map((c) => normalize(c.authorName)));
-  const options = board.roster.filter((m) => !doneNames.has(normalize(m.name)));
+  const match = rosterMatcher(board.roster);
+  if (board.roster.length === 0 || match(card)) return null;
+  const doneIds = new Set(board.cards.filter((c) => c.taskId === card.taskId && c.id !== card.id).flatMap((c) => { const m = match(c); return m ? [m.id] : []; }));
+  const options = board.roster.filter((m) => !doneIds.has(m.id));
   return (
     <div className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">
       <label htmlFor={`fb-reassign-${card.id}`} className="font-bold">“{card.authorName}” chưa có trong danh sách thành viên. Gán bài này cho:</label>

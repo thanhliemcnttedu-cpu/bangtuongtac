@@ -33,24 +33,44 @@ export function normalize(text: string): string {
     .trim();
 }
 
+/** Phần "lớp" của đơn vị: "Lớp 4A – Tổ 2" → "Lớp 4A". Đơn vị không có dấu ngăn thì giữ nguyên. */
+export function classPart(unit: string): string {
+  return unit.split(/\s[–-]\s/)[0].trim();
+}
+
+/**
+ * Bài nộp này của thành viên nào trong danh sách? Tên khớp một người thì là người đó; tên trùng ở nhiều lớp thì xét thêm lớp / tổ.
+ * Không rõ thì trả null (giáo viên có thể gán thủ công).
+ */
+export function rosterMatcher(roster: RosterMember[]): (card: { authorName: string; unit: string }) => RosterMember | null {
+  const byName = new Map<string, RosterMember[]>();
+  for (const m of roster) { const k = normalize(m.name); byName.set(k, [...(byName.get(k) ?? []), m]); }
+  return (card) => {
+    const list = byName.get(normalize(card.authorName));
+    if (!list) return null;
+    if (list.length === 1) return list[0];
+    const u = normalize(card.unit);
+    return list.find((m) => normalize(m.unit) === u) ?? list.find((m) => normalize(classPart(m.unit)) === normalize(classPart(card.unit)) && !!classPart(card.unit)) ?? null;
+  };
+}
+
 /** Ghép mỗi thành viên với bài nộp mới nhất; người nộp ngoài danh sách được thêm thành dòng riêng. */
 export function buildRows(board: BoardData): BoardRow[] {
-  const byName = new Map<string, SubmissionCard[]>();
+  const match = rosterMatcher(board.roster);
+  const byMember = new Map<string, SubmissionCard[]>();
+  const outside = new Map<string, SubmissionCard[]>();
   for (const card of board.cards) {
-    const key = normalize(card.authorName);
-    const list = byName.get(key) ?? [];
-    list.push(card);
-    byName.set(key, list);
+    const m = match(card);
+    const bucket = m ? byMember : outside;
+    const key = m ? m.id : normalize(card.authorName);
+    bucket.set(key, [...(bucket.get(key) ?? []), card]);
   }
   const latest = (list: SubmissionCard[]): SubmissionCard =>
     list.reduce((a, b) => (a.submittedAt >= b.submittedAt ? a : b));
 
   const rows: BoardRow[] = [];
-  const used = new Set<string>();
   for (const member of board.roster) {
-    const key = normalize(member.name);
-    const list = byName.get(key);
-    if (list) used.add(key);
+    const list = byMember.get(member.id);
     const card = list ? latest(list) : null;
     rows.push({
       member,
@@ -59,8 +79,7 @@ export function buildRows(board: BoardData): BoardRow[] {
       inRoster: true,
     });
   }
-  for (const [key, list] of byName) {
-    if (used.has(key)) continue;
+  for (const list of outside.values()) {
     const card = latest(list);
     rows.push({
       member: { id: `guest-${card.id}`, name: card.authorName, unit: card.unit },
@@ -157,10 +176,10 @@ export interface UnitSummary {
   pct: number;
 }
 
-export function summarizeByUnit(rows: BoardRow[]): UnitSummary[] {
+export function summarizeByUnit(rows: BoardRow[], byClass = false): UnitSummary[] {
   const map = new Map<string, BoardRow[]>();
   for (const r of rows) {
-    const key = r.member.unit || '(Chưa ghi đơn vị)';
+    const key = (byClass ? classPart(r.member.unit) : r.member.unit) || '(Chưa ghi đơn vị)';
     map.set(key, [...(map.get(key) ?? []), r]);
   }
   return [...map.entries()]
@@ -186,13 +205,17 @@ export function parseRosterText(text: string, idPrefix = 'ds'): RosterMember[] {
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim().replace(/^\d+[.)]\s+/, ''); // bỏ số thứ tự đầu dòng
     if (!line) continue;
-    const parts = line.split(/\t|\s\|\s|\||;|,|\s[-–]\s/).map((p) => p.trim()).filter(Boolean);
-    const name = parts[0];
+    // Chỉ tách ở dấu ngăn ĐẦU TIÊN: phần còn lại là lớp / tổ, giữ nguyên ("Lớp 4A – Tổ 1" không bị mất "Tổ 1").
+    // Nhiều cột (Tên, Lớp, Tổ) thì ghép bằng " – ".
+    const cut = /\t|\s\|\s|\||;|,|\s[-–]\s/.exec(line);
+    const name = (cut ? line.slice(0, cut.index) : line).trim();
     if (!name) continue;
-    const key = normalize(name);
+    const unit = cut ? line.slice(cut.index + cut[0].length).split(/\t|\s\|\s|\||;|,/).map((p) => p.trim()).filter(Boolean).join(' – ') : '';
+    // Khối có nhiều lớp: hai bạn cùng tên ở hai lớp khác nhau vẫn là hai người.
+    const key = `${normalize(name)}|${normalize(unit)}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    members.push({ id: `${idPrefix}-${members.length + 1}`, name, unit: parts[1] ?? '' });
+    members.push({ id: `${idPrefix}-${members.length + 1}`, name, unit });
   }
   return members;
 }

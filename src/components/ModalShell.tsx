@@ -36,7 +36,7 @@ export function ModalShell({ title, onClose, children, maxWidth = 'max-w-lg', la
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
         onPaste={onPaste}
-        className={`pop-in max-h-[92vh] w-full ${maxWidth} overflow-y-auto rounded-t-3xl bg-white ${large ? 'p-6 sm:p-9' : 'p-5'} shadow-lift outline-none sm:rounded-3xl`}
+        className={`pop-in modal-box w-full ${maxWidth} overflow-y-auto rounded-t-3xl bg-white ${large ? 'p-6 sm:p-9' : 'p-5'} shadow-lift outline-none sm:rounded-3xl`}
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <h2 className={`${large ? 'text-2xl sm:text-3xl' : 'text-xl'} font-extrabold tracking-tight`}>{title}</h2>

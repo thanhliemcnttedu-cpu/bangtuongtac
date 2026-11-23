@@ -60,7 +60,7 @@ export function CardQuickActions({ row, onSetStatus }: Pick<TileProps, 'row' | '
   );
 }
 
-export function Tile({ row, board, compact, wall, canManage, onOpen, onSetStatus, deletableIds, onDelete, onVote, selection }: TileProps) {
+export function Tile({ row, board, compact, wall, canManage, onOpen, onSetStatus, deletableIds, onDelete, onVote, selection, feedback }: TileProps) {
   const { card, member } = row;
   const s = board.settings;
 
@@ -99,6 +99,7 @@ export function Tile({ row, board, compact, wall, canManage, onOpen, onSetStatus
         </div>
         <div className="space-y-1.5 p-3">
           <div className="flex flex-wrap items-center gap-1.5">
+            {!canManage && feedback?.isMine(card.id) && <span className="chip bg-amber-300 text-ink ring-amber-400"><Star className="h-3 w-3 fill-current" aria-hidden /> {board.mode === 'classroom' ? 'Bài của em' : 'Của tôi'}</span>}
             {s.showAuthor && <span className="chip bg-brand-100 text-brand-800 ring-brand-200">{card.authorName}</span>}
             <StatusBadge progress={card.status} />
             {card.late && <span className="chip bg-orange-100 text-orange-900 ring-orange-200">Nộp muộn</span>}

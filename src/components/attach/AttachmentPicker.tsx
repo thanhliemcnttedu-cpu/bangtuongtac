@@ -201,8 +201,8 @@ export function AttachmentPicker({ files, links, poll, location, onLocation, err
               const disabled = full && id !== 'poll';
               return (
                 <button key={id} type="button" disabled={(disabled && id !== 'location') || (id === 'poll' && !!poll)} onClick={() => pick(id)}
-                  className="flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-2xl border-[1.5px] border-brand-200 bg-white px-1 py-2 text-[11px] font-bold leading-tight text-brand-800 transition duration-150 hover:-translate-y-0.5 hover:border-brand-400 hover:bg-brand-50 disabled:opacity-40 sm:text-xs">
-                  <Icon className="h-5 w-5" aria-hidden />
+                  className="flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-2xl border-[1.5px] border-brand-200 bg-white px-1 py-2 text-[11px] font-bold leading-tight text-brand-800 transition duration-150 hover:-translate-y-0.5 hover:border-brand-400 hover:bg-brand-50 disabled:opacity-40 sm:text-xs [@media(min-height:800px)_and_(min-width:640px)]:min-h-[84px] [@media(min-height:800px)_and_(min-width:640px)]:text-sm">
+                  <Icon className="h-5 w-5 [@media(min-height:800px)_and_(min-width:640px)]:h-7 [@media(min-height:800px)_and_(min-width:640px)]:w-7" aria-hidden />
                   <span className="text-center">{label}</span>
                 </button>
               );

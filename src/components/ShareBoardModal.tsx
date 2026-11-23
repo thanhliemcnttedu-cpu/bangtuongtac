@@ -65,7 +65,7 @@ export function ShareBoardModal({ board, canManage, onChangeLinkMode, onChangeMo
   }
 
   return (
-    <ModalShell title="Chia sẻ bảng" onClose={onClose} maxWidth="max-w-2xl">
+    <ModalShell title="Chia sẻ bảng" onClose={onClose} maxWidth="max-w-5xl">
       <div role="tablist" aria-label="Chia sẻ với ai" className="mb-4 grid grid-cols-2 gap-1 rounded-full bg-brand-50 p-1">
         {([['students', 'Học sinh · Link & QR'], ['teachers', `Giáo viên · ${(board.collaborators?.length ?? 0) + 1} người`]] as const).map(([id, label]) => (
           <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)}
@@ -84,6 +84,7 @@ export function ShareBoardModal({ board, canManage, onChangeLinkMode, onChangeMo
           </button>
         </div>
 
+        <div className="grid min-w-0 gap-5 lg:grid-cols-2">
         <div className="min-w-0 space-y-4">
           <div>
             <label htmlFor="share-url" className="field-label">Liên kết của bảng</label>
@@ -113,10 +114,12 @@ export function ShareBoardModal({ board, canManage, onChangeLinkMode, onChangeMo
               );
             })}
           </fieldset>
-
+        </div>
+        <div className="min-w-0 space-y-4">
           <ModerationPicker name="share-moderation" value={board.settings.moderation} disabled={!canManage} onChange={onChangeModeration} />
           <p className="text-xs text-ink-2">Giới hạn chống spam: tối đa 5 bài / 10 phút mỗi trình duyệt.</p>
           {!canManage && <p className="text-xs text-ink-2">Chỉ chủ bảng và đồng quản lý mới đổi được quyền của link.</p>}
+        </div>
         </div>
       </div>
       )}

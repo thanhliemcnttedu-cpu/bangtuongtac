@@ -160,7 +160,7 @@ export function BoardSettingsModal({ initial, onPreview, onSave, onCancel, showP
           <Section title="Đánh giá giữa các bạn">
             <Toggle label="Học sinh chấm sao bài của bạn" hint="Mỗi bạn một lượt cho mỗi bài, đổi ý được; không chấm được bài của mình." checked={s.peerStars} onChange={(v) => set('peerStars', v)} />
             <Toggle label="Học sinh nhận xét bài của bạn" hint="Tự động chặn từ ngữ không lành mạnh, số điện thoại, email, liên kết. Giáo viên ẩn hoặc xóa được." checked={s.peerComments} onChange={(v) => set('peerComments', v)} />
-            <Toggle label="Cho học sinh xem điểm số của giáo viên" hint="Mặc định tắt vì điểm là riêng tư. Sao và lời phê của giáo viên luôn hiện." checked={s.showGrades} onChange={(v) => set('showGrades', v)} />
+            <Toggle label={`Cho ${showProgram ? 'học viên' : 'học sinh'} xem điểm số của giáo viên`} hint="Mặc định tắt vì điểm là riêng tư. Sao và lời phê của giáo viên luôn hiện." checked={s.showGrades} onChange={(v) => set('showGrades', v)} />
           </Section>
 
           <Section title="Biểu đồ Venn">

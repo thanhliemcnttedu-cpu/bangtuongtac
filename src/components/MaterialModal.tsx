@@ -104,7 +104,7 @@ export function MaterialModal({ board, defaultLessonId, startMindMap = false, re
           <div>
             <label htmlFor="mt-lesson" className="field-label">Đặt trong</label>
             <select id="mt-lesson" className="input" value={lessonId} onChange={(e) => setLessonId(e.target.value)}>
-              <option value="">Tài liệu chung của lớp</option>
+              <option value="">{board.mode === 'classroom' ? 'Tài liệu chung của lớp' : 'Tài liệu chung của lớp tập huấn'}</option>
               {board.lessons.map((l) => <option key={l.id} value={l.id}>{l.title}</option>)}
             </select>
           </div>

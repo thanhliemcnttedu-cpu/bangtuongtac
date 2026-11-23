@@ -2,7 +2,7 @@
 // Quyết định cuối cùng nằm ở trigger `cards_guard` trong docs/schema.sql; các hàm này chỉ để giao diện báo trước cho học sinh.
 
 import type { BoardData, Lesson, RosterMember, SubmissionCard, TaskItem } from '../types/board';
-import { normalize } from './boardLogic';
+import { classPart, normalize, rosterMatcher } from './boardLogic';
 
 /** scheduled: chưa đến giờ giao · open: đang nhận bài · soon: sắp hết hạn (≤ 24 giờ) · overdue: quá hạn. */
 export type TaskPhase = 'scheduled' | 'open' | 'soon' | 'overdue';
@@ -60,14 +60,18 @@ export interface TaskProgress {
 
 /** Ai trong danh sách đã nộp bài tập này, ai chưa (chỉ tính thành viên thuộc đối tượng được giao). */
 export function taskProgress(board: BoardData, task: TaskItem): TaskProgress {
+  const match = rosterMatcher(board.roster);
   const cards = board.cards.filter((c) => c.taskId === task.id);
-  const names = new Set(cards.map((c) => normalize(c.authorName)));
+  const doneIds = new Set<string>();
+  let outside = 0;
+  const outsideNames = new Set<string>();
+  for (const c of cards) {
+    const m = match(c);
+    if (m) doneIds.add(m.id); else outsideNames.add(normalize(c.authorName));
+  }
+  outside = outsideNames.size;
   const targeted = board.roster.filter((m) => targetsUnit(task, m.unit));
-  const done = targeted.filter((m) => names.has(normalize(m.name)));
-  const missing = targeted.filter((m) => !names.has(normalize(m.name)));
-  const inRoster = new Set(board.roster.map((m) => normalize(m.name)));
-  const outside = new Set(cards.filter((c) => !inRoster.has(normalize(c.authorName))).map((c) => normalize(c.authorName))).size;
-  return { total: targeted.length, done, missing, outside };
+  return { total: targeted.length, done: targeted.filter((m) => doneIds.has(m.id)), missing: targeted.filter((m) => !doneIds.has(m.id)), outside };
 }
 
 /** Giờ ghi trên bài: lần nộp lại mới nhất nếu có, kèm số lần nộp lại. */
@@ -86,7 +90,7 @@ export function checkSubmit(t: TaskItem, unit: string, now: number): SubmitCheck
   if (phase === 'scheduled') return { ok: false, reason: `Bài tập này sẽ được giao lúc ${formatDateTime(t.assignedAt)}.` };
   if (phase === 'overdue' && !t.allowLate) return { ok: false, reason: `Bài tập đã hết hạn nộp từ ${formatDateTime(t.dueAt)}.` };
   const targets = t.targetUnits ?? [];
-  if (targets.length > 0 && !targets.some((u) => u.trim().toLowerCase() === unit.trim().toLowerCase())) {
+  if (targets.length > 0 && !targets.some((u) => unitMatches(u, unit))) {
     return { ok: false, reason: `Bài tập này chỉ giao cho: ${targets.join(', ')}.` };
   }
   return { ok: true, late: phase === 'overdue' };
@@ -95,7 +99,14 @@ export function checkSubmit(t: TaskItem, unit: string, now: number): SubmitCheck
 /** Bài tập có giao cho tổ / nhóm này không (trống = cả lớp). */
 export function targetsUnit(t: TaskItem, unit: string): boolean {
   const targets = t.targetUnits ?? [];
-  return targets.length === 0 || targets.some((u) => u.trim().toLowerCase() === unit.trim().toLowerCase());
+  return targets.length === 0 || targets.some((u) => unitMatches(u, unit));
+}
+
+/** Đối tượng giao khớp đơn vị: đúng cả cụm, hoặc đúng phần lớp (giao cho "Lớp 4A" thì mọi tổ của 4A đều khớp). */
+export function unitMatches(target: string, unit: string): boolean {
+  const t = target.trim().toLowerCase();
+  const u = unit.trim().toLowerCase();
+  return t === u || t === classPart(unit).toLowerCase();
 }
 
 const pad = (n: number): string => String(n).padStart(2, '0');
@@ -136,8 +147,10 @@ export function fromLocalInput(value: string): string | null {
 /** Các tổ / nhóm / đơn vị có trong bảng (từ sĩ số và bài đã nộp), để giáo viên chọn khi giao bài. */
 export function unitsOf(board: BoardData): string[] {
   const set = new Set<string>();
-  for (const m of board.roster) if (m.unit.trim()) set.add(m.unit.trim());
-  for (const c of board.cards) if (c.unit.trim()) set.add(c.unit.trim());
+  // Bảng cả khối: giao bài theo LỚP (mọi tổ của lớp đó đều nhận); bảng khác giao theo từng tổ / nhóm.
+  const key = (u: string): string => (board.settings.scope === 'grade' ? classPart(u) : u.trim());
+  for (const m of board.roster) if (m.unit.trim()) set.add(key(m.unit));
+  for (const c of board.cards) if (c.unit.trim()) set.add(key(c.unit));
   for (const t of board.tasks) for (const u of t.targetUnits ?? []) if (u.trim()) set.add(u.trim());
   return [...set].sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }));
 }
@@ -161,6 +174,6 @@ export const KIND_LABEL = { assignment: 'Bài tập', requirement: 'Yêu cầu' 
 /** Từ ngữ theo kiểu lớp: lớp học dùng "Bài học / Tổ, nhóm"; lớp tập huấn dùng "Buổi tập huấn / Đơn vị". */
 export function wordsFor(mode: BoardData['mode'], scope?: 'class' | 'grade' | 'lesson') {
   return mode === 'classroom'
-    ? { lesson: 'Bài học', lessonLower: 'bài học', unit: scope === 'grade' ? 'lớp / tổ' : 'tổ / nhóm', panel: scope === 'grade' ? 'Bài học & tài liệu của khối' : scope === 'lesson' ? 'Bài học & tài liệu' : 'Bài học & tài liệu của lớp', learner: 'học sinh' }
-    : { lesson: 'Buổi tập huấn', lessonLower: 'buổi tập huấn', unit: 'đơn vị', panel: 'Buổi tập huấn & tài liệu của giảng viên', learner: 'học viên' };
+    ? { lesson: 'Bài học', lessonLower: 'bài học', unit: scope === 'grade' ? 'lớp / tổ' : 'tổ / nhóm', panel: scope === 'grade' ? 'Bài học & tài liệu của khối' : scope === 'lesson' ? 'Bài học & tài liệu' : 'Bài học & tài liệu của lớp', learner: 'học sinh', everyone: 'Cả lớp', common: 'Tài liệu chung của lớp', group: 'lớp' }
+    : { lesson: 'Buổi tập huấn', lessonLower: 'buổi tập huấn', unit: 'đơn vị', panel: 'Buổi tập huấn & tài liệu của giảng viên', learner: 'học viên', everyone: 'Tất cả học viên', common: 'Tài liệu chung của lớp tập huấn', group: 'lớp tập huấn' };
 }

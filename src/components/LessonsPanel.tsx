@@ -245,7 +245,7 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
           <PhaseChip task={t} now={now} />
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ink-2">
-          <span className="chip bg-brand-50 text-ink-2 ring-brand-100"><Users className="h-3.5 w-3.5" aria-hidden /> {targets.length === 0 ? 'Cả lớp' : `Giao cho: ${targets.join(', ')}`}</span>
+          <span className="chip bg-brand-50 text-ink-2 ring-brand-100"><Users className="h-3.5 w-3.5" aria-hidden /> {targets.length === 0 ? w.everyone : `Giao cho: ${targets.join(', ')}`}</span>
           {t.dueAt && <span className="chip bg-brand-50 text-ink-2 ring-brand-100"><CalendarClock className="h-3.5 w-3.5" aria-hidden /> Hạn: {formatDateTime(t.dueAt)}</span>}
           <span>{submissions(t.id)} bài nộp</span>
         </div>
@@ -303,17 +303,19 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
               </div>
             )}
 
-            <div>
-              <h3 className="mb-2 text-sm font-extrabold text-teal2-700">Tài liệu chung của lớp</h3>
-              {classMaterials.length === 0 ? <p className="text-sm text-ink-3">Chưa có tài liệu chung.</p> : materialList(classMaterials)}
-            </div>
+            {(classMaterials.length > 0 || board.lessons.length === 0) && (
+              <div>
+                <h3 className="mb-2 text-sm font-extrabold text-teal2-700">{w.common}</h3>
+                {classMaterials.length === 0 ? <p className="text-sm text-ink-3">Chưa có tài liệu chung.</p> : materialList(classMaterials)}
+              </div>
+            )}
 
             {board.lessons.length === 0 && (canManage ? (
               <ol className="grid grid-cols-1 gap-3 sm:grid-cols-3" aria-label="Bắt đầu nhanh">
                 {[
-                  { n: 1, t: `Thêm ${w.lessonLower}`, d: `Tạo ${w.lessonLower} đầu tiên của lớp.`, run: actions.onAddLesson },
-                  { n: 2, t: 'Giao bài tập / yêu cầu', d: 'Đặt hạn nộp, giao cả lớp hoặc từng tổ.', run: () => actions.onAddTask(null) },
-                  { n: 3, t: 'Chia sẻ link cho học sinh', d: 'Bấm “Chia sẻ & QR” ở đầu trang.', run: undefined },
+                  { n: 1, t: `Thêm ${w.lessonLower}`, d: `Tạo ${w.lessonLower} đầu tiên của ${w.group}.`, run: actions.onAddLesson },
+                  { n: 2, t: 'Giao bài tập / yêu cầu', d: `Đặt hạn nộp, giao ${w.everyone.toLowerCase()} hoặc từng ${w.unit}.`, run: () => actions.onAddTask(null) },
+                  { n: 3, t: `Chia sẻ link cho ${w.learner}`, d: 'Bấm “Chia sẻ & QR” ở đầu trang.', run: undefined },
                 ].map((x) => (
                   <li key={x.n} className="flex items-start gap-3 rounded-2xl border border-dashed border-teal2-200 bg-white/80 p-3">
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal2-600 text-sm font-extrabold text-white">{x.n}</span>
@@ -336,7 +338,7 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
                 <article key={lesson.id} style={{ ['--bar' as string]: pal.bar }} className={`rounded-3xl border-2 p-3 pt-4 sm:p-4 sm:pt-5 ${pal.box}`}>
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <button type="button" aria-expanded={!collapsed} onClick={() => setClosedLessons((m) => ({ ...m, [lesson.id]: !collapsed }))} className="flex min-w-0 items-start gap-2 text-left">
-                      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base font-extrabold text-white shadow-soft ${pal.num}`} aria-hidden>{idx + 1}</span>
+                      {!(board.settings.scope === 'lesson' && board.lessons.length === 1) && <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base font-extrabold text-white shadow-soft ${pal.num}`} aria-hidden>{idx + 1}</span>}
                       <ChevronDown className={`mt-2 h-4 w-4 shrink-0 transition-transform ${collapsed ? '-rotate-90' : ''}`} aria-hidden />
                       <span className="min-w-0">
                         <span className={`block ${kid ? 'text-xl' : 'text-base'} font-extrabold ${pal.text}`}>{lesson.title}</span>

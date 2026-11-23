@@ -551,6 +551,12 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
       attachments = [...input.keep, ...added];
     }
     let status: CardStatus = old.status;
+    if (!isReal && !del) {
+      // Bản mẫu mô phỏng đúng máy chủ: sửa xong thì áp lại chế độ kiểm duyệt của bảng.
+      const mode = b.settings.moderation;
+      const flagged = mode === 'auto' && textFlagged([input.authorName, input.unit, input.title, input.body, ...attachments.map((x) => x.name)]);
+      status = mode === 'manual' || flagged ? 'pending' : old.status === 'featured' ? 'featured' : 'approved';
+    }
     if (isReal) {
       const st = await api.updateCardByCode(b.shareToken, clean, { title: input.title, body: input.body, authorName: input.authorName, unit: input.unit, attachments }, del);
       if (st !== 'deleted') status = st as CardStatus;

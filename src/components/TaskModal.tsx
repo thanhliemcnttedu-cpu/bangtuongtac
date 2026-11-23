@@ -50,7 +50,7 @@ export function TaskModal({ board, task, defaultLessonId = null, otherBoards, on
   const submit = async (e: FormEvent): Promise<void> => {
     e.preventDefault();
     if (!label.trim()) { setError('Hãy nhập tên bài tập / yêu cầu.'); document.getElementById('tk-label')?.focus(); return; }
-    if (!targetAll && targets.length === 0) { setError(`Chọn ít nhất một ${w.unit} được giao, hoặc chọn “Cả lớp”.`); return; }
+    if (!targetAll && targets.length === 0) { setError(`Chọn ít nhất một ${w.unit} được giao, hoặc chọn “${w.everyone}”.`); return; }
     if (scheduled && !assignedAt) { setError('Hãy chọn thời điểm giao bài hoặc chọn “Giao ngay”.'); return; }
     setBusy(true);
     try {
@@ -64,8 +64,10 @@ export function TaskModal({ board, task, defaultLessonId = null, otherBoards, on
   };
 
   return (
-    <ModalShell title={task ? 'Sửa bài tập / yêu cầu' : 'Giao bài tập / yêu cầu'} onClose={onClose} maxWidth="max-w-2xl">
-      <form onSubmit={(e) => void submit(e)} noValidate className="space-y-4">
+    <ModalShell title={task ? 'Sửa bài tập / yêu cầu' : 'Giao bài tập / yêu cầu'} onClose={onClose} maxWidth="max-w-5xl">
+      <form onSubmit={(e) => void submit(e)} noValidate className="grid grid-cols-1 gap-x-7 gap-y-4 lg:grid-cols-2">
+        {/* Cột trái: giao cái gì, cho ai. Cột phải: khi nào, giao thêm lớp khác. Vừa một màn hình, không phải cuộn. */}
+        <div className="space-y-4">
         <fieldset className="grid grid-cols-2 gap-2">
           <legend className="field-label">Loại</legend>
           {(['assignment', 'requirement'] as TaskKind[]).map((k) => (
@@ -98,26 +100,9 @@ export function TaskModal({ board, task, defaultLessonId = null, otherBoards, on
           <textarea id="tk-ins" className="input min-h-[80px] py-2" value={instructions} onChange={(e) => setInstructions(e.target.value)} />
         </div>
 
-        <div className="space-y-3 rounded-2xl bg-brand-50/70 p-3">
-          <p className="text-sm font-extrabold">Thời gian</p>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-brand-600" checked={!scheduled} onChange={(e) => setScheduled(!e.target.checked)} /> Giao ngay (hiện cho {w.learner} khi lưu)</label>
-          {scheduled && (
-            <div>
-              <label htmlFor="tk-assign" className="field-label">Giao lúc</label>
-              <input id="tk-assign" type="datetime-local" className="input" value={assignedAt} onChange={(e) => setAssignedAt(e.target.value)} />
-              <p className="mt-1 text-xs text-ink-2">Trước giờ này {w.learner} chưa thấy và chưa nộp được.</p>
-            </div>
-          )}
-          <div>
-            <label htmlFor="tk-due" className="field-label">Hạn nộp <span className="font-normal text-ink-2">(để trống = không có hạn)</span></label>
-            <input id="tk-due" type="datetime-local" className="input" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
-          </div>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-brand-600" checked={allowLate} onChange={(e) => setAllowLate(e.target.checked)} /> Cho phép nộp muộn (bài nộp sau hạn được đánh dấu “Nộp muộn”)</label>
-        </div>
-
         <fieldset className="space-y-2">
           <legend className="field-label">Giao cho</legend>
-          <label className="flex items-center gap-2 text-sm"><input type="radio" name="tk-target" className="h-4 w-4 accent-brand-600" checked={targetAll} onChange={() => setTargetAll(true)} /> Cả lớp</label>
+          <label className="flex items-center gap-2 text-sm"><input type="radio" name="tk-target" className="h-4 w-4 accent-brand-600" checked={targetAll} onChange={() => setTargetAll(true)} /> {w.everyone}</label>
           <label className="flex items-center gap-2 text-sm"><input type="radio" name="tk-target" className="h-4 w-4 accent-brand-600" checked={!targetAll} onChange={() => setTargetAll(false)} /> Chỉ một số {w.unit}</label>
           {!targetAll && (
             <div className="space-y-2 rounded-2xl border border-brand-100 p-3">
@@ -138,6 +123,25 @@ export function TaskModal({ board, task, defaultLessonId = null, otherBoards, on
           )}
         </fieldset>
 
+        </div>
+        <div className="space-y-4">
+        <div className="space-y-3 rounded-2xl bg-brand-50/70 p-3">
+          <p className="text-sm font-extrabold">Thời gian</p>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-brand-600" checked={!scheduled} onChange={(e) => setScheduled(!e.target.checked)} /> Giao ngay (hiện cho {w.learner} khi lưu)</label>
+          {scheduled && (
+            <div>
+              <label htmlFor="tk-assign" className="field-label">Giao lúc</label>
+              <input id="tk-assign" type="datetime-local" className="input" value={assignedAt} onChange={(e) => setAssignedAt(e.target.value)} />
+              <p className="mt-1 text-xs text-ink-2">Trước giờ này {w.learner} chưa thấy và chưa nộp được.</p>
+            </div>
+          )}
+          <div>
+            <label htmlFor="tk-due" className="field-label">Hạn nộp <span className="font-normal text-ink-2">(để trống = không có hạn)</span></label>
+            <input id="tk-due" type="datetime-local" className="input" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
+          </div>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-brand-600" checked={allowLate} onChange={(e) => setAllowLate(e.target.checked)} /> Cho phép nộp muộn (bài nộp sau hạn được đánh dấu “Nộp muộn”)</label>
+        </div>
+
         {otherBoards.length > 0 && (
           <fieldset className="space-y-2">
             <legend className="field-label">Giao thêm cho lớp khác của bạn</legend>
@@ -152,8 +156,9 @@ export function TaskModal({ board, task, defaultLessonId = null, otherBoards, on
           </fieldset>
         )}
 
-        {error && <p role="alert" className="text-sm font-bold text-rose-700">{error}</p>}
-        <div className="flex justify-end gap-2">
+        </div>
+        {error && <p role="alert" className="text-sm font-bold text-rose-700 lg:col-span-2">{error}</p>}
+        <div className="flex justify-end gap-2 lg:col-span-2">
           <button type="button" onClick={onClose} className="btn-ghost">Hủy</button>
           <button type="submit" disabled={busy} className="btn-primary">{busy ? 'Đang lưu…' : task ? 'Lưu thay đổi' : 'Giao bài'}</button>
         </div>

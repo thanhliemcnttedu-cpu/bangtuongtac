@@ -10,8 +10,9 @@ interface Props {
 
 /** Kiểu 4: tỉ lệ hoàn thành từng Tổ / Đội / Đơn vị. */
 export function GroupSummaryView({ rows, board, onPickUnit }: Props) {
-  const units = summarizeByUnit(rows);
-  const label = board.mode === 'classroom' ? 'tổ' : 'đơn vị';
+  const byClass = board.settings.scope === 'grade';
+  const units = summarizeByUnit(rows, byClass);
+  const label = byClass ? 'lớp' : board.mode === 'classroom' ? 'tổ' : 'đơn vị';
 
   if (units.length === 0) {
     return <div className="glass rounded-3xl p-10 text-center text-ink-2">Chưa có dữ liệu để tổng hợp theo {label}.</div>;

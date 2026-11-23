@@ -7,7 +7,7 @@ import { usePostDraft } from '../hooks/usePostDraft';
 import type { PostDraft } from '../hooks/usePostDraft';
 import { ModalShell } from './ModalShell';
 import { AttachmentPicker } from './attach/AttachmentPicker';
-import { normalize } from '../lib/boardLogic';
+import { classPart, normalize } from '../lib/boardLogic';
 import { checkSubmit, countdown, formatDateTime, groupTasks, taskPhase } from '../lib/lessons';
 
 export type { PostDraft };
@@ -48,11 +48,20 @@ export function QuickPostModal({ board, initialName = '', initialUnit = '', init
   const nameUnknown = roster.length > 0 && draft.authorName.trim().length > 1 && !picked;
   const pickName = (value: string): void => {
     set('authorName', value);
-    const m = roster.find((x) => normalize(x.name) === normalize(value));
-    if (m && m.unit) set('unit', m.unit);
+    const same = roster.filter((x) => normalize(x.name) === normalize(value));
+    // Chỉ tự điền khi tên này là duy nhất; trùng tên ở nhiều lớp thì để em chọn lớp.
+    if (same.length === 1 && same[0].unit) set('unit', same[0].unit);
   };
   const task = board.tasks.find((t) => t.id === draft.taskId);
   const targets = task?.targetUnits ?? [];
+  const isGrade = isClass && board.settings.scope === 'grade';
+  // Bảng cả khối: lớp và tổ nhập riêng, ghép thành "Lớp 4A – Tổ 2".
+  const unitParts = draft.unit.split(/\s[–-]\s/);
+  const lop = unitParts[0] ?? '';
+  const to = unitParts.slice(1).join(' – ');
+  const setUnitParts = (l: string, t: string): void => set('unit', t.trim() && l.trim() ? `${l.trim()} – ${t.trim()}` : l);
+  const classChoices = isGrade ? (targets.length > 0 ? targets : [...new Set(roster.map((m) => classPart(m.unit)).filter(Boolean))]) : [];
+  const rosterShown = isGrade && lop.trim() ? roster.filter((m) => normalize(classPart(m.unit)) === normalize(lop)) : roster;
   // Giờ giao / hạn nộp báo ngay khi chọn bài tập (không tính đối tượng, vì đối tượng đã có ô chọn riêng).
   const timing = task ? checkSubmit({ ...task, targetUnits: [] }, '', now) : null;
 
@@ -71,7 +80,8 @@ export function QuickPostModal({ board, initialName = '', initialUnit = '', init
     }
     if (!draft.authorName.trim()) e.authorName = isClass ? 'Vui lòng nhập họ tên hoặc tên nhóm.' : 'Vui lòng nhập họ tên giáo viên.';
     if (!draft.unit.trim()) e.unit = isClass ? 'Vui lòng nhập tổ / lớp.' : 'Vui lòng nhập trường / đơn vị.';
-    if (!draft.title.trim()) e.title = draft.poll ? 'Thăm dò cần có câu hỏi.' : 'Vui lòng nhập tiêu đề sản phẩm.';
+    // Học sinh nhỏ không bắt buộc đặt tên bài: để trống thì lấy tên bài tập. Giáo viên tập huấn và thăm dò vẫn cần tiêu đề.
+    if (!draft.title.trim() && (draft.poll || !isClass)) e.title = draft.poll ? 'Thăm dò cần có câu hỏi.' : 'Vui lòng nhập tiêu đề sản phẩm.';
     return e;
   };
 
@@ -86,7 +96,7 @@ export function QuickPostModal({ board, initialName = '', initialUnit = '', init
       return;
     }
     setBusy(true);
-    const problem = await onSubmit(draft);
+    const problem = await onSubmit(draft.title.trim() ? draft : { ...draft, title: task?.label || `Bài của ${draft.authorName.trim()}` });
     if (problem) { setErrors({ submit: problem }); setBusy(false); }
   };
 
@@ -106,18 +116,41 @@ export function QuickPostModal({ board, initialName = '', initialUnit = '', init
   const mark = (id: keyof Errors) => ({ 'aria-invalid': !!errors[id], 'aria-describedby': errors[id] ? `qp-${id}-err` : undefined });
 
   return (
-    <ModalShell title={isClass ? 'Nộp bài của em' : 'Nộp sản phẩm tập huấn'} onClose={onClose} onPaste={onPaste} maxWidth={isClass ? 'max-w-2xl' : 'max-w-lg'} large={isClass}>
-      <form onSubmit={(e) => void submit(e)} noValidate className={isClass ? 'space-y-4' : 'space-y-3'}>
-        <div>
+    <ModalShell title={isClass ? 'Nộp bài của em' : 'Nộp sản phẩm tập huấn'} onClose={onClose} onPaste={onPaste} maxWidth={isClass ? 'max-w-5xl' : 'max-w-4xl'}>
+      <form onSubmit={(e) => void submit(e)} noValidate className="grid grid-cols-1 gap-x-7 gap-y-3 lg:grid-cols-2">
+        {/* Cột trái: em là ai, nộp bài nào. Cột phải: đính kèm. Máy tính và máy tính bảng vừa một màn hình, không phải cuộn. */}
+        <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className={isGrade ? 'order-3 sm:col-span-2' : undefined}>
           <label htmlFor="qp-name" className={lbl}>{isClass ? 'Em tên là gì? *' : 'Họ tên giáo viên *'}</label>
           <input id="qp-name" className={inp} value={draft.authorName} onChange={(e) => pickName(e.target.value)} list={roster.length > 0 ? 'qp-roster' : undefined}
             {...mark('authorName')} autoComplete={roster.length > 0 ? 'off' : 'name'} placeholder={isClass ? 'Ví dụ: Nguyễn Gia Bảo' : 'Ví dụ: Nguyễn Thị Hằng'} />
-          {roster.length > 0 && <datalist id="qp-roster">{roster.map((m) => <option key={m.name + m.unit} value={m.name}>{m.unit}</option>)}</datalist>}
+          {roster.length > 0 && <datalist id="qp-roster">{rosterShown.map((m) => <option key={m.name + m.unit} value={m.name}>{m.unit}</option>)}</datalist>}
           {nameUnknown && <p className="mt-1 text-xs font-bold text-amber-800">{isClass ? 'Em chưa thấy tên trong danh sách lớp. Em bấm vào ô và chọn đúng tên của em để cô ghi nhận bài nhé.' : 'Chưa thấy tên trong danh sách. Hãy chọn đúng tên trong gợi ý để được ghi nhận.'}</p>}
           {errors.authorName && <p id="qp-authorName-err" className="mt-1 text-xs font-bold text-rose-700" role="alert">{errors.authorName}</p>}
         </div>
+        {isGrade ? (
+          <>
+            <div className="order-1">
+              <label htmlFor="qp-unit" className={lbl}>Em học lớp nào? *</label>
+              {classChoices.length > 0 ? (
+                <select id="qp-unit" className={inp} value={lop} onChange={(e) => setUnitParts(e.target.value, to)} {...mark('unit')}>
+                  <option value="">Chọn lớp của em…</option>
+                  {classChoices.map((u) => <option key={u} value={u}>{u}</option>)}
+                </select>
+              ) : (
+                <input id="qp-unit" className={inp} value={lop} onChange={(e) => setUnitParts(e.target.value, to)} {...mark('unit')} placeholder="Ví dụ: Lớp 4A" />
+              )}
+              {errors.unit && <p id="qp-unit-err" className="mt-1 text-xs font-bold text-rose-700" role="alert">{errors.unit}</p>}
+            </div>
+            <div className="order-2">
+              <label htmlFor="qp-group" className={lbl}>Em ở tổ nào? <span className="font-normal text-ink-2">(nếu có)</span></label>
+              <input id="qp-group" className={inp} value={to} onChange={(e) => setUnitParts(lop, e.target.value)} placeholder="Ví dụ: Tổ 2" />
+            </div>
+          </>
+        ) : (
         <div>
-          <label htmlFor="qp-unit" className={lbl}>{isClass ? (board.settings.scope === 'grade' ? 'Em học lớp nào? (và tổ nào?) *' : 'Em học tổ nào? (hoặc lớp nào?) *') : 'Trường / Đơn vị *'}</label>
+          <label htmlFor="qp-unit" className={lbl}>{isClass ? (board.settings.scope === 'grade' ? 'Em học lớp nào? *' : 'Em học tổ nào? *') : 'Trường / Đơn vị *'}</label>
           {targets.length > 0 ? (
             <select id="qp-unit" className={inp} value={draft.unit} onChange={(e) => set('unit', e.target.value)} {...mark('unit')}>
               <option value="">{isClass ? 'Chọn tổ / nhóm được giao…' : 'Chọn đơn vị được giao…'}</option>
@@ -128,6 +161,8 @@ export function QuickPostModal({ board, initialName = '', initialUnit = '', init
               {...mark('unit')} placeholder={isClass ? (board.settings.scope === 'grade' ? 'Ví dụ: Lớp 4A – Tổ 2' : 'Ví dụ: Tổ 2 – Lớp 4A') : 'Ví dụ: TH Kim Đồng'} />
           )}
           {errors.unit && <p id="qp-unit-err" className="mt-1 text-xs font-bold text-rose-700" role="alert">{errors.unit}</p>}
+        </div>
+        )}
         </div>
         <div className={`grid grid-cols-1 gap-3 ${board.tasks.length > 0 ? 'sm:grid-cols-2' : ''}`}>
           {board.tasks.length > 0 && <div>
@@ -144,9 +179,9 @@ export function QuickPostModal({ board, initialName = '', initialUnit = '', init
             {errors.task && <p id="qp-task-err" className="mt-1 text-xs font-bold text-rose-700" role="alert">{errors.task}</p>}
           </div>}
           <div>
-            <label htmlFor="qp-title" className={lbl}>{draft.poll ? 'Câu hỏi thăm dò *' : isClass ? 'Đặt tên cho bài của em *' : 'Tiêu đề sản phẩm *'}</label>
+            <label htmlFor="qp-title" className={lbl}>{draft.poll ? 'Câu hỏi thăm dò *' : isClass ? <>Đặt tên cho bài <span className="font-normal text-ink-2">(không bắt buộc)</span></> : 'Tiêu đề sản phẩm *'}</label>
             <input id="qp-title" className={inp} value={draft.title} onChange={(e) => set('title', e.target.value)}
-              {...mark('title')} placeholder={draft.poll ? 'Em thích hoạt động nào nhất?' : 'Tên bài của bạn'} />
+              {...mark('title')} placeholder={draft.poll ? 'Em thích hoạt động nào nhất?' : isClass && task ? task.label : 'Tên bài của bạn'} />
             {errors.title && <p id="qp-title-err" className="mt-1 text-xs font-bold text-rose-700" role="alert">{errors.title}</p>}
           </div>
         </div>
@@ -161,24 +196,30 @@ export function QuickPostModal({ board, initialName = '', initialUnit = '', init
         )}
         <div>
           <label htmlFor="qp-body" className={lbl}>{isClass ? 'Em muốn viết thêm gì không?' : 'Nội dung'} <span className="font-normal text-ink-2">(không bắt buộc)</span></label>
-          <textarea id="qp-body" className={`${inp} min-h-[100px] py-2`} value={draft.body} onChange={(e) => set('body', e.target.value)}
+          <textarea id="qp-body" rows={2} className={`${inp} min-h-[72px] py-2`} value={draft.body} onChange={(e) => set('body', e.target.value)}
             placeholder="Viết hoặc dán nội dung bài nộp…" />
         </div>
 
+        </div>
+
+        <div className="space-y-3">
         <AttachmentPicker files={draft.files} links={draft.links} poll={draft.poll} location={draft.location} onLocation={(l) => set('location', l)} error={attachError}
           onAddFiles={addFiles} onRemoveFile={removeFile} onAddLinks={addLinks} onRemoveLink={removeLink}
           onPoll={(p) => set('poll', p)} onIngest={ingest} />
 
         {board.settings.moderation === 'manual' && (
-          <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">Bài sẽ hiện công khai sau khi giáo viên duyệt.</p>
+          <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">Bài sẽ hiện công khai sau khi {isClass ? 'giáo viên' : 'giảng viên'} duyệt.</p>
         )}
         {board.settings.moderation === 'auto' && (
-          <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">Hệ thống sẽ kiểm tra bài của bạn. Bài phù hợp hiện ngay; nếu cần xem lại, giáo viên sẽ duyệt.</p>
+          <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">Hệ thống sẽ kiểm tra bài của bạn. Bài phù hợp hiện ngay; nếu cần xem lại, {isClass ? 'giáo viên' : 'giảng viên'} sẽ duyệt.</p>
         )}
         <p className="text-xs text-ink-2">Sau khi nộp, bạn nhận một mã sửa bài (không cần tài khoản): giữ mã để sửa hoặc xóa bài về sau.</p>
         {errors.submit && <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700" role="alert">{errors.submit}</p>}
 
-        <div className="flex justify-end gap-2 pt-1">
+        </div>
+
+        {/* Trên điện thoại nút Nộp bài dính ở đáy hộp: em không phải cuộn xuống tận cuối mới tìm thấy. */}
+        <div className="sticky bottom-0 z-10 -mx-5 -mb-5 flex justify-end gap-2 border-t border-brand-100 bg-white/95 px-5 py-3 backdrop-blur max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:static lg:col-span-2 lg:m-0 lg:border-0 lg:bg-transparent lg:p-0 lg:pt-1">
           <button type="button" onClick={onClose} className={isClass ? 'btn-ghost !min-h-[54px] !px-6 text-base' : 'btn-ghost'}>Hủy</button>
           <button type="submit" disabled={busy} className={isClass ? 'btn-primary !min-h-[54px] !px-8 text-lg' : 'btn-primary'}><Send className="h-4 w-4" aria-hidden /> {busy ? 'Đang gửi…' : 'Nộp bài'}</button>
         </div>
