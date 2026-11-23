@@ -4,44 +4,96 @@
 
 @layer base {
   /* Cỡ chữ gốc tăng nhẹ theo bề rộng: 1366→~16px, 1920→~18px, 2K→~20px, 3K→~21px; mọi khoảng cách theo rem nên cả giao diện co giãn theo. */
-  html { -webkit-text-size-adjust: 100%; font-size: clamp(16px, calc(12px + 0.3vw), 22px); }
+  html { -webkit-text-size-adjust: 100%; font-size: clamp(16px, calc(12px + 0.3vw), 22px); scroll-behavior: smooth; }
   body {
     @apply font-sans text-ink antialiased;
     min-height: 100vh;
+    /* Nền công nghệ: lưới điểm mờ + quầng sáng xanh / ngọc. */
     background:
-      radial-gradient(900px 480px at 8% -8%, #d6e7ff 0%, transparent 60%),
-      radial-gradient(800px 460px at 96% -4%, #c9f3ea 0%, transparent 58%),
-      #f3f8ff;
+      radial-gradient(circle at 1px 1px, rgba(22,104,242,.10) 1px, transparent 0) 0 0 / 26px 26px,
+      radial-gradient(900px 520px at 6% -10%, #cfe2ff 0%, transparent 60%),
+      radial-gradient(820px 480px at 98% -6%, #bdf1e6 0%, transparent 58%),
+      radial-gradient(700px 420px at 50% 112%, #e0d9ff 0%, transparent 60%),
+      #f1f6ff;
     background-attachment: fixed;
   }
   :focus-visible { outline: 3px solid #1668f2; outline-offset: 2px; border-radius: 8px; }
   button, input, select, textarea { font-family: inherit; }
+  ::selection { background: #bfd6ff; }
 }
 
 @layer components {
-  .glass {
-    @apply border border-brand-200/80 bg-white/75 shadow-soft backdrop-blur-md;
-  }
+  .glass { @apply border border-white/70 bg-white/70 shadow-soft backdrop-blur-xl; }
+
+  /* Nút 3D: có "mép" dưới tạo chiều sâu, nhấc lên khi rê chuột, nhấn lún xuống khi bấm, vệt sáng quét ngang. */
   .btn {
-    @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-4 text-sm font-bold
-           transition duration-200 ease-out active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50;
+    --edge: #0a3fa6; --edge-h: 5px;
+    @apply relative inline-flex min-h-[44px] items-center justify-center gap-2 overflow-hidden rounded-full px-5 text-sm font-bold
+           disabled:cursor-not-allowed disabled:opacity-50;
+    transition: transform .22s cubic-bezier(.2,.8,.2,1), box-shadow .22s cubic-bezier(.2,.8,.2,1), background-color .2s, border-color .2s, color .2s;
+    -webkit-tap-highlight-color: transparent;
   }
+  .btn::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,.55) 50%, transparent 65%);
+    transform: translateX(-120%); transition: transform .6s ease;
+  }
+  .btn:hover:not(:disabled)::after { transform: translateX(120%); }
+
   .btn-primary {
-    @apply btn bg-gradient-to-b from-brand-500 to-brand-600 text-white shadow-glow hover:-translate-y-0.5 hover:shadow-lift;
+    @apply btn text-white;
+    background: linear-gradient(180deg, #4d98ff 0%, #1668f2 55%, #0f56d6 100%);
+    box-shadow: inset 0 1.5px 0 rgba(255,255,255,.55), inset 0 -2px 0 rgba(0,0,0,.08),
+                0 var(--edge-h) 0 var(--edge), 0 calc(var(--edge-h) + 10px) 22px -4px rgba(22,104,242,.55);
+    transform: translateY(0);
   }
+  .btn-primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: inset 0 1.5px 0 rgba(255,255,255,.6), inset 0 -2px 0 rgba(0,0,0,.08),
+                0 calc(var(--edge-h) + 2px) 0 var(--edge), 0 calc(var(--edge-h) + 16px) 28px -4px rgba(22,104,242,.6);
+  }
+  .btn-primary:active:not(:disabled) {
+    transform: translateY(calc(var(--edge-h) - 1px));
+    box-shadow: inset 0 2px 4px rgba(0,0,0,.18), 0 1px 0 var(--edge), 0 4px 10px -2px rgba(22,104,242,.4);
+  }
+
   .btn-ghost {
-    @apply btn border-[1.5px] border-brand-200 bg-white text-brand-700 hover:-translate-y-0.5 hover:border-brand-400 hover:bg-brand-50;
+    --edge: #bcd3f7;
+    @apply btn border-[1.5px] border-brand-200 text-brand-700;
+    background: linear-gradient(180deg, #ffffff 0%, #f1f6ff 100%);
+    box-shadow: inset 0 1.5px 0 #fff, 0 4px 0 var(--edge), 0 10px 18px -8px rgba(22,104,242,.3);
   }
-  .btn-sm { @apply min-h-[36px] px-3 text-xs; }
+  .btn-ghost:hover:not(:disabled) {
+    transform: translateY(-2px); border-color: #5c9bf8; color: #0b4fd0;
+    box-shadow: inset 0 1.5px 0 #fff, 0 6px 0 #a8c7f8, 0 14px 22px -8px rgba(22,104,242,.38);
+  }
+  .btn-ghost:active:not(:disabled) { transform: translateY(3px); box-shadow: inset 0 2px 4px rgba(22,104,242,.18), 0 1px 0 var(--edge); }
+  .btn-sm { @apply min-h-[36px] px-3.5 text-xs; --edge-h: 4px; }
+
+  /* Nút nổi: lơ lửng nhẹ, quầng sáng xung quanh. */
+  button.fixed.btn-primary { animation: float-y 3.2s ease-in-out infinite; }
+  button.fixed.btn-primary:hover { animation-play-state: paused; }
+
   .field-label { @apply mb-1 block text-[0.92rem] font-extrabold text-ink; }
   .input {
-    @apply min-h-[44px] w-full rounded-xl border-2 border-brand-200 bg-white px-3 text-sm text-ink
-           transition duration-200 placeholder:text-ink-3 focus:border-brand-600 focus:outline-none focus:ring-4 focus:ring-brand-100;
+    @apply min-h-[44px] w-full rounded-xl border-2 border-brand-200 bg-white/90 px-3 text-sm text-ink placeholder:text-ink-3 focus:border-brand-600 focus:outline-none focus:ring-4 focus:ring-brand-100;
+    transition: border-color .2s, box-shadow .2s, background-color .2s;
+    box-shadow: inset 0 2px 4px rgba(22,104,242,.06);
   }
-  .chip {
-    @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset;
-  }
+  .input:hover { border-color: #a8c7f8; }
+  .chip { @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset; }
 }
+
+/* Thẻ và khung: kính mờ, viền sáng, nâng nhẹ khi rê chuột. */
+article, section[aria-label], header.relative {
+  transition: transform .3s cubic-bezier(.2,.8,.2,1), box-shadow .3s cubic-bezier(.2,.8,.2,1), border-color .3s;
+}
+article.rounded-3xl:hover { box-shadow: 0 24px 48px -18px rgba(22,104,242,.42), 0 0 0 1px rgba(92,155,248,.35); }
+header.sticky { backdrop-filter: blur(16px) saturate(1.4); box-shadow: 0 8px 30px -16px rgba(22,104,242,.35); }
+
+@keyframes float-y { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes fade-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+main > *, main section { animation: fade-up .5s cubic-bezier(.2,.8,.2,1) both; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
@@ -85,3 +137,50 @@
 /* Ghim trên bản đồ (Leaflet divIcon): giọt nước xoay 45°. */
 .map-pin { display: block; width: 26px; height: 26px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--pin, #1668f2); border: 3px solid #fff; box-shadow: 0 4px 10px rgba(10, 23, 48, .35); }
 .leaflet-container { font-family: inherit; }
+
+/* ---- Hiệu ứng tham khảo từ trang Tải plugin: quầng sáng trôi, tiêu đề ánh sắc, thẻ có vạch màu và quầng theo con trỏ ---- */
+body::before, body::after {
+  content: ''; position: fixed; z-index: -1; pointer-events: none; border-radius: 50%; filter: blur(70px); opacity: .5;
+  width: 38vw; height: 38vw; animation: orb 18s ease-in-out infinite;
+}
+body::before { left: -10vw; top: -12vw; background: #bcd6ff; }
+body::after { right: -10vw; bottom: -14vw; background: #d9ccff; animation-delay: -9s; }
+@keyframes orb { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(3vw,2.5vw) scale(1.1); } }
+
+h1 {
+  background: linear-gradient(90deg, #0a1730 0%, #1668f2 45%, #129a4b 70%, #0a1730 100%); background-size: 220% 100%;
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: shine 9s linear infinite;
+}
+@keyframes shine { to { background-position: 220% 0; } }
+
+article.rounded-3xl { position: relative; --mx: 50%; --my: 0%; }
+article.rounded-3xl::before {
+  content: ''; position: absolute; inset: 0 0 auto 0; height: 5px; z-index: 1; pointer-events: none;
+  background: linear-gradient(90deg, #1668f2, #7aa8ff, #14b8a6, #1668f2); background-size: 200% 100%; transition: height .25s;
+}
+article.rounded-3xl::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .25s;
+  background: radial-gradient(380px circle at var(--mx) var(--my), rgba(47,128,255,.16), transparent 60%);
+}
+@media (hover: hover) and (pointer: fine) {
+  article.rounded-3xl:hover { transform: translateY(-6px); }
+  article.rounded-3xl:hover::before { height: 7px; animation: bar 2.2s linear infinite; }
+  article.rounded-3xl:hover::after { opacity: 1; }
+}
+@keyframes bar { to { background-position: 200% 0; } }
+
+.rip { position: absolute; border-radius: 50%; background: rgba(255,255,255,.6); transform: scale(0); animation: rip .6s ease-out forwards; pointer-events: none; }
+@keyframes rip { to { transform: scale(3); opacity: 0; } }
+
+/* Biểu tượng tự gắn cho nút lệnh chỉ có chữ (src/lib/fx.ts đặt data-ic): vẽ bằng mặt nạ nên không đụng tới cây React. */
+.btn[data-ic]::before { content: ''; flex: none; width: 1.15em; height: 1.15em; background: currentColor; -webkit-mask: var(--ic) center / contain no-repeat; mask: var(--ic) center / contain no-repeat; }
+.btn[data-ic='x'] { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6 6 18'/%3E%3Cpath d='m6 6 12 12'/%3E%3C/svg%3E"); }
+.btn[data-ic='check'] { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E"); }
+.btn[data-ic='plus'] { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14'/%3E%3Cpath d='M12 5v14'/%3E%3C/svg%3E"); }
+.btn[data-ic='send'] { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m22 2-7 20-4-9-9-4Z'/%3E%3Cpath d='M22 2 11 13'/%3E%3C/svg%3E"); }
+.btn[data-ic='list'] { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 17 2 2 4-4'/%3E%3Cpath d='m3 7 2 2 4-4'/%3E%3Cpath d='M13 6h8'/%3E%3Cpath d='M13 12h8'/%3E%3Cpath d='M13 18h8'/%3E%3C/svg%3E"); }
+.btn[data-ic='eye'] { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E"); }
+.btn[data-ic='ext'] { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 3h6v6'/%3E%3Cpath d='M10 14 21 3'/%3E%3Cpath d='M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'/%3E%3C/svg%3E"); }
+.btn[data-ic='copy'] { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='14' height='14' x='8' y='8' rx='2'/%3E%3Cpath d='M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2'/%3E%3C/svg%3E"); }
+.btn[data-ic='trash'] { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6'/%3E%3Cpath d='M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2'/%3E%3C/svg%3E"); }
+.btn[data-ic='save'] { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z'/%3E%3Cpath d='M17 21v-8H7v8'/%3E%3Cpath d='M7 3v5h8'/%3E%3C/svg%3E"); }

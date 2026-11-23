@@ -97,35 +97,35 @@ export function CreateBoardModal({ extraTemplates = [], onCreate, onClose }: Pro
   };
 
   return (
-    <ModalShell title="Tạo bảng mới" onClose={onClose} maxWidth="max-w-2xl">
-      <ol className="mb-5 flex items-center gap-2" aria-label="Các bước tạo bảng">
+    <ModalShell title="Tạo bảng mới" onClose={onClose} maxWidth="max-w-5xl" large>
+      <ol className="mb-7 flex items-center gap-2" aria-label="Các bước tạo bảng">
         {STEPS.map((label, i) => (
           <li key={label} className="flex flex-1 items-center gap-2">
-            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-extrabold ${i < step ? 'bg-emerald-500 text-white' : i === step ? 'bg-brand-600 text-white' : 'bg-brand-100 text-ink-2'}`}
+            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-extrabold ${i < step ? 'bg-emerald-500 text-white' : i === step ? 'bg-brand-600 text-white' : 'bg-brand-100 text-ink-2'}`}
               aria-current={i === step ? 'step' : undefined}>{i < step ? <Check className="h-4 w-4" aria-hidden /> : i + 1}</span>
-            <span className={`hidden text-xs font-bold sm:block ${i === step ? 'text-ink' : 'text-ink-3'}`}>{label}</span>
+            <span className={`hidden text-sm font-bold sm:block ${i === step ? 'text-ink' : 'text-ink-3'}`}>{label}</span>
             {i < STEPS.length - 1 && <span className="h-px flex-1 bg-brand-200" aria-hidden />}
           </li>
         ))}
       </ol>
 
-      <form onSubmit={(e) => void submit(e)} noValidate className="space-y-4">
+      <form onSubmit={(e) => void submit(e)} noValidate className="space-y-5">
         {step === 0 && (
           <fieldset>
-            <legend className="mb-2 text-base font-extrabold">Bảng này dành cho ai?</legend>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <legend className="mb-3 text-xl font-extrabold">Bảng này dành cho ai?</legend>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {SCOPES.map((s) => {
                 const on = s.id === scope;
                 const Icon = s.icon;
                 return (
-                  <label key={s.id} className={`relative cursor-pointer rounded-2xl border-2 p-3 transition duration-200 hover:-translate-y-0.5 ${on ? 'border-brand-600 bg-brand-50' : 'border-brand-100 hover:border-brand-300'}`}>
+                  <label key={s.id} className={`relative cursor-pointer rounded-3xl border-2 p-5 transition duration-200 hover:-translate-y-1 hover:shadow-soft ${on ? 'border-brand-600 bg-brand-50 shadow-soft' : 'border-brand-100 hover:border-brand-300'}`}>
                     <input type="radio" name="board-scope" className="sr-only" checked={on} onChange={() => pickScope(s.id)} />
-                    <span className="flex items-start gap-3">
-                      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${on ? 'bg-brand-600 text-white' : 'bg-white text-brand-700 shadow-soft'}`}><Icon className="h-5 w-5" aria-hidden /></span>
+                    <span className="flex items-start gap-4">
+                      <span className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl ${on ? 'bg-brand-600 text-white' : 'bg-white text-brand-700 shadow-soft'}`}><Icon className="h-8 w-8" aria-hidden /></span>
                       <span className="min-w-0">
-                        <span className="block text-sm font-extrabold">{s.title}</span>
-                        <span className="block text-xs text-ink-2">{s.hint}</span>
-                        <span className="mt-1 block text-[11px] font-bold text-brand-700">{s.example}</span>
+                        <span className="block text-lg font-extrabold">{s.title}</span>
+                        <span className="block text-sm leading-snug text-ink-2">{s.hint}</span>
+                        <span className="mt-1.5 block text-xs font-bold text-brand-700">{s.example}</span>
                       </span>
                     </span>
                     {on && <Check className="absolute right-2 top-2 h-4 w-4 text-brand-700" aria-label="Đã chọn" />}
@@ -137,8 +137,8 @@ export function CreateBoardModal({ extraTemplates = [], onCreate, onClose }: Pro
         )}
 
         {step === 1 && (
-          <div className="space-y-3">
-            <p className="text-base font-extrabold">Đặt tên cho {def.title.toLowerCase()}</p>
+          <div className="space-y-4">
+            <p className="text-xl font-extrabold">Đặt tên cho {def.title.toLowerCase()}</p>
             <div>
               <label htmlFor="cb-name" className="field-label">{def.nameLabel}</label>
               <input id="cb-name" className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder={def.namePlaceholder} autoFocus />
@@ -153,9 +153,9 @@ export function CreateBoardModal({ extraTemplates = [], onCreate, onClose }: Pro
 
         {step === 2 && (
           <fieldset>
-            <legend className="mb-1 text-base font-extrabold">Chọn kiểu trình bày</legend>
+            <legend className="mb-1 text-xl font-extrabold">Chọn kiểu trình bày</legend>
             <p className="mb-2 text-xs text-ink-2">Bảng sẽ là: <b className="text-ink">{title}</b>. Mẫu chỉ quyết định cách hiển thị ban đầu, đổi lại bất cứ lúc nào trong “Sửa bảng”.</p>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {templates.map((t) => {
                 const on = t.id === (template?.id ?? '');
                 const { Icon } = ICONS[t.settings.icon];

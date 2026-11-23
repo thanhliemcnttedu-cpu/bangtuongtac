@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Archive, GraduationCap, Plus, School, Share2, Users } from 'lucide-react';
+import { Archive, Plus, School, Share2, Users } from 'lucide-react';
+import { Logo } from './components/Logo';
 import type { BoardData, ViewerRole } from './types/board';
 import type { BoardTemplate } from './data/boardTemplates';
 import { useAccounts } from './hooks/useAccounts';
@@ -68,7 +69,7 @@ export default function App() {
       <header className="sticky top-0 z-30 border-b border-brand-200/70 bg-white/85 pt-[env(safe-area-inset-top)] backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-[min(100%,2800px)] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 sm:px-6 2xl:px-10">
           <div className="flex items-center gap-2">
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-b from-brand-500 to-brand-600 text-white shadow-glow"><GraduationCap className="h-5 w-5" aria-hidden /></span>
+            <Logo className="h-11 w-11" />
             <span className="text-base font-extrabold tracking-tight">Bảng tương tác</span>
           </div>
 
