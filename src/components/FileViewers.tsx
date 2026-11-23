@@ -153,19 +153,70 @@ async function fetchBuffer(url: string | undefined): Promise<ArrayBuffer> {
 
 const Loading = ({ what }: { what: string }) => <p role="status" className="rounded-3xl bg-brand-50 p-8 text-center text-ink-2">Đang mở {what}…</p>;
 
-/** Word (.docx): đổi sang HTML bằng mammoth (nạp khi cần), làm sạch rồi hiển thị. */
+/**
+ * Word (.docx): dựng lại đúng như bản gốc bằng docx-preview (phông chữ, căn giữa / căn đều, cỡ chữ, màu, khoảng cách dòng,
+ * bảng, hình, đầu trang / chân trang, ngắt trang). Trang giấy tự thu nhỏ cho vừa màn hình điện thoại.
+ * Nếu thư viện không đọc được thì quay về cách cũ (mammoth → HTML đơn giản, mất một phần định dạng).
+ */
 function DocxViewer({ attachment }: { attachment: Attachment }) {
   const url = safeHref(attachment.url);
-  const phase = useAsync(url ? async () => {
-    const arrayBuffer = await fetchBuffer(url);
-    const mod = await import('mammoth');
-    const mammoth = (mod as unknown as { default?: typeof mod }).default ?? mod;
-    const result = await mammoth.convertToHtml({ arrayBuffer });
-    return sanitizeHtml(result.value);
-  } : null, [url]);
-  if (phase.state === 'loading') return <Loading what="tài liệu Word" />;
-  if (phase.state === 'error') return <FileFallback attachment={attachment} kind="word" note="Không đọc được tệp Word này (có thể bị hỏng hoặc đặt mật khẩu)." />;
-  return <div className="doc-html viewer-fit max-h-[66vh] overflow-auto rounded-3xl border border-brand-200 bg-white p-6 text-base" dangerouslySetInnerHTML={{ __html: phase.value || '<p>(Tài liệu trống)</p>' }} />;
+  const host = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'html' | 'error'>('loading');
+  const [html, setHtml] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    if (!url) { setState('error'); return; }
+    (async () => {
+      const buf = await fetchBuffer(url);
+      try {
+        const { renderAsync } = await import('docx-preview');
+        if (!alive || !host.current) return;
+        host.current.innerHTML = '';
+        await renderAsync(buf, host.current, undefined, {
+          className: 'docx', inWrapper: true, ignoreWidth: false, ignoreHeight: false, breakPages: true,
+          ignoreLastRenderedPageBreak: true, renderHeaders: true, renderFooters: true, renderFootnotes: true, useBase64URL: true,
+        });
+        if (alive) setState('ready');
+      } catch {
+        try {
+          const mod = await import('mammoth');
+          const mammoth = (mod as unknown as { default?: typeof mod }).default ?? mod;
+          const result = await mammoth.convertToHtml({ arrayBuffer: buf });
+          if (alive) { setHtml(sanitizeHtml(result.value)); setState('html'); }
+        } catch { if (alive) setState('error'); }
+      }
+    })().catch(() => { if (alive) setState('error'); });
+    return () => { alive = false; };
+  }, [url]);
+
+  // Thu nhỏ trang giấy cho vừa bề rộng khung xem (điện thoại, máy tính bảng); không phóng to quá 100%.
+  useEffect(() => {
+    if (state !== 'ready') return;
+    const fit = (): void => {
+      const h = host.current; const b = box.current;
+      const page = h?.querySelector<HTMLElement>('section.docx');
+      if (!h || !b || !page) return;
+      const pageW = page.offsetWidth + 40;
+      h.style.setProperty('--fit', String(Math.min(1, b.clientWidth / pageW)));
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    if (box.current) ro.observe(box.current);
+    return () => ro.disconnect();
+  }, [state]);
+
+  if (state === 'error') return <FileFallback attachment={attachment} kind="word" note="Không đọc được tệp Word này (có thể bị hỏng hoặc đặt mật khẩu)." />;
+  return (
+    <>
+      {state === 'loading' && <Loading what="tài liệu Word" />}
+      {state === 'html' && <div className="doc-html viewer-fit max-h-[66vh] overflow-auto rounded-3xl border border-brand-200 bg-white p-6 text-base" dangerouslySetInnerHTML={{ __html: html || '<p>(Tài liệu trống)</p>' }} />}
+      <div ref={box} className={`viewer-fit max-h-[72vh] overflow-auto rounded-3xl border border-brand-200 bg-brand-50/60 ${state === 'ready' ? '' : 'hidden'}`}>
+        <div ref={host} className="docx-host" />
+      </div>
+    </>
+  );
 }
 
 const MAX_SHEET_ROWS = 300;

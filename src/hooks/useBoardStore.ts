@@ -41,7 +41,18 @@ export interface MaterialInput {
   links: string[];
   /** Chỉ khi sửa: các đính kèm cũ được giữ lại (bỏ khỏi danh sách = gỡ khỏi tài liệu). */
   keep?: Attachment[];
+  /** Trình bày thẻ: nhãn nhỏ, màu, các bước (mỗi dòng một bước) và tên nút cho từng tệp / liên kết mới (cùng thứ tự). */
+  badge?: string;
+  color?: string;
+  steps?: string;
+  fileLabels?: string[];
+  linkLabels?: string[];
 }
+
+const withLabels = (list: Attachment[], fileLabels: string[] = [], linkLabels: string[] = [], nFiles: number): Attachment[] =>
+  list.map((a, i) => { const lab = (i < nFiles ? fileLabels[i] : linkLabels[i - nFiles])?.trim(); return lab ? { ...a, label: lab } : a; });
+
+const stepsOf = (text?: string): string[] => (text ?? '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(0, 12);
 
 export interface DuplicateOptions {
   title: string;
@@ -432,13 +443,15 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
   const addResource = useCallback(async (boardId: string, input: MaterialInput): Promise<void> => {
     if (!input.title.trim()) throw new Error('Hãy nhập tên tài liệu.');
     if (input.files.length + input.links.length === 0) throw new Error('Hãy tải lên tệp hoặc dán ít nhất một liên kết.');
-    const attachments = await prepareAttachments({ boardId, files: input.files, links: input.links }, isReal, true);
+    const prepared = await prepareAttachments({ boardId, files: input.files, links: input.links }, isReal, true);
+    const attachments = withLabels(prepared, input.fileLabels, input.linkLabels, input.files.length);
     const kind: ResourceKind = input.kind === 'auto' ? inferKind(attachments) : input.kind;
     const first = attachments.find((a) => a.type === 'link' || a.type === 'embed');
-    const payload = { title: input.title.trim(), description: input.description.trim(), url: first?.url ?? '', kind, lessonId: input.lessonId, attachments };
+    const look = { badge: input.badge?.trim() || undefined, color: input.color || undefined, steps: stepsOf(input.steps) };
+    const payload = { title: input.title.trim(), description: input.description.trim(), url: first?.url ?? '', kind, lessonId: input.lessonId, attachments, ...look };
     const res: PinnedResource = isReal
       ? await api.addResource(boardId, payload)
-      : { id: `r-${Date.now()}`, kind, title: payload.title, description: payload.description, url: payload.url || attachments[0]?.url || '#', lessonId: input.lessonId ?? undefined, attachments, sizeLabel: sizeLabelOf(attachments) };
+      : { id: `r-${Date.now()}`, kind, title: payload.title, description: payload.description, url: payload.url || attachments[0]?.url || '#', lessonId: input.lessonId ?? undefined, attachments, sizeLabel: sizeLabelOf(attachments), ...look, steps: look.steps.length > 0 ? look.steps : undefined };
     patch(boardId, (b) => ({ ...b, pinned: [...b.pinned, { ...res, sizeLabel: res.sizeLabel ?? sizeLabelOf(attachments) }] }));
     await note(boardId, 'ghim_tai_lieu', input.title, true);
   }, [isReal, patch, note]);
@@ -447,14 +460,15 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     if (!input.title.trim()) throw new Error('Hãy nhập tên tài liệu.');
     const kept = input.keep ?? [];
     if (kept.length + input.files.length + input.links.length === 0) throw new Error('Tài liệu cần ít nhất một tệp hoặc một liên kết.');
-    const added = await prepareAttachments({ boardId, files: input.files, links: input.links }, isReal, true);
+    const added = withLabels(await prepareAttachments({ boardId, files: input.files, links: input.links }, isReal, true), input.fileLabels, input.linkLabels, input.files.length);
     const attachments = [...kept, ...added];
     const kind: ResourceKind = input.kind === 'auto' ? inferKind(attachments) : input.kind;
     const first = attachments.find((a) => a.type === 'link' || a.type === 'embed');
-    const payload = { title: input.title.trim(), description: input.description.trim(), url: first?.url ?? '', kind, lessonId: input.lessonId, attachments };
+    const look = { badge: input.badge?.trim() || undefined, color: input.color || undefined, steps: stepsOf(input.steps) };
+    const payload = { title: input.title.trim(), description: input.description.trim(), url: first?.url ?? '', kind, lessonId: input.lessonId, attachments, ...look };
     const res: PinnedResource = isReal
       ? await api.updateResource(resourceId, payload)
-      : { id: resourceId, kind, title: payload.title, description: payload.description, url: payload.url || attachments[0]?.url || '#', lessonId: input.lessonId ?? undefined, attachments };
+      : { id: resourceId, kind, title: payload.title, description: payload.description, url: payload.url || attachments[0]?.url || '#', lessonId: input.lessonId ?? undefined, attachments, ...look, steps: look.steps.length > 0 ? look.steps : undefined };
     patch(boardId, (b) => ({ ...b, pinned: b.pinned.map((r) => (r.id === resourceId ? { ...res, sizeLabel: sizeLabelOf(attachments) } : r)) }));
     await note(boardId, 'sua_tai_lieu', input.title, true);
   }, [isReal, patch, note]);

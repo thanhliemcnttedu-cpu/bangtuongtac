@@ -62,6 +62,10 @@ export interface PinnedResource {
   lessonId?: string;
   /** Tệp tải lên hoặc nhiều liên kết đính kèm (xem trực tiếp bằng FileViewers). */
   attachments?: Attachment[];
+  /** Trình bày thẻ: nhãn nhỏ, màu và các bước hướng dẫn (mỗi bước hỗ trợ **đậm** và `mã`). */
+  badge?: string;
+  color?: string;
+  steps?: string[];
 }
 
 /** Bài học (lớp học) hoặc buổi / nội dung tập huấn. Có thể có thời gian diễn ra. */
@@ -88,6 +92,8 @@ export interface Attachment {
   size?: number;
   /** Màu nền thumbnail mẫu khi chưa có ảnh thật. */
   hue?: number;
+  /** Tên nút do giáo viên đặt (ví dụ “Tải gói Gemini cách A”). */
+  label?: string;
 }
 
 /** Bài tập hoặc yêu cầu của một bài học; bài nộp gắn vào đây. */

@@ -19,3 +19,10 @@ create policy board_files_insert on storage.objects for insert to anon, authenti
       or (auth.uid() is not null and public.is_board_manager(((storage.foldername(name))[1])::uuid))
     )
   );
+
+-- 3) Nâng giới hạn mỗi tệp của kho lên 50 MB (gói Supabase miễn phí cho tối đa 50 MB).
+--    Muốn lớn hơn 50 MB: nâng lên gói Pro, vào Storage -> Settings đổi "Upload file size limit", rồi sửa số dưới đây.
+update storage.buckets set file_size_limit = 52428800 where id = 'board-files';
+
+-- 4) Cột trình bày thẻ tài liệu (nhãn nhỏ, màu, các bước hướng dẫn). Tên nút nằm trong cột attachments sẵn có.
+alter table public.cards add column if not exists meta jsonb;

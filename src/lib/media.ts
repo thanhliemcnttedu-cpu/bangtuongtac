@@ -1,9 +1,10 @@
 import type { Attachment } from '../types/board';
 
-export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-export const MAX_FILE_BYTES = 25 * 1024 * 1024; // khớp giới hạn của kho tệp trong schema.sql
+export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+/** 50 MB: mức tối đa của gói Supabase miễn phí. Gói trả phí tăng được (đổi cả hằng số này, kho tệp và cài đặt Storage). */
+export const MAX_FILE_BYTES = 50 * 1024 * 1024;
 /** Tổng dung lượng các đính kèm của MỘT bài (tối đa 10 tệp). */
-export const MAX_TOTAL_BYTES = 60 * 1024 * 1024;
+export const MAX_TOTAL_BYTES = 200 * 1024 * 1024;
 
 /** Loại MIME kho tệp chấp nhận (khớp allowed_mime_types trong schema.sql). */
 export const ALLOWED_MIME = [
@@ -89,7 +90,7 @@ export function validateFile(file: File, allowArchive = false): string | null {
   const mime = baseMime(file);
   if (!ALLOWED_MIME.includes(mime) && !(allowArchive && ARCHIVE_MIME.includes(mime))) return `Loại tệp "${mime || 'không rõ'}" chưa được hỗ trợ. Dùng ảnh, video, âm thanh, PDF, Word, Excel, PowerPoint hoặc văn bản.`;
   const limit = mime.startsWith('image/') ? MAX_IMAGE_BYTES : MAX_FILE_BYTES;
-  if (file.size > limit) return `Tệp ${formatSize(file.size)} vượt giới hạn ${formatSize(limit)}.`;
+  if (file.size > limit) return `Tệp ${formatSize(file.size)} vượt giới hạn ${formatSize(limit)}. Tệp lớn hơn: hãy tải lên Google Drive hoặc YouTube rồi dán liên kết vào ô “Liên kết”.`;
   return null;
 }
 

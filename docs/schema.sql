@@ -413,9 +413,9 @@ grant execute on function public.vote_card to anon, authenticated;
 
 -- ===== Kho tệp (Storage) =====
 -- Bucket công khai để đọc (địa chỉ chứa UUID ngẫu nhiên, không đoán được); ghi bị khóa bằng chính sách.
--- Giới hạn 25 MB / tệp và danh sách loại tệp áp dụng ngay tại kho, không thể vượt qua từ trình duyệt.
+-- Giới hạn 50 MB / tệp (tối đa của gói miễn phí) và danh sách loại tệp áp dụng ngay tại kho, không thể vượt qua từ trình duyệt.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('board-files', 'board-files', true, 26214400, array['image/jpeg','image/png','image/webp','image/gif','image/bmp','image/avif','video/webm','video/mp4','video/quicktime','audio/webm','audio/mpeg','audio/mp4','audio/aac','audio/ogg','audio/wav','application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-powerpoint','application/vnd.openxmlformats-officedocument.presentationml.presentation','text/plain','text/csv'])
+values ('board-files', 'board-files', true, 52428800, array['image/jpeg','image/png','image/webp','image/gif','image/bmp','image/avif','video/webm','video/mp4','video/quicktime','audio/webm','audio/mpeg','audio/mp4','audio/aac','audio/ogg','audio/wav','application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-powerpoint','application/vnd.openxmlformats-officedocument.presentationml.presentation','text/plain','text/csv'])
 on conflict (id) do update set file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
 -- Thư mục đầu tiên của đường dẫn là id bảng: chỉ ghi được khi bảng nhận bài từ khách, hoặc người ghi là chủ/đồng quản lý.
@@ -806,3 +806,6 @@ begin
 end $$;
 
 grant execute on function public.rate_card, public.post_comment, public.delete_comment to anon, authenticated;
+
+-- Trình bày thẻ tài liệu (nhãn nhỏ, màu, các bước)
+alter table public.cards add column if not exists meta jsonb;

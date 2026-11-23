@@ -4,10 +4,12 @@ import {
   Sparkles, Trash2, Users, Video, X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { BoardData, Lesson, PinnedResource, ResourceKind, TaskItem } from '../types/board';
+import type { Attachment, BoardData, Lesson, PinnedResource, ResourceKind, TaskItem } from '../types/board';
 import { KIND_LABEL, countdown, formatDateTime, groupTasks, taskPhase, wordsFor } from '../lib/lessons';
 import { MaterialReader } from './MaterialReader';
-import { formatSize } from '../lib/media';
+import { docKindOf, formatSize } from '../lib/media';
+import { colorOf } from '../lib/cardColors';
+import { renderMarkup } from '../lib/markup';
 
 export interface LessonsPanelActions {
   onAddLesson: () => void;
@@ -45,7 +47,7 @@ const KIND: Record<ResourceKind, { label: string; icon: LucideIcon; tone: string
   image: { label: 'Hình ảnh', icon: ImageIcon, tone: 'bg-emerald-100 text-emerald-700' },
 };
 
-/** Vạch màu trên đầu thẻ theo loại tài liệu, giống cách trình bày các gói tải về. */
+/** Vạch màu trên đầu thẻ theo loại tài liệu khi giáo viên chưa chọn màu riêng. */
 const KIND_BAR: Record<ResourceKind, string> = {
   pdf: 'linear-gradient(90deg,#e11d48,#fb7185)', slide: 'linear-gradient(90deg,#d97706,#fcd34d)', video: 'linear-gradient(90deg,#7c3aed,#c4b5fd)',
   link: 'linear-gradient(90deg,#0284c7,#7dd3fc)', sample: 'linear-gradient(90deg,#0d9488,#5eead4)', file: 'linear-gradient(90deg,#475569,#94a3b8)',
@@ -57,43 +59,63 @@ const downloadHref = (url: string, name: string): string => (url.includes('/stor
 
 const extOf = (name: string): string => { const m = /\.([a-z0-9]{1,6})$/i.exec(name); return m ? `.${m[1].toLowerCase()}` : ''; };
 
+/** Có xem trực tiếp trong trang được không (ảnh, video, âm thanh, nhúng, PDF, Word, Excel, PowerPoint, văn bản). */
+const viewable = (a: Attachment): boolean => a.type === 'image' || a.type === 'video' || a.type === 'audio' || a.type === 'embed' || (a.type === 'file' && !['archive', 'other'].includes(docKindOf(a)));
+
 /**
- * Thẻ tài liệu: tiêu đề + mô tả, rồi các nút rõ ràng: "Xem ngay" (đọc trong trang) và mỗi tệp một nút
- * "Tải về · .đuôi · dung lượng"; liên kết có nút "Mở liên kết". Học sinh nhỏ không phải đoán bấm vào đâu.
+ * Thẻ tài liệu theo kiểu thẻ hướng dẫn: vạch màu, biểu tượng, nhãn nhỏ, mô tả, các bước đánh số, rồi các nút do giáo viên đặt tên
+ * ("Tải gói Gemini cách A  .rar · 342 KB"). Nút đầu tiên là nút chính (tô màu thẻ), các nút sau viền nhạt.
  */
 function MaterialCard({ r, canManage, onOpen, onDelete, onEdit }: { r: PinnedResource; canManage: boolean; onOpen: () => void; onDelete: () => void; onEdit: () => void }) {
   const k = KIND[r.kind];
   const Icon = k.icon;
-  const files = (r.attachments ?? []).filter((a) => a.url && a.type !== 'link' && a.type !== 'embed');
-  const links = (r.attachments ?? []).filter((a) => a.url && (a.type === 'link' || a.type === 'embed'));
-  const legacyLink = !r.attachments?.length && r.url && r.url !== '#' ? r.url : '';
+  const col = colorOf(r.color);
+  const atts = r.attachments ?? [];
+  const actions = atts.filter((a) => a.url);
+  const legacyLink = atts.length === 0 && r.url && r.url !== '#' ? r.url : '';
+  const canView = atts.some(viewable) || (atts.length === 0 && !legacyLink);
+  const mainStyle = col ? { background: col.btn, color: '#fff', boxShadow: `0 10px 22px -10px ${col.text}` } : undefined;
+  const note = (a: Attachment): string => (a.type === 'link' || a.type === 'embed' ? a.name : `${extOf(a.name) || 'tệp'}${a.size ? ` · ${formatSize(a.size)}` : ''}`);
   return (
     <li className="relative flex flex-col overflow-hidden rounded-2xl border border-teal2-100 bg-white shadow-soft transition duration-200 hover:-translate-y-0.5 hover:shadow-lift">
-      <span className="h-1.5 w-full" style={{ background: KIND_BAR[r.kind] }} aria-hidden />
+      <span className="h-1.5 w-full" style={{ background: col?.bar ?? KIND_BAR[r.kind] }} aria-hidden />
       <button type="button" onClick={onOpen} className="flex items-start gap-3 p-3 pr-16 text-left">
-        <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${k.tone}`}><Icon className="h-6 w-6" aria-hidden /></span>
+        <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${col ? '' : k.tone}`} style={col ? { background: col.soft, color: col.text } : undefined}><Icon className="h-6 w-6" aria-hidden /></span>
         <span className="min-w-0">
-          <span className="block text-xs font-bold text-teal2-700">{k.label}{r.sizeLabel ? ` · ${r.sizeLabel}` : ''}{r.attachments && r.attachments.length > 1 ? ` · ${r.attachments.length} tệp` : ''}</span>
           <span className="block text-base font-extrabold leading-snug">{r.title}</span>
-          {r.description && <span className="mt-0.5 block text-xs text-ink-2">{r.description}</span>}
+          <span className="block text-xs text-ink-2">{k.label}{r.sizeLabel ? ` · ${r.sizeLabel}` : ''}{atts.length > 1 ? ` · ${atts.length} đính kèm` : ''}</span>
         </span>
       </button>
+      <div className="flex flex-col gap-2.5 px-3 pb-3">
+        {r.badge && <span className="chip w-fit" style={{ background: col?.soft ?? '#e3eeff', color: col?.text ?? '#0b4fd0', boxShadow: 'none' }}>{r.badge}</span>}
+        {r.description && <p className="text-sm leading-relaxed text-ink-2">{renderMarkup(r.description)}</p>}
+        {r.steps && r.steps.length > 0 && (
+          <ol className="space-y-1.5">
+            {r.steps.map((st, i) => (
+              <li key={i} className="grid grid-cols-[24px_1fr] items-start gap-2 text-sm leading-snug">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full text-xs font-extrabold" style={{ background: col?.soft ?? '#e3eeff', color: col?.text ?? '#0b4fd0' }}>{i + 1}</span>
+                <span className="pt-0.5">{renderMarkup(st)}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
       <div className="mt-auto flex flex-col gap-1.5 px-3 pb-3">
-        <button type="button" onClick={onOpen} className="btn-primary btn-sm w-full"><Eye className="h-4 w-4" aria-hidden /> Xem ngay</button>
-        {files.slice(0, 3).map((a, i) => (
-          <a key={`${a.name}-${i}`} href={downloadHref(a.url as string, a.name)} download={a.name} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm w-full !justify-between">
-            <span className="flex min-w-0 items-center gap-1.5"><Download className="h-4 w-4 shrink-0" aria-hidden /> <span className="truncate">Tải về</span></span>
-            <span className="shrink-0 text-[11px] font-bold text-ink-2">{extOf(a.name) || 'tệp'}{a.size ? ` · ${formatSize(a.size)}` : ''}</span>
-          </a>
-        ))}
-        {files.length > 3 && <p className="text-center text-xs text-ink-2">+ {files.length - 3} tệp nữa trong “Xem ngay”</p>}
-        {links.slice(0, 2).map((a, i) => (
-          <a key={`${a.url}-${i}`} href={a.url} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm w-full !justify-between">
-            <span className="flex min-w-0 items-center gap-1.5"><ExternalLink className="h-4 w-4 shrink-0" aria-hidden /> <span className="truncate">Mở liên kết</span></span>
-            <span className="max-w-[55%] shrink-0 truncate text-[11px] font-bold text-ink-2">{a.name}</span>
-          </a>
-        ))}
-        {legacyLink && <a href={legacyLink} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm w-full"><ExternalLink className="h-4 w-4" aria-hidden /> Mở liên kết</a>}
+        {actions.map((a, i) => {
+          const isLink = a.type === 'link' || a.type === 'embed';
+          const main = i === 0;
+          const cls = main ? (col ? 'btn btn-sm w-full !justify-between' : 'btn-primary btn-sm w-full !justify-between') : 'btn-ghost btn-sm w-full !justify-between';
+          return (
+            <a key={`${a.url}-${i}`} href={isLink ? a.url : downloadHref(a.url as string, a.name)} {...(isLink ? {} : { download: a.name })} target="_blank" rel="noopener noreferrer" className={cls} style={main ? mainStyle : undefined}>
+              <span className="flex min-w-0 items-center gap-1.5">{isLink ? <ExternalLink className="h-4 w-4 shrink-0" aria-hidden /> : <Download className="h-4 w-4 shrink-0" aria-hidden />}<span className="truncate">{a.label || (isLink ? 'Mở liên kết' : 'Tải về')}</span></span>
+              <span className={`max-w-[50%] shrink-0 truncate text-[11px] font-bold ${main ? 'opacity-90' : 'text-ink-2'}`}>{note(a)}</span>
+            </a>
+          );
+        })}
+        {legacyLink && <a href={legacyLink} target="_blank" rel="noopener noreferrer" className="btn-primary btn-sm w-full"><ExternalLink className="h-4 w-4" aria-hidden /> Mở liên kết</a>}
+        {canView && (
+          <button type="button" onClick={onOpen} className={`${actions.length === 0 && !legacyLink ? 'btn-primary' : 'btn-ghost'} btn-sm w-full`}><Eye className="h-4 w-4" aria-hidden /> Xem ngay</button>
+        )}
       </div>
       {canManage && (
         <span className="absolute right-1.5 top-3 flex items-center gap-0.5">

@@ -23,6 +23,8 @@ interface CardDb {
   loc: CardLocation | null; pos: { x: number; y: number } | null; venn: VennRegion | null;
   teacher_stars: number | null; lesson_id?: string | null; late?: boolean | null;
   attachments: Attachment[] | null; poll: { id: string; label: string }[] | null; grade: number | string | null;
+  /** Trình bày thẻ tài liệu: { badge, color, steps }. */
+  meta?: { badge?: string; color?: string; steps?: string[] } | null;
 }
 interface CollabDb { board_id: string; email: string; role: CollabRole; added_at: string }
 
@@ -87,6 +89,7 @@ function toResource(c: CardDb): PinnedResource {
   return {
     id: c.id, kind, title: c.title ?? 'Tài liệu', description: c.body ?? '', url: c.link_url ?? attachments?.[0]?.url ?? '#',
     lessonId: c.lesson_id ?? undefined, attachments,
+    badge: c.meta?.badge || undefined, color: c.meta?.color || undefined, steps: c.meta?.steps && c.meta.steps.length > 0 ? c.meta.steps : undefined,
   };
 }
 
@@ -295,31 +298,36 @@ export interface ResourceInput {
   lessonId?: string | null;
   /** Tệp đã tải lên kho hoặc liên kết đính kèm. */
   attachments?: Attachment[];
+  badge?: string; color?: string; steps?: string[];
 }
 
+/** Gói phần trình bày thành cột meta; rỗng thì để null. */
+export function metaOf(r: { badge?: string; color?: string; steps?: string[] }): { badge?: string; color?: string; steps?: string[] } | null {
+  const m = { badge: r.badge?.trim() || undefined, color: r.color || undefined, steps: r.steps && r.steps.length > 0 ? r.steps : undefined };
+  return m.badge || m.color || m.steps ? m : null;
+}
+
+/** CSDL chưa chạy lệnh thêm cột `meta` (docs/cap-nhat-tep-nen.sql) thì lưu lại không có phần trình bày để không chặn giáo viên. */
+const missingMeta = (message: string): boolean => /meta/i.test(message) && /(column|schema cache)/i.test(message);
+
 export async function addResource(boardId: string, input: ResourceInput): Promise<PinnedResource> {
-  const { data, error } = await db()
-    .from('cards')
-    .insert({
-      board_id: boardId, kind: 'resource', title: input.title, body: input.description, link_url: input.url || null, file_type: input.kind,
-      status: 'approved', lesson_id: input.lessonId || null, attachments: input.attachments ?? [],
-    })
-    .select('*')
-    .single();
-  if (error) fail('Không ghim được tài liệu', error.message);
-  return toResource(data as CardDb);
+  const row = {
+    board_id: boardId, kind: 'resource', title: input.title, body: input.description, link_url: input.url || null, file_type: input.kind,
+    status: 'approved', lesson_id: input.lessonId || null, attachments: input.attachments ?? [],
+  };
+  let res = await db().from('cards').insert({ ...row, meta: metaOf(input) }).select('*').single();
+  if (res.error && missingMeta(res.error.message)) res = await db().from('cards').insert(row).select('*').single();
+  if (res.error) fail('Không ghim được tài liệu', res.error.message);
+  return toResource(res.data as CardDb);
 }
 
 export async function updateResource(id: string, input: ResourceInput): Promise<PinnedResource> {
-  const { data, error } = await db()
-    .from('cards')
-    .update({ title: input.title, body: input.description, link_url: input.url || null, file_type: input.kind, lesson_id: input.lessonId || null, attachments: input.attachments ?? [] })
-    .eq('id', id)
-    .eq('kind', 'resource')
-    .select('*')
-    .single();
-  if (error) fail('Không lưu được tài liệu', error.message);
-  return toResource(data as CardDb);
+  const row = { title: input.title, body: input.description, link_url: input.url || null, file_type: input.kind, lesson_id: input.lessonId || null, attachments: input.attachments ?? [] };
+  const run = (extra: object) => db().from('cards').update({ ...row, ...extra }).eq('id', id).eq('kind', 'resource').select('*').single();
+  let res = await run({ meta: metaOf(input) });
+  if (res.error && missingMeta(res.error.message)) res = await run({});
+  if (res.error) fail('Không lưu được tài liệu', res.error.message);
+  return toResource(res.data as CardDb);
 }
 
 /* ---------- Khách không đăng nhập ---------- */
@@ -477,7 +485,7 @@ export async function copyAssignmentTo(targetBoardId: string, src: AssignmentCop
   const resources: PinnedResource[] = [];
   if (lesson) {
     for (const r of src.resources) {
-      resources.push(await addResource(targetBoardId, { title: r.title, description: r.description, url: r.url === '#' ? '' : r.url, kind: r.kind, lessonId: lesson.id, attachments: r.attachments }));
+      resources.push(await addResource(targetBoardId, { title: r.title, description: r.description, url: r.url === '#' ? '' : r.url, kind: r.kind, lessonId: lesson.id, attachments: r.attachments, badge: r.badge, color: r.color, steps: r.steps }));
     }
   }
   return { lesson, task, resources };
@@ -513,7 +521,7 @@ export async function duplicateBoard(source: BoardData, opts: DuplicateOpts, own
   if (opts.keepPinned && source.pinned.length > 0) {
     const r = await client.from('cards').insert(source.pinned.map((p) => ({
       board_id: board.id, kind: 'resource', title: p.title, body: p.description, link_url: p.url === '#' ? null : p.url, file_type: p.kind, status: 'approved',
-      lesson_id: p.lessonId ? lessonMap.get(p.lessonId) ?? null : null, attachments: p.attachments ?? [],
+      lesson_id: p.lessonId ? lessonMap.get(p.lessonId) ?? null : null, attachments: p.attachments ?? [], meta: metaOf(p),
     }))).select('*');
     if (r.error) fail('Không chép được tài liệu ghim', r.error.message);
     resources = (r.data ?? []) as CardDb[];

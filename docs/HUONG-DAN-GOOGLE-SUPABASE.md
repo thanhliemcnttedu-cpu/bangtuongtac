@@ -66,7 +66,7 @@ Supabase giữ một phiên mỗi lần. Ứng dụng lưu danh sách Gmail đã
 - Chưa có `.env`: ứng dụng chạy dữ liệu mẫu. Có `.env`: ứng dụng dùng Supabase; chưa đăng nhập sẽ thấy màn hình "Tiếp tục với Google".
 - Bảng mới tạo xong: bấm **Chia sẻ & QR**, link có dạng `https://<tên-miền>/b/<mã>`; học sinh mở link là nộp bài không cần tài khoản.
 - Khi đưa lên Vercel, giữ tệp `vercel.json` (đã có) để đường dẫn `/b/<mã>` mở được trực tiếp.
-- Tải tệp: `schema.sql` tự tạo kho `board-files` (25 MB mỗi tệp; ảnh, video, âm thanh, PDF, Word, Excel, PowerPoint, văn bản). Ảnh được nén ở trình duyệt trước khi tải. Kho đọc công khai theo địa chỉ ngẫu nhiên, ghi chỉ khi bảng đang nhận bài.
+- Tải tệp: `schema.sql` tự tạo kho `board-files` (50 MB mỗi tệp; ảnh, video, âm thanh, PDF, Word, Excel, PowerPoint, văn bản). Ảnh được nén ở trình duyệt trước khi tải. Kho đọc công khai theo địa chỉ ngẫu nhiên, ghi chỉ khi bảng đang nhận bài.
 - Chụp ảnh, quay video, ghi âm, quay màn hình cần trang chạy trên `https` hoặc `localhost` và người dùng bấm Cho phép.
 
 ## Chia sẻ bảng với giáo viên khác (theo Gmail)
