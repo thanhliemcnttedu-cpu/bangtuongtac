@@ -1,6 +1,6 @@
 import type { Attachment, BoardData, SubmissionCard } from '../types/board';
 import type { DriveApi } from './drive';
-import { driveFileUrl } from './drive';
+import { driveAttachment } from './drive';
 
 export interface BackupOptions {
   /** Ghi bản sao bảng (lớp, bài học, bài tập, danh sách, bài nộp) thành một tệp JSON gọn. */
@@ -36,14 +36,18 @@ export function pendingFiles(board: BoardData): { count: number; bytes: number }
   return { count, bytes };
 }
 
-const safe = (s: string, max = 60): string => s.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max) || 'khong-ten';
+export const ROOT_FOLDER = 'Bảng tương tác lớp học';
+export const safe = (s: string, max = 60): string => s.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max) || 'khong-ten';
+
+/** Tên thư mục của một bảng trên Drive: tên bảng + 6 ký tự mã bảng để không trùng khi hai lớp cùng tên. */
+export const boardFolderName = (b: { title: string; shareToken: string }): string => `${safe(b.title, 80)} · ${b.shareToken.slice(0, 6)}`;
 
 /** Bản sao bảng gọn nhất có thể: không có địa chỉ tạm, chỉ giữ thông tin cần để khôi phục và đọc lại. */
 export function boardToJson(board: BoardData, cards: SubmissionCard[] = board.cards): string {
   const att = (a: Attachment) => ({ type: a.type, name: a.name, size: a.size, mime: a.mime, label: a.label, driveId: a.driveId, archived: a.archived, url: a.driveId ? undefined : a.url });
   const data = {
     app: 'bang-tuong-tac', version: 1, exportedAt: new Date().toISOString(),
-    board: { title: board.title, subtitle: board.subtitle, mode: board.mode, program: board.program, goals: board.goals, settings: board.settings },
+    board: { title: board.title, subtitle: board.subtitle, mode: board.mode, program: board.program, goals: board.goals, settings: { ...board.settings, driveUrl: undefined, driveSecret: undefined } },
     lessons: board.lessons,
     tasks: board.tasks,
     roster: board.roster.map((m) => ({ name: m.name, unit: m.unit })),
@@ -76,8 +80,8 @@ export async function backupBoardToDrive(
   removeFromSystem: (attachments: Attachment[]) => Promise<void>,
 ): Promise<BackupResult> {
   onProgress({ phase: 'Chuẩn bị thư mục trên Drive…', done: 0, total: 1 });
-  const root = await drive.ensureFolder('Bảng tương tác lớp học');
-  const boardFolder = await drive.ensureFolder(`${safe(board.title, 80)} · ${board.shareToken.slice(0, 6)}`, root);
+  const root = await drive.ensureFolder(ROOT_FOLDER);
+  const boardFolder = await drive.ensureFolder(boardFolderName(board), root);
   const result: BackupResult = { folderId: boardFolder, folderUrl: drive.folderUrl(boardFolder), jsonSaved: false, filesSaved: 0, filesFailed: 0, bytesSaved: 0, bytesFreed: 0, updates: [], errors: [] };
 
   const nextAtts = new Map<string, Attachment[]>(board.cards.map((c) => [c.id, c.attachments.map((a) => ({ ...a }))]));
@@ -98,8 +102,9 @@ export async function backupBoardToDrive(
           const name = `${safe(card.authorName, 30)} - ${safe(card.title, 30)} - ${safe(a.name, 50)}`;
           const up = await drive.uploadFile(name, blob, files);
           const cur = nextAtts.get(card.id) ?? [];
+          // Chuyển hẳn: đính kèm trỏ tới tệp trên Drive (xem được ngay trong trang). Chỉ chép: giữ tệp cũ, ghi thêm mã Drive để xóa theo.
           cur[idx] = opts.removeAfter
-            ? { ...a, driveId: up.id, archived: true, url: driveFileUrl(up.id), size: a.size ?? blob.size }
+            ? { ...driveAttachment({ name: a.name, mime: a.mime, size: a.size ?? blob.size, type: a.type }, up.id), label: a.label }
             : { ...a, driveId: up.id };
           nextAtts.set(card.id, cur);
           if (opts.removeAfter) removable.push(a);

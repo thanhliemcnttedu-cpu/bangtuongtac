@@ -1,3 +1,4 @@
+import { isGatewayUrl } from './drive';
 import {
   BookOpen, Calculator, Clock, Columns3, FlaskConical, Globe, GraduationCap, Layers, LayoutDashboard, LayoutGrid, Lightbulb,
   MapPin, Move, Music, Network, Palette, Presentation, Table2, Blend,
@@ -99,6 +100,8 @@ export function parseSettings(raw: unknown): BoardSettings {
     peerStars: r.peerStars !== false,
     peerComments: r.peerComments !== false,
     showGrades: r.showGrades === true,
+    ...(typeof r.driveUrl === 'string' && isGatewayUrl(r.driveUrl) && typeof r.driveSecret === 'string' && /^[A-Za-z0-9]{8,80}$/.test(r.driveSecret)
+      ? { driveUrl: r.driveUrl, driveSecret: r.driveSecret } : {}),
   };
 }
 

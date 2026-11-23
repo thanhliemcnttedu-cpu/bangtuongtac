@@ -1,29 +1,138 @@
-// Máy khách Google Drive chạy hoàn toàn trong trình duyệt của giáo viên.
-// Quyền xin: drive.file (chỉ thấy và sửa các tệp do chính ứng dụng này tạo; không đọc được phần còn lại của Drive).
-// Mã truy cập sống khoảng 1 giờ và chỉ nằm trong bộ nhớ trang, không gửi đi đâu và không lưu lại.
+// Lớp truy cập Google Drive của giáo viên qua "cổng Drive" (Google Apps Script chạy bằng tài khoản giáo viên).
+// Không dùng Google Cloud, không cần mã khách hay biến môi trường: giáo viên chỉ dán địa chỉ cổng vào trang một lần.
 
-export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
-export const GOOGLE_CLIENT_ID: string | undefined = import.meta.env.VITE_GOOGLE_CLIENT_ID || undefined;
+import type { Attachment, BoardSettings } from '../types/board';
 
-export interface DriveFile { id: string; name: string }
+export interface GatewayConfig { url: string; secret: string }
 
-export interface DriveApi {
-  /** true = Drive giả lập trong bộ nhớ (chế độ dữ liệu mẫu), không chạm tới Drive thật. */
-  readonly fake: boolean;
-  ensureFolder(name: string, parentId?: string): Promise<string>;
-  /** Tải một tệp lên thư mục; trả về mã tệp trên Drive. */
-  uploadFile(name: string, blob: Blob, parentId: string): Promise<DriveFile>;
-  /** Ghi (tạo mới hoặc ghi đè) một tệp JSON theo tên trong thư mục. */
-  upsertJson(name: string, json: string, parentId: string): Promise<DriveFile>;
-  deleteFile(id: string): Promise<void>;
-  folderUrl(id: string): string;
-  fileUrl(id: string): string;
+/** Địa chỉ cổng hợp lệ: ứng dụng web của Apps Script (khi chạy thử trên máy được thêm localhost). */
+const URL_RE = /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/;
+const DEV_URL_RE = /^http:\/\/localhost:\d{2,5}\/exec$/;
+export const isGatewayUrl = (u: string): boolean => URL_RE.test(u) || (import.meta.env.DEV && DEV_URL_RE.test(u));
+
+export function gatewayOf(s: Pick<BoardSettings, 'driveUrl' | 'driveSecret'> | undefined | null): GatewayConfig | null {
+  if (!s?.driveUrl || !s.driveSecret || !isGatewayUrl(s.driveUrl)) return null;
+  return { url: s.driveUrl, secret: s.driveSecret };
 }
+
+/* ---------- Cấu hình mặc định nhớ trên trình duyệt giáo viên (dùng cho bảng mới) ---------- */
+const KEY = 'bt.gateway';
+export function loadDefaultGateway(): GatewayConfig | null {
+  try { const v = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Partial<GatewayConfig> | null; return v && typeof v.url === 'string' && typeof v.secret === 'string' && isGatewayUrl(v.url) ? { url: v.url, secret: v.secret } : null; }
+  catch { return null; }
+}
+export function saveDefaultGateway(c: GatewayConfig): void { try { localStorage.setItem(KEY, JSON.stringify(c)); } catch { /* bỏ qua */ } }
+
+/* ---------- Gọi cổng ---------- */
+
+interface Reply { ok: boolean; error?: string; id?: string; url?: string; size?: number; folderUrl?: string; deleted?: number; root?: string }
+
+async function call(cfg: GatewayConfig, body: Record<string, unknown>, tries = 2): Promise<Reply> {
+  let last = '';
+  for (let i = 0; i < tries; i += 1) {
+    try {
+      // text/plain để trình duyệt không gửi yêu cầu dò đường (Apps Script không trả lời được yêu cầu đó).
+      const res = await fetch(cfg.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ ...body, secret: cfg.secret }) });
+      const data = (await res.json()) as Reply;
+      if (!data.ok) throw new Error(data.error ?? 'Cổng Drive báo lỗi');
+      return data;
+    } catch (e) {
+      last = e instanceof Error ? e.message : 'lỗi không rõ';
+      if (/mật khẩu|không hợp lệ/i.test(last)) break; // lỗi cấu hình: thử lại cũng vô ích
+    }
+  }
+  throw new Error(`Không gọi được cổng Drive: ${last}`);
+}
+
+const toBase64 = (blob: Blob): Promise<string> => new Promise((resolve, reject) => {
+  const r = new FileReader();
+  r.onload = () => resolve(String(r.result).split(',')[1] ?? '');
+  r.onerror = () => reject(new Error('Không đọc được tệp'));
+  r.readAsDataURL(blob);
+});
+
+export async function gatewayPing(cfg: GatewayConfig): Promise<string> {
+  const r = await call(cfg, { action: 'ping' }, 1);
+  return r.root ?? '';
+}
+
+export interface GatewayFile { id: string; url: string; size: number; folderUrl: string }
+
+/** Giới hạn mỗi tệp qua cổng (Apps Script nhận tối đa khoảng 50 MB, mã hóa base64 làm tăng thêm 1/3). */
+export const GATEWAY_MAX_BYTES = 30 * 1024 * 1024;
+
+export async function gatewayUpload(cfg: GatewayConfig, path: string[], name: string, blob: Blob): Promise<GatewayFile> {
+  if (blob.size > GATEWAY_MAX_BYTES) throw new Error('Tệp quá lớn để gửi qua cổng Drive (tối đa 30 MB).');
+  const r = await call(cfg, { action: 'upload', path, name, mime: blob.type || 'application/octet-stream', data: await toBase64(blob) });
+  if (!r.id) throw new Error('Cổng Drive không trả mã tệp.');
+  return { id: r.id, url: r.url ?? driveFileUrl(r.id), size: r.size ?? blob.size, folderUrl: r.folderUrl ?? '' };
+}
+
+export async function gatewayJson(cfg: GatewayConfig, path: string[], name: string, text: string): Promise<GatewayFile> {
+  const r = await call(cfg, { action: 'json', path, name, text });
+  return { id: r.id ?? '', url: '', size: text.length, folderUrl: r.folderUrl ?? '' };
+}
+
+export async function gatewayDelete(cfg: GatewayConfig, ids: string[]): Promise<number> {
+  if (ids.length === 0) return 0;
+  return (await call(cfg, { action: 'delete', ids })).deleted ?? 0;
+}
+
+/* ---------- Đính kèm trỏ tới tệp trên Drive ---------- */
 
 export const driveFileUrl = (id: string): string => `https://drive.google.com/file/d/${id}/view`;
 export const driveFolderUrl = (id: string): string => `https://drive.google.com/drive/folders/${id}`;
+const thumbUrl = (id: string, w: number): string => `https://drive.google.com/thumbnail?id=${id}&sz=w${w}`;
 
-/* ============ Drive giả lập (thử giao diện, không cần tài khoản) ============ */
+/**
+ * Đính kèm cho một tệp đã nằm trên Drive (cổng đặt quyền "ai có liên kết đều xem"):
+ * ảnh hiện trực tiếp bằng ảnh thu nhỏ của Drive; mọi tệp khác nhúng khung xem trước của Drive (PDF, Word, PowerPoint, video, âm thanh).
+ */
+export function driveAttachment(f: { name: string; mime?: string; size?: number; type?: Attachment['type'] }, id: string): Attachment {
+  const base = { name: f.name, mime: f.mime, size: f.size, driveId: id };
+  if (f.type === 'image' || (f.mime ?? '').startsWith('image/')) return { ...base, type: 'image', url: thumbUrl(id, 1600) };
+  return { ...base, type: 'embed', url: driveFileUrl(id), embed: { provider: 'drive', src: `https://drive.google.com/file/d/${id}/preview`, thumb: thumbUrl(id, 480) } };
+}
+
+/* ---------- Giao diện chung dùng cho sao lưu ---------- */
+
+export interface DriveFile { id: string; name: string; url?: string }
+
+export interface DriveApi {
+  /** true = Drive giả lập trong bộ nhớ (chế độ thử), không chạm tới Drive thật. */
+  readonly fake: boolean;
+  /** Thư mục được biểu diễn bằng chuỗi đường dẫn (ví dụ "Bảng tương tác lớp học/Lớp 4A"). */
+  ensureFolder(name: string, parentId?: string): Promise<string>;
+  uploadFile(name: string, blob: Blob, parentId: string): Promise<DriveFile>;
+  upsertJson(name: string, json: string, parentId: string): Promise<DriveFile>;
+  deleteFile(id: string): Promise<void>;
+  folderUrl(id: string): string;
+}
+
+/** Cổng thật: mỗi "thư mục" là một đường dẫn; cổng tự tạo thư mục còn thiếu khi nhận tệp. */
+export function createGatewayDrive(cfg: GatewayConfig): DriveApi {
+  const urls = new Map<string, string>();
+  const pathOf = (id: string): string[] => id.split('/');
+  const keep = (id: string, folderUrl: string): void => { if (folderUrl) urls.set(id, folderUrl); };
+  return {
+    fake: false,
+    async ensureFolder(name, parentId) { return parentId ? `${parentId}/${name}` : name; },
+    async uploadFile(name, blob, parentId) {
+      const r = await gatewayUpload(cfg, pathOf(parentId), name, blob);
+      keep(parentId, r.folderUrl);
+      return { id: r.id, name, url: r.url };
+    },
+    async upsertJson(name, json, parentId) {
+      const r = await gatewayJson(cfg, pathOf(parentId), name, json);
+      keep(parentId, r.folderUrl);
+      return { id: r.id, name };
+    },
+    async deleteFile(id) { await gatewayDelete(cfg, [id]); },
+    folderUrl: (id) => urls.get(id) ?? [...urls.values()][0] ?? '',
+  };
+}
+
+/* ---------- Drive giả lập (chế độ thử, không cần tài khoản) ---------- */
 
 export interface FakeEntry { id: string; name: string; parent?: string; folder: boolean; size: number; deleted?: boolean; text?: string }
 
@@ -56,129 +165,12 @@ export function createFakeDrive(): DriveApi {
     },
     async deleteFile(id) { const e = store.get(id); if (e) e.deleted = true; },
     folderUrl: (id) => `#drive-gia-lap-${id}`,
-    fileUrl: (id) => `#drive-gia-lap-${id}`,
   };
 }
 
-/* ============ Drive thật ============ */
-
-interface TokenResponse { access_token?: string; expires_in?: number; error?: string }
-interface TokenClient { requestAccessToken: (o?: { prompt?: string }) => void }
-interface GoogleGlobal { accounts: { oauth2: { initTokenClient: (c: { client_id: string; scope: string; callback: (r: TokenResponse) => void; error_callback?: (e: { type?: string }) => void }) => TokenClient } } }
-
-let gsiLoading: Promise<void> | null = null;
-function loadGsi(): Promise<void> {
-  if ((window as unknown as { google?: GoogleGlobal }).google?.accounts?.oauth2) return Promise.resolve();
-  gsiLoading ??= new Promise<void>((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = 'https://accounts.google.com/gsi/client';
-    s.async = true;
-    s.onload = () => resolve();
-    s.onerror = () => { gsiLoading = null; reject(new Error('Không tải được dịch vụ đăng nhập của Google. Hãy kiểm tra mạng.')); };
-    document.head.appendChild(s);
-  });
-  return gsiLoading;
-}
-
-let token: { value: string; expiresAt: number } | null = null;
-
-/** Xin quyền Drive (hiện cửa sổ của Google ở lần đầu hoặc khi hết hạn). Phải gọi từ thao tác bấm của người dùng. */
-export async function requestDriveToken(forcePrompt = false): Promise<string> {
-  if (!GOOGLE_CLIENT_ID) throw new Error('Chưa cấu hình VITE_GOOGLE_CLIENT_ID.');
-  if (!forcePrompt && token && token.expiresAt - Date.now() > 60_000) return token.value;
-  await loadGsi();
-  const g = (window as unknown as { google: GoogleGlobal }).google;
-  return new Promise<string>((resolve, reject) => {
-    const client = g.accounts.oauth2.initTokenClient({
-      client_id: GOOGLE_CLIENT_ID as string,
-      scope: DRIVE_SCOPE,
-      callback: (r) => {
-        if (r.error || !r.access_token) { reject(new Error(r.error === 'access_denied' ? 'Bạn chưa cho phép ứng dụng dùng Google Drive.' : `Google từ chối cấp quyền (${r.error ?? 'không rõ'}).`)); return; }
-        token = { value: r.access_token, expiresAt: Date.now() + (r.expires_in ?? 3600) * 1000 };
-        resolve(r.access_token);
-      },
-      error_callback: (e) => reject(new Error(e.type === 'popup_closed' ? 'Bạn đã đóng cửa sổ xin quyền Google Drive.' : 'Không mở được cửa sổ xin quyền. Hãy cho phép cửa sổ bật lên (popup) rồi thử lại.')),
-    });
-    client.requestAccessToken({ prompt: token ? '' : 'consent' });
-  });
-}
-
-const esc = (s: string): string => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-
-async function call(url: string, init: RequestInit & { retry?: boolean } = {}): Promise<Response> {
-  const t = await requestDriveToken();
-  const res = await fetch(url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), Authorization: `Bearer ${t}` } });
-  if (res.status === 401 && !init.retry) { token = null; return call(url, { ...init, retry: true }); }
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`Google Drive báo lỗi ${res.status}${body ? `: ${body.slice(0, 160)}` : ''}`);
-  }
-  return res;
-}
-
-const API = 'https://www.googleapis.com/drive/v3/files';
-const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files';
-const SMALL = 5 * 1024 * 1024;
-
-async function createMultipart(name: string, blob: Blob, parentId: string, type: string): Promise<DriveFile> {
-  const boundary = `bt${Math.random().toString(36).slice(2)}`;
-  const head = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, parents: [parentId] })}\r\n--${boundary}\r\nContent-Type: ${type}\r\n\r\n`;
-  const body = new Blob([head, blob, `\r\n--${boundary}--`]);
-  const res = await call(`${UPLOAD}?uploadType=multipart&fields=id,name`, { method: 'POST', headers: { 'Content-Type': `multipart/related; boundary=${boundary}` }, body });
-  return (await res.json()) as DriveFile;
-}
-
-async function createResumable(name: string, blob: Blob, parentId: string, type: string): Promise<DriveFile> {
-  const init = await call(`${UPLOAD}?uploadType=resumable&fields=id,name`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Type': type, 'X-Upload-Content-Length': String(blob.size) },
-    body: JSON.stringify({ name, parents: [parentId] }),
-  });
-  const loc = init.headers.get('Location');
-  if (!loc) throw new Error('Google Drive không trả địa chỉ tải lên.');
-  const put = await fetch(loc, { method: 'PUT', headers: { 'Content-Type': type }, body: blob });
-  if (!put.ok) throw new Error(`Tải lên Drive không thành công (${put.status}).`);
-  return (await put.json()) as DriveFile;
-}
-
-export function createRealDrive(): DriveApi {
-  return {
-    fake: false,
-    async ensureFolder(name, parentId) {
-      const q = `name='${esc(name)}' and mimeType='application/vnd.google-apps.folder' and trashed=false and '${parentId ?? 'root'}' in parents`;
-      const list = await (await call(`${API}?q=${encodeURIComponent(q)}&fields=files(id,name)&spaces=drive`)).json() as { files?: DriveFile[] };
-      if (list.files && list.files.length > 0) return list.files[0].id;
-      const made = await (await call(`${API}?fields=id`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder', ...(parentId ? { parents: [parentId] } : {}) }),
-      })).json() as { id: string };
-      return made.id;
-    },
-    async uploadFile(name, blob, parentId) {
-      const type = blob.type || 'application/octet-stream';
-      return blob.size <= SMALL ? createMultipart(name, blob, parentId, type) : createResumable(name, blob, parentId, type);
-    },
-    async upsertJson(name, json, parentId) {
-      const q = `name='${esc(name)}' and trashed=false and '${parentId}' in parents`;
-      const list = await (await call(`${API}?q=${encodeURIComponent(q)}&fields=files(id,name)&spaces=drive`)).json() as { files?: DriveFile[] };
-      const blob = new Blob([json], { type: 'application/json' });
-      const hit = list.files?.[0];
-      if (!hit) return createMultipart(name, blob, parentId, 'application/json');
-      await call(`${UPLOAD}/${hit.id}?uploadType=media`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: blob });
-      return { id: hit.id, name };
-    },
-    async deleteFile(id) {
-      try { await call(`${API}/${id}`, { method: 'DELETE' }); }
-      catch (e) { if (e instanceof Error && /\b404\b/.test(e.message)) return; throw e; } // đã bị xóa từ trước thì coi như xong
-    },
-    folderUrl: driveFolderUrl,
-    fileUrl: driveFileUrl,
-  };
-}
-
-/** Chế độ dữ liệu mẫu dùng Drive giả lập; chế độ thật cần có mã khách Google. */
-export function getDrive(mock: boolean): DriveApi {
+/** Có cổng thì dùng cổng; không có cổng mà đang ở chế độ thử thì dùng Drive giả lập; còn lại báo cần kết nối. */
+export function getDrive(mock: boolean, cfg: GatewayConfig | null): DriveApi {
+  if (cfg) return createGatewayDrive(cfg);
   if (mock) return createFakeDrive();
-  if (!GOOGLE_CLIENT_ID) throw new Error('Chưa cấu hình Google Drive (thiếu VITE_GOOGLE_CLIENT_ID). Xem hướng dẫn trong docs/HUONG-DAN-GOOGLE-DRIVE.md.');
-  return createRealDrive();
+  throw new Error('Chưa kết nối cổng Google Drive. Mở Thêm → Lưu lên Google Drive của tôi để kết nối.');
 }

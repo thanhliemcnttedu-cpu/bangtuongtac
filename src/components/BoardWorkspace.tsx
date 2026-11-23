@@ -428,6 +428,11 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
           await store.addResource(savedBoard.id, input); setModal(null); showToast('Đã thêm tài liệu.');
         }} />}
       {modal === 'drive' && <DriveBackupModal board={savedBoard} real={store.isReal} onClose={() => setModal(null)}
+        onSaveGateway={async (cfg, all) => {
+          // Ghi cổng vào cài đặt của bảng này và (nếu chọn) mọi bảng của giáo viên để học sinh ở bảng nào cũng nộp thẳng vào Drive.
+          const targets = store.boards.filter((b) => !b.deletedAt && (b.access ?? 'owner') === 'owner' && (all || b.id === savedBoard.id));
+          for (const b of targets) await store.updateMeta(b.id, { title: b.title, goals: b.goals, settings: { ...b.settings, driveUrl: cfg.url, driveSecret: cfg.secret } });
+        }}
         onUpdateAttachments={(cardId, atts) => store.updateCardAttachments(savedBoard.id, cardId, atts)} onRemoveStored={store.removeStoredAttachments} />}
       {modal === 'confirm-card' && toDelete.card && (
         <ConfirmModal title="Xóa bài nộp này?" confirmLabel="Xóa bài" danger onClose={() => setModal(null)}

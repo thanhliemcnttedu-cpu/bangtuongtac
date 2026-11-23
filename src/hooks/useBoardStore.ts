@@ -10,7 +10,9 @@ import * as api from '../lib/boardApi';
 import { linkToAttachment } from '../lib/embeds';
 import { attachmentTypeOf, baseMime, compressImage, docKindOf, formatSize, validateFile } from '../lib/media';
 import { removeStoredFiles, uploadAttachment } from '../lib/storage';
-import { getDrive } from '../lib/drive';
+import { driveAttachment, gatewayDelete, gatewayOf, gatewayUpload, getDrive, loadDefaultGateway } from '../lib/drive';
+import type { GatewayConfig } from '../lib/drive';
+import { ROOT_FOLDER, boardFolderName, safe } from '../lib/driveBackup';
 import { checkComment, textFlagged } from '../lib/moderation';
 import { getMyRatings, rememberMyCard, rememberMyComment, rememberRating } from '../lib/peer';
 import type { LessonInput, TaskInput } from '../lib/boardApi';
@@ -20,14 +22,17 @@ import { checkSubmit } from '../lib/lessons';
 export interface CleanupReport { storageRemoved: number; driveDeleted: number; driveFailed: number; driveError?: string }
 
 /** Dọn tệp của các đính kèm bị xóa: kho Supabase (chế độ thật) và bản sao trên Google Drive của giáo viên. Lỗi từng phần không chặn việc xóa bài. */
-async function cleanupAttachments(list: Attachment[], real: boolean): Promise<CleanupReport> {
+async function cleanupAttachments(list: Attachment[], real: boolean, cfg: GatewayConfig | null): Promise<CleanupReport> {
   const rep: CleanupReport = { storageRemoved: 0, driveDeleted: 0, driveFailed: 0 };
   if (real) { try { rep.storageRemoved = await removeStoredFiles(list.map((a) => a.url)); } catch { /* kho từ chối: để lại, không chặn */ } }
   const ids = [...new Set(list.map((a) => a.driveId).filter((x): x is string => !!x))];
   if (ids.length > 0) {
     try {
-      const drive = getDrive(!real);
-      for (const id of ids) { try { await drive.deleteFile(id); rep.driveDeleted += 1; } catch (e) { rep.driveFailed += 1; rep.driveError = e instanceof Error ? e.message : undefined; } }
+      if (cfg) { rep.driveDeleted = await gatewayDelete(cfg, ids); rep.driveFailed = Math.max(0, ids.length - rep.driveDeleted); } // một lần gọi cho mọi tệp
+      else {
+        const drive = getDrive(!real, cfg);
+        for (const id of ids) { try { await drive.deleteFile(id); rep.driveDeleted += 1; } catch (e) { rep.driveFailed += 1; rep.driveError = e instanceof Error ? e.message : undefined; } }
+      }
     } catch (e) { rep.driveFailed += ids.length; rep.driveError = e instanceof Error ? e.message : undefined; }
   }
   return rep;
@@ -143,12 +148,22 @@ export interface BoardStore {
  * Chuẩn bị mọi đính kèm của một bài: nén ảnh, kiểm tra loại/dung lượng, tải song song lên kho (dữ liệu thật)
  * hoặc tạo liên kết tạm (bản mẫu). Một tệp lỗi thì cả bài dừng và báo rõ tệp nào; không gửi bài thiếu tệp.
  */
-async function prepareAttachments(input: { boardId: string; files: File[]; links: string[] }, real: boolean, allowArchive = false): Promise<Attachment[]> {
+async function prepareAttachments(
+  input: { boardId: string; files: File[]; links: string[] }, real: boolean, allowArchive = false,
+  /** Có cổng Drive thì tệp đi thẳng vào Drive của giáo viên (lỗi cổng thì quay về kho Supabase để học sinh vẫn nộp được). */
+  drive?: { cfg: GatewayConfig; folder: string[]; author: string },
+): Promise<Attachment[]> {
   const files = await Promise.all(input.files.map(async (raw): Promise<Attachment> => {
     const file = await compressImage(raw);
     const problem = validateFile(file, allowArchive);
     if (problem) throw new Error(`${raw.name}: ${problem}`);
     const base = { type: attachmentTypeOf(file), name: file.name, mime: baseMime(file), size: file.size };
+    if (drive) {
+      try {
+        const up = await gatewayUpload(drive.cfg, drive.folder, `${safe(drive.author, 30)} - ${safe(file.name, 60)}`, file);
+        return driveAttachment({ ...base }, up.id);
+      } catch { /* cổng không nhận được: dùng kho Supabase bên dưới */ }
+    }
     if (real) {
       const up = await uploadAttachment(input.boardId, file);
       return { ...base, url: up.url };
@@ -243,7 +258,10 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     return () => { alive = false; };
   }, [isReal, userId, linkToken, actor]);
 
-  const createBoard = useCallback(async (title: string, template: BoardTemplate, extras: { lessonTitle?: string; program?: string } = {}): Promise<BoardData> => {
+  const createBoard = useCallback(async (title: string, tpl: BoardTemplate, extras: { lessonTitle?: string; program?: string } = {}): Promise<BoardData> => {
+    // Bảng mới dùng luôn cổng Drive đã kết nối trên trình duyệt này (nếu có).
+    const gw = loadDefaultGateway();
+    const template: BoardTemplate = gw ? { ...tpl, settings: { ...tpl.settings, driveUrl: gw.url, driveSecret: gw.secret } } : tpl;
     if (!isReal) {
       const lesson: Lesson | undefined = extras.lessonTitle ? { id: `bh-${Date.now()}`, title: extras.lessonTitle, description: '', startsAt: null, endsAt: null } : undefined;
       const b: BoardData = {
@@ -288,7 +306,9 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
       if (!check.ok) throw new Error(check.reason);
       late = check.late;
     }
-    const attachments = await prepareAttachments(input, isReal);
+    const gb = boards.find((b) => b.id === input.boardId);
+    const cfg = gatewayOf(gb?.settings);
+    const attachments = await prepareAttachments(input, isReal, false, gb && cfg ? { cfg, folder: [ROOT_FOLDER, boardFolderName(gb), 'Bài nộp'], author: input.authorName } : undefined);
     // off: hiện ngay · manual: chờ giáo viên · auto: hệ thống đọc chữ, sạch thì duyệt luôn, nghi ngờ thì giữ lại.
     const status: CardStatus = asManager || moderation === 'off' ? 'approved'
       : moderation === 'manual' ? 'pending'
@@ -368,7 +388,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     let label = '';
     patch(boardId, (b) => ({ ...b, cards: b.cards.filter((c) => { if (c.id === cardId) label = `${c.authorName} · ${c.title}`; return c.id !== cardId; }) }));
     await note(boardId, 'xoa_bai', label, false);
-    return asManager ? cleanupAttachments(atts, isReal) : undefined;
+    return asManager ? cleanupAttachments(atts, isReal, gatewayOf(boards.find((b) => b.id === boardId)?.settings)) : undefined;
   }, [isReal, boards, patch, note]);
 
   const updateCardAttachments = useCallback(async (boardId: string, cardId: string, attachments: Attachment[]): Promise<void> => {
@@ -386,7 +406,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     if (isReal) await api.clearSubmissions(boardId);
     patch(boardId, (b) => ({ ...b, cards: [] }));
     await note(boardId, 'xoa_het', 'Đã xóa toàn bộ bài nộp', true);
-    return cleanupAttachments(atts, isReal);
+    return cleanupAttachments(atts, isReal, gatewayOf(boards.find((b) => b.id === boardId)?.settings));
   }, [isReal, boards, patch, note]);
 
   const updateMeta = useCallback(async (boardId: string, meta: api.BoardMetaPatch): Promise<void> => {

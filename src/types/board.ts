@@ -217,6 +217,9 @@ export interface BoardSettings {
   peerComments: boolean;
   /** Cho học sinh xem điểm số của giáo viên (mặc định tắt vì điểm là riêng tư). */
   showGrades: boolean;
+  /** Cổng Google Drive của giáo viên (địa chỉ ứng dụng web Apps Script và mật khẩu cổng): tệp học sinh nộp được lưu thẳng vào Drive. */
+  driveUrl?: string;
+  driveSecret?: string;
 }
 
 export interface BoardData {
