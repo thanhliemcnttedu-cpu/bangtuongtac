@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as RPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
+import type { LucideIcon } from 'lucide-react';
 import {
-  AlignCenter, AlignLeft, AlignRight, Bold, Heading, StickyNote, Check, ClipboardPaste, ImagePlus, Italic, Maximize2, Minus, Pencil, Plus, Redo2, RotateCw, Trash2, Underline, Undo2, X,
+  AlignCenter, AlignLeft, AlignRight, Bold, Heading, StickyNote, Check, ClipboardPaste, Download, FileText, ImagePlus, Italic, Maximize2, Move, Minus, Pencil, Plus, Redo2, RotateCw, Trash2, Underline, Undo2, X,
 } from 'lucide-react';
 import { ColorPanel } from './ColorPanel';
 import { ImageEditor } from './ImageEditor';
 import { FontPicker } from './FontPicker';
-import { PAD, cssFamily, radiusOf, WORLD_H, WORLD_W, branchPolygon, defaultThick, drawMindMapPng, layoutNode, newId, readImage } from './mindmapCore';
-import type { MMNode } from './mindmapCore';
+import { TEMPLATES, buildTemplate, lookFor } from './templates';
+import { PAD, cssFamily, linkLine, linkStyleOf, radiusOf, WORLD_H, WORLD_W, branchPolygon, defaultThick, linkMid, drawMindMapPng, layoutNode, newId, pngToPdf, readImage, saveBlob } from './mindmapCore';
+import type { LinkStyle, MMNode } from './mindmapCore';
 
 const BRANCH_COLORS = ['#1668f2', '#16a34a', '#f59e0b', '#e11d48', '#7c3aed', '#0d9488', '#ea580c'];
 
@@ -36,6 +38,53 @@ function makeRoot(text: string): MMNode {
   return { id: 'root', parent: null, x: WORLD_W / 2 - 110, y: WORLD_H / 2 - 40, w: 220, text, color: '#1668f2', fill: '#1668f2', textColor: '#ffffff', font: 'sans', size: 26, bold: true, italic: false, underline: false, align: 'center', level: 0 };
 }
 
+/** Sơ đồ mặc định: ý chính ở giữa, 4 nhánh chính tỏa ra bốn góc. */
+function defaultNodes(rootText: string): MMNode[] {
+  const root = makeRoot(rootText);
+  const kids: MMNode[] = ['Nhánh 1', 'Nhánh 2', 'Nhánh 3', 'Nhánh 4'].map((t, i) => {
+    const a = -Math.PI / 2 + (i * 2 * Math.PI) / 4 + Math.PI / 4;
+    const w = 160;
+    const c = BRANCH_COLORS[i];
+    return { id: newId(), parent: 'root', x: WORLD_W / 2 + Math.cos(a) * 330 - w / 2, y: WORLD_H / 2 + Math.sin(a) * 210 - 30, w, text: t, color: c, fill: c, textColor: '#ffffff', font: 'sans', size: 20, bold: true, italic: false, underline: false, align: 'center', level: 1 } as MMNode;
+  });
+  return [root, ...kids];
+}
+
+/** Nút thanh công cụ kiểu ruy-băng: biểu tượng ở trên, chữ nhỏ ở dưới. */
+function RBtn({ Icon, label, onClick, disabled, active, danger, primary, aria }: {
+  Icon: LucideIcon; label: string; onClick: () => void; disabled?: boolean; active?: boolean; danger?: boolean; primary?: boolean; aria?: string;
+}) {
+  const tone = primary ? 'bg-brand-600 text-white shadow-sm hover:bg-brand-700' : active ? 'bg-brand-100 text-brand-800' : danger ? 'text-ink-2 hover:bg-rose-50 hover:text-rose-700' : 'text-ink-2 hover:bg-brand-50 hover:text-brand-800';
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} aria-pressed={active} aria-label={aria ?? label} title={label}
+      className={`flex min-h-[52px] min-w-[54px] flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 py-1 text-[11px] font-semibold leading-tight transition duration-150 disabled:pointer-events-none disabled:opacity-40 ${tone}`}>
+      <Icon className="h-5 w-5" aria-hidden /><span className="whitespace-nowrap">{label}</span>
+    </button>
+  );
+}
+
+/** Nút chỉ có biểu tượng (đậm, nghiêng, căn lề, cộng trừ…). */
+function IBtn({ Icon, label, onClick, disabled, active }: { Icon: LucideIcon; label: string; onClick: () => void; disabled?: boolean; active?: boolean }) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} aria-pressed={active} aria-label={label} title={label}
+      className={`flex h-8 w-8 items-center justify-center rounded-lg transition duration-150 disabled:pointer-events-none disabled:opacity-40 ${active ? 'bg-brand-100 text-brand-800' : 'text-ink-2 hover:bg-brand-50 hover:text-brand-800'}`}>
+      <Icon className="h-4 w-4" aria-hidden />
+    </button>
+  );
+}
+
+/** Một nhóm trên ruy-băng, có tên nhóm nhỏ ở dưới như trong PowerPoint. */
+function Group({ label, children, ariaLabel }: { label: string; children: React.ReactNode; ariaLabel?: string }) {
+  return (
+    <div className="flex flex-col items-stretch justify-between border-r border-brand-100 px-2 last:border-r-0" role="group" aria-label={ariaLabel ?? label}>
+      <div className="relative flex flex-1 items-center gap-0.5">{children}</div>
+      <span className="mt-0.5 text-center text-[10px] font-bold uppercase tracking-wide text-ink-3">{label}</span>
+    </div>
+  );
+}
+
+const SELECT = 'h-9 rounded-lg border border-brand-200 bg-white px-2 text-sm font-semibold text-ink-2 outline-none transition hover:border-brand-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-100';
+
 const rect = (n: MMNode) => ({ x: n.x, y: n.y, w: n.w, h: layoutNode(n).h });
 const centerOf = (n: MMNode) => { const r = rect(n); return { x: r.x + r.w / 2, y: r.y + r.h / 2 }; };
 
@@ -55,16 +104,7 @@ function NodeBody({ n }: { n: MMNode }) {
  * cỡ chữ, đậm / nghiêng / gạch chân, căn lề và màu. Xuất ra ảnh PNG để nộp hoặc đính kèm tài liệu.
  */
 export function MindMapEditor({ title = 'Sơ đồ tư duy', rootText = 'Ý chính', onDone, onClose }: Props) {
-  const [nodes, setNodes] = useState<MMNode[]>(() => {
-    const root = makeRoot(rootText);
-    const kids: MMNode[] = ['Nhánh 1', 'Nhánh 2', 'Nhánh 3', 'Nhánh 4'].map((t, i) => {
-      const a = -Math.PI / 2 + (i * 2 * Math.PI) / 4 + Math.PI / 4;
-      const w = 160;
-      const c = BRANCH_COLORS[i];
-      return { id: newId(), parent: 'root', x: WORLD_W / 2 + Math.cos(a) * 330 - w / 2, y: WORLD_H / 2 + Math.sin(a) * 210 - 30, w, text: t, color: c, fill: c, textColor: '#ffffff', font: 'sans', size: 20, bold: true, italic: false, underline: false, align: 'center', level: 1 } as MMNode;
-    });
-    return [root, ...kids];
-  });
+  const [nodes, setNodes] = useState<MMNode[]>(() => defaultNodes(rootText));
   const [sel, setSelRaw] = useState('root');
   // Chọn nhiều nhánh: giữ Shift / Ctrl (Cmd) khi bấm, hoặc bật nút “Chọn nhiều” trên máy cảm ứng.
   const [extra, setExtra] = useState<string[]>([]);
@@ -79,8 +119,8 @@ export function MindMapEditor({ title = 'Sơ đồ tư duy', rootText = 'Ý chí
   const [editing, setEditing] = useState<string | null>(null);
   const [zoom, setZoom] = useState(0.7);
   const [busy, setBusy] = useState(false);
-  // Điện thoại: thanh định dạng chữ gập lại mặc định để vùng vẽ còn đủ rộng.
-  const [fmtOpen, setFmtOpen] = useState(false);
+  // Điện thoại: ruy-băng công cụ gập lại mặc định để vùng vẽ còn đủ rộng.
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [msg, setMsg] = useState('');
   const past = useRef<MMNode[][]>([]);
   const future = useRef<MMNode[][]>([]);
@@ -90,7 +130,7 @@ export function MindMapEditor({ title = 'Sơ đồ tư duy', rootText = 'Ý chí
   const pendingScroll = useRef<{ x: number; y: number } | null>(null);
   const anchor = useRef<{ wx: number; wy: number; mx: number; my: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const drag = useRef<{ id: string; sx: number; sy: number; start: MMNode[]; moved: boolean; ids: Set<string> } | null>(null);
+  const drag = useRef<{ id: string; sx: number; sy: number; start: MMNode[]; moved: boolean; ids: Set<string>; toggle?: boolean } | null>(null);
   const nodesRef = useRef(nodes);
   nodesRef.current = nodes;
 
@@ -172,6 +212,7 @@ export function MindMapEditor({ title = 'Sơ đồ tư duy', rootText = 'Ý chí
   };
 
   const addChild = (extra: Partial<MMNode> = {}): string => {
+    setPickMode(false);
     const list = nodesRef.current;
     const p0 = list.find((n) => n.id === sel);
     const p = p0 && !p0.note ? p0 : list[0];
@@ -191,7 +232,25 @@ export function MindMapEditor({ title = 'Sơ đồ tư duy', rootText = 'Ý chí
       x: 0, y: 0, ...extra,
     });
     let n = mk();
+    const lk = lookFor(style, level);
+    if (lk) n = { ...n, fill: lk.fill, color: lk.color, textColor: lk.text, bold: lk.bold, radius: lk.radius >= 999 ? 18 : lk.radius, thick: 3, ...extra };
     const h = layoutNode(n).h;
+    if (style !== 'branch') {
+      // Mẫu dạng cây: ô mới nằm ngay dưới ô cha (xếp ngang) hoặc dưới cùng danh sách (thụt lề), rồi tránh các ô khác.
+      const bottom = Math.max(...[...subtree(p.id, list)].map((id) => { const o = list.find((x) => x.id === id); return o ? rect(o).y + rect(o).h : 0; }));
+      const pr = rect(p);
+      let nx = style === 'indent' ? pr.x + 110 : pr.x + k * (w + 20);
+      let ny = style === 'indent' ? bottom + 16 : pr.y + pr.h + 80;
+      for (let i = 0; i < 40; i += 1) {
+        const hit = list.some((o) => { const r = rect(o); return nx < r.x + r.w + 14 && nx + w + 14 > r.x && ny < r.y + r.h + 14 && ny + h + 14 > r.y; });
+        if (!hit) break;
+        if (style === 'indent') ny += 30; else nx += w + 20;
+      }
+      n = { ...n, x: Math.max(10, Math.min(world.w - w - 10, nx)), y: Math.max(10, Math.min(world.h - h - 10, ny)) };
+      commit([...list, n]); setSel(n.id);
+      setEditing(n.id);
+      return n.id;
+    }
     for (let i = 0; i < 14; i += 1) {
       n = { ...n, x: Math.max(10, Math.min(world.w - w - 10, pc.x + Math.cos(angle) * dist - w / 2)), y: Math.max(10, Math.min(world.h - h - 10, pc.y + Math.sin(angle) * dist * 0.7 - h / 2)) };
       const hit = list.some((o) => { const r = rect(o); return n.x < r.x + r.w + 14 && n.x + w + 14 > r.x && n.y < r.y + r.h + 14 && n.y + h + 14 > r.y; });
@@ -205,6 +264,7 @@ export function MindMapEditor({ title = 'Sơ đồ tư duy', rootText = 'Ý chí
 
   /** Thêm ô văn bản tự do ở giữa vùng đang nhìn: kind 'topic' = tên chủ đề (chữ to, không nền), 'note' = ghi chú. */
   const addNote = (kind: 'topic' | 'note'): void => {
+    setPickMode(false);
     const list = nodesRef.current;
     const el = box.current;
     const w = kind === 'topic' ? 320 : 210;
@@ -226,6 +286,24 @@ export function MindMapEditor({ title = 'Sơ đồ tư duy', rootText = 'Ý chí
     commit([...list, n]);
     setSel(n.id);
     setEditing(n.id);
+  };
+
+  /** Chọn kiểu sơ đồ: dựng lại sơ đồ mẫu của kiểu đó (hỏi trước nếu đã chỉnh sửa), giữ chữ ở ô chính giữa. */
+  const changeStyle = (id: LinkStyle): void => {
+    if (id === style) return;
+    if (past.current.length > 0 && !window.confirm('Đổi kiểu sơ đồ sẽ làm lại sơ đồ theo mẫu mới và bỏ các chỉnh sửa hiện tại (bấm Hoàn tác để lấy lại). Tiếp tục?')) return;
+    const root = nodesRef.current.find((n) => n.id === 'root');
+    const cx = paged ? world.px + world.pw / 2 : WORLD_W / 2; const cy = paged ? world.py + world.ph / 2 : WORLD_H / 2;
+    let next: MMNode[];
+    if (id === 'branch') {
+      next = defaultNodes(root?.text ?? rootText);
+    } else {
+      next = buildTemplate(id, cx, cy, root?.text ?? rootText);
+    }
+    next = next.map((n) => (n.id === 'root' ? { ...n, style: id === 'branch' ? undefined : id } : n));
+    commit(next);
+    setSelRaw('root'); setExtra([]); setEditing(null);
+    window.setTimeout(() => fit(next), 60);
   };
 
   /** Đổi khổ trang: dời cả sơ đồ vào giữa trang và co / giãn cho vừa (không nhỏ quá 25%, không to quá 4 lần). */
@@ -311,8 +389,10 @@ export function MindMapEditor({ title = 'Sơ đồ tư duy', rootText = 'Ý chí
 
   // Kéo thả: kéo một nhánh thì cả các nhánh con đi theo.
   const down = (e: RPointerEvent, n: MMNode): void => {
-    if (editing === n.id || e.button === 1) return;
+    if (e.button === 1) return;
     e.stopPropagation();
+    // Đang gõ chữ trong ô: bấm vào ô chỉ đặt con trỏ, không kéo và không trượt cả sơ đồ (kéo ô bằng tay nắm phía trên).
+    if (editing === n.id) return;
     if (eyedrop) {
       const c = colorTarget === 'text' ? n.textColor : colorTarget === 'link' ? n.color : n.fill;
       setEyedrop(false); setMsg('');
@@ -321,18 +401,26 @@ export function MindMapEditor({ title = 'Sơ đồ tư duy', rootText = 'Ý chí
     }
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     const add = e.shiftKey || e.ctrlKey || e.metaKey || pickMode;
-    if (add) {
-      // Thêm / bớt nhánh khỏi nhóm đang chọn, không kéo.
-      if (selIds.includes(n.id) && selIds.length > 1) { const rest = selIds.filter((x) => x !== n.id); setSelRaw(rest[rest.length - 1]); setExtra(rest.slice(0, -1)); }
-      else if (!selIds.includes(n.id)) { setExtra(selIds); setSelRaw(n.id); }
+    if (add && !selIds.includes(n.id)) {
+      // Thêm nhánh vào nhóm đang chọn.
+      setExtra(selIds); setSelRaw(n.id);
       return;
     }
+    // Nhánh đã nằm trong nhóm: kéo thì dời cả nhóm; bấm mà không kéo (khi đang chọn nhiều) thì bỏ nhánh đó khỏi nhóm.
     // Bấm vào một nhánh đã nằm trong nhóm thì giữ nhóm để kéo cả nhóm; bấm nhánh khác thì chọn riêng nhánh đó.
     const group = selIds.includes(n.id) ? selIds : [n.id];
     if (!selIds.includes(n.id)) setSel(n.id);
     const ids = new Set<string>();
     group.forEach((g) => subtree(g, nodesRef.current).forEach((x) => ids.add(x)));
-    drag.current = { id: n.id, sx: e.clientX, sy: e.clientY, start: nodesRef.current, moved: false, ids };
+    drag.current = { id: n.id, sx: e.clientX, sy: e.clientY, start: nodesRef.current, moved: false, ids, toggle: add && selIds.length > 1 };
+  };
+  /** Tay nắm phía trên ô văn bản: kéo để dời ô ngay cả khi đang gõ chữ. */
+  const gripDown = (e: RPointerEvent, n: MMNode): void => {
+    e.stopPropagation();
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    setEditing(null);
+    drag.current = { id: n.id, sx: e.clientX, sy: e.clientY, start: nodesRef.current, moved: false, ids: new Set([n.id]) };
   };
   const move = (e: RPointerEvent): void => {
     const d = drag.current;
@@ -346,6 +434,7 @@ export function MindMapEditor({ title = 'Sơ đồ tư duy', rootText = 'Ý chí
     const d = drag.current;
     drag.current = null;
     if (d?.moved) { past.current = [...past.current.slice(-39), d.start]; future.current = []; }
+    else if (d?.toggle && selIds.includes(d.id)) { const rest = selIds.filter((x) => x !== d.id); setSelRaw(rest[rest.length - 1]); setExtra(rest.slice(0, -1)); }
   };
 
   // Đổi cỡ bằng 8 ô vuông quanh nhánh đang chọn: cạnh trái / phải đổi độ rộng, cạnh trên / dưới đổi độ cao,
@@ -454,12 +543,41 @@ export function MindMapEditor({ title = 'Sơ đồ tư duy', rootText = 'Ý chí
     } else if (ptrs.current.size === 1) { pinch.current = null; const [p] = [...ptrs.current.values()]; const el = box.current; if (el) panRef.current = { sx: p.x, sy: p.y, sl: el.scrollLeft, st: el.scrollTop, moved: true }; }
   };
 
+  const style: LinkStyle = linkStyleOf(nodes);
   const links = useMemo(() => nodes.filter((n) => n.parent).map((n) => {
     const p = nodes.find((x) => x.id === n.parent);
     if (!p) return null;
     const a = centerOf(p); const b = centerOf(n);
-    return { id: n.id, pts: branchPolygon(a, b, n.thick ?? defaultThick(n.level)).map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' '), color: n.color };
-  }).filter((x): x is NonNullable<typeof x> => x !== null), [nodes]);
+    const fmt = (pts: Array<[number, number]>): string => pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+    if (style !== 'branch') {
+      const { line, head } = linkLine(style, rect(p), rect(n));
+      return { id: n.id, pts: fmt(line), head: head ? fmt(head) : undefined, stroke: n.thick ?? 3, color: n.color, mid: linkMid(a, b, n.bend), bent: false };
+    }
+    return { id: n.id, pts: fmt(branchPolygon(a, b, n.thick ?? defaultThick(n.level), n.bend)), head: undefined, stroke: 0, color: n.color, mid: linkMid(a, b, n.bend), bent: !!n.bend };
+  }).filter((x): x is NonNullable<typeof x> => x !== null), [nodes, style]);
+
+  /** Kéo tay nắm giữa nét nối để uốn cong nhánh cho mềm mại; bấm đúp tay nắm để thẳng lại. */
+  const bendDrag = useRef<{ id: string; sx: number; sy: number; from: { x: number; y: number }; start: MMNode[]; moved: boolean } | null>(null);
+  const bendDown = (e: RPointerEvent<HTMLElement>, id: string): void => {
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setSel(id);
+    bendDrag.current = { id, sx: e.clientX, sy: e.clientY, from: nodesRef.current.find((n) => n.id === id)?.bend ?? { x: 0, y: 0 }, start: nodesRef.current, moved: false };
+  };
+  const bendMove = (e: RPointerEvent<HTMLElement>): void => {
+    const d = bendDrag.current;
+    if (!d) return;
+    const dx = (e.clientX - d.sx) / zoomRef.current / 0.75; const dy = (e.clientY - d.sy) / zoomRef.current / 0.75;
+    if (!d.moved && Math.hypot(dx, dy) < 2) return;
+    d.moved = true;
+    const bend = { x: Math.round(d.from.x + dx), y: Math.round(d.from.y + dy) };
+    setNodes(nodesRef.current.map((n) => (n.id === d.id ? { ...n, bend } : n)));
+  };
+  const bendUp = (): void => {
+    const d = bendDrag.current;
+    bendDrag.current = null;
+    if (d?.moved) { past.current = [...past.current.slice(-39), d.start]; future.current = []; }
+  };
 
   const finish = async (): Promise<void> => {
     setBusy(true);
@@ -469,105 +587,134 @@ export function MindMapEditor({ title = 'Sơ đồ tư duy', rootText = 'Ý chí
     } catch { setMsg('Không tạo được ảnh sơ đồ. Hãy thử lại.'); setBusy(false); }
   };
 
-  const tb = 'btn-ghost !min-h-[44px] !px-3 text-sm';
+  /** Lưu sơ đồ về máy tính dưới dạng ảnh PNG hoặc tệp PDF (để báo cáo, in, dùng lại sau này). */
+  const download = async (kind: 'png' | 'pdf'): Promise<void> => {
+    setBusy(true); setMsg('');
+    try {
+      const png = await drawMindMapPng(nodes, paged ? { x: world.px, y: world.py, w: world.pw, h: world.ph } : undefined);
+      const base = title.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '').toLowerCase() || 'so-do-tu-duy';
+      saveBlob(kind === 'png' ? png : await pngToPdf(png), `${base}.${kind}`);
+      setMsg(kind === 'png' ? 'Đã lưu ảnh PNG về máy (thư mục Tải xuống).' : 'Đã lưu tệp PDF về máy (thư mục Tải xuống).');
+    } catch { setMsg('Không lưu được sơ đồ về máy. Hãy thử lại.'); } finally { setBusy(false); }
+  };
+
   const outside = paged && nodes.some((n) => { const r = rect(n); return r.x < world.px || r.y < world.py || r.x + r.w > world.px + world.pw || r.y + r.h > world.py + world.ph; });
   const cropNode = nodes.find((n) => n.id === cropFor);
 
   return createPortal(
     <div className="fixed inset-0 z-[70] flex flex-col bg-gradient-to-b from-brand-50 to-white" role="dialog" aria-modal="true" aria-label="Thiết kế sơ đồ tư duy">
-      <header className="flex flex-wrap items-center gap-2 border-b border-brand-200 bg-white/95 px-3 py-2 shadow-soft">
-        <button type="button" onClick={onClose} className="btn-ghost !min-h-[48px]"><X className="h-5 w-5" aria-hidden /> Hủy</button>
-        <h2 className="min-w-0 flex-1 truncate text-lg font-extrabold sm:text-xl">{title}</h2>
-        <label className="flex items-center gap-1 text-xs font-bold text-ink-2">Khổ trang
-          <select aria-label="Khổ trang vẽ" value={pageId} onChange={(e) => changePage(e.target.value as (typeof PAGES)[number]['id'])} className="input !min-h-[44px] !w-auto text-sm">
-            {PAGES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
-          </select>
-        </label>
-        <button type="button" onClick={undo} aria-label="Hoàn tác" className={tb}><Undo2 className="h-5 w-5" aria-hidden /></button>
-        <button type="button" onClick={redo} aria-label="Làm lại" className={tb}><Redo2 className="h-5 w-5" aria-hidden /></button>
-        <button type="button" onClick={() => void finish()} disabled={busy} className="btn-primary !min-h-[48px]"><Check className="h-5 w-5" aria-hidden /> {busy ? 'Đang lưu…' : <><span className="sm:hidden">Xong</span><span className="hidden sm:inline">Xong, dùng sơ đồ này</span></>}</button>
+      <header className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-brand-200 bg-white px-3 py-2">
+        <button type="button" onClick={onClose} className="flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm font-bold text-ink-2 transition hover:bg-rose-50 hover:text-rose-700" aria-label="Hủy"><X className="h-5 w-5" aria-hidden /> <span className="hidden sm:inline">Hủy</span></button>
+        <h2 className="min-w-0 flex-1 truncate text-base font-extrabold sm:text-lg">{title}</h2>
+        <select aria-label="Kiểu sơ đồ tư duy" value={style} onChange={(e) => changeStyle(e.target.value as LinkStyle)} title={`Kiểu sơ đồ: ${TEMPLATES.find((t) => t.id === style)?.hint ?? ''}`} className={SELECT}>
+          {TEMPLATES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+        </select>
+        <select aria-label="Khổ trang vẽ" value={pageId} onChange={(e) => changePage(e.target.value as (typeof PAGES)[number]['id'])} title="Khổ trang vẽ" className={SELECT}>
+          {PAGES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+        </select>
+        <span className="flex items-center rounded-lg bg-slate-50 p-0.5">
+          <IBtn Icon={Undo2} label="Hoàn tác" onClick={undo} />
+          <IBtn Icon={Redo2} label="Làm lại" onClick={redo} />
+        </span>
+        <div className="flex items-center rounded-lg bg-slate-50 p-0.5" role="group" aria-label="Thu phóng">
+          <IBtn Icon={Minus} label="Thu nhỏ" onClick={() => setZoom((z) => Math.max(0.05, +(z - (z > 0.3 ? 0.1 : 0.05)).toFixed(2)))} />
+          <span className="w-11 text-center text-sm font-bold">{Math.round(zoom * 100)}%</span>
+          <IBtn Icon={Plus} label="Phóng to" onClick={() => setZoom((z) => Math.min(3, +(z + (z < 0.3 ? 0.05 : 0.1)).toFixed(2)))} />
+          <IBtn Icon={Maximize2} label="Vừa khung" onClick={() => fit()} />
+        </div>
+        <button type="button" aria-expanded={toolsOpen} onClick={() => setToolsOpen((v) => !v)} className={`flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm font-bold transition sm:hidden ${toolsOpen ? 'bg-brand-100 text-brand-800' : 'text-ink-2 hover:bg-brand-50'}`}><Pencil className="h-4 w-4" aria-hidden /> Công cụ</button>
+        <details className="relative">
+          <summary className="flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-lg px-2.5 text-sm font-bold text-ink-2 transition hover:bg-brand-50 hover:text-brand-800" aria-label="Lưu sơ đồ về máy"><Download className="h-5 w-5" aria-hidden /> <span className="hidden sm:inline">Lưu về máy</span></summary>
+          <div className="absolute right-0 top-full z-30 mt-1 w-52 space-y-0.5 rounded-xl border border-brand-200 bg-white p-1.5 shadow-lift">
+            <button type="button" disabled={busy} onClick={(e) => { e.currentTarget.closest('details')?.removeAttribute('open'); void download('png'); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-semibold text-ink-2 hover:bg-brand-50"><Download className="h-4 w-4" aria-hidden /> Lưu ảnh PNG</button>
+            <button type="button" disabled={busy} onClick={(e) => { e.currentTarget.closest('details')?.removeAttribute('open'); void download('pdf'); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-semibold text-ink-2 hover:bg-brand-50"><FileText className="h-4 w-4" aria-hidden /> Lưu tệp PDF</button>
+          </div>
+        </details>
+        <button type="button" onClick={() => void finish()} disabled={busy} className="flex h-9 items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 text-sm font-bold text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-60"><Check className="h-5 w-5" aria-hidden /> {busy ? 'Đang lưu…' : <><span className="sm:hidden">Xong</span><span className="hidden sm:inline">Xong, dùng sơ đồ này</span></>}</button>
       </header>
 
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-brand-100 bg-white/90 px-3 py-2">
-        <div className="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Thêm vào sơ đồ">
-          <button type="button" onClick={() => setEditing(addChild())} className="btn-primary !min-h-[44px]"><Plus className="h-5 w-5" aria-hidden /> Thêm nhánh</button>
-          <button type="button" onClick={() => addNote('note')} className={tb}><StickyNote className="h-4 w-4" aria-hidden /> Thêm ô văn bản</button>
-          <button type="button" onClick={() => addNote('topic')} className={tb}><Heading className="h-4 w-4" aria-hidden /> Tên chủ đề</button>
-          <button type="button" onClick={() => setEditing(selected.id)} className={tb}><Pencil className="h-4 w-4" aria-hidden /> Sửa chữ</button>
-          <button type="button" aria-pressed={pickMode} onClick={() => setPickMode((v) => !v)} className={`${tb} ${pickMode ? '!border-brand-600 !bg-brand-50' : ''}`}><Check className="h-4 w-4" aria-hidden /> Chọn nhiều</button>
-          <button type="button" onClick={() => { const all = nodesRef.current.map((n) => n.id); setSelRaw(all[all.length - 1]); setExtra(all.slice(0, -1)); }} className={tb}>Chọn hết</button>
-          <button type="button" aria-expanded={fmtOpen} onClick={() => setFmtOpen((v) => !v)} className={`${tb} md:!hidden ${fmtOpen ? '!border-brand-600 !bg-brand-50' : ''}`}><Bold className="h-4 w-4" aria-hidden /> Định dạng chữ</button>
-          <button type="button" onClick={() => fileRef.current?.click()} className={tb}><ImagePlus className="h-4 w-4" aria-hidden /> {selected.img ? 'Đổi hình' : 'Thêm hình'}</button>
-          {selected.note && (
-            <span className="flex flex-wrap items-center gap-1" role="group" aria-label="Kích thước ô văn bản">
-              <button type="button" aria-label="Thu hẹp ô" onClick={() => patch(selected.id, { w: Math.max(90, selected.w - 30) })} className={tb}><Minus className="h-4 w-4" aria-hidden /> Rộng</button>
-              <button type="button" aria-label="Mở rộng ô" onClick={() => patch(selected.id, { w: Math.min(1200, selected.w + 30) })} className={tb}><Plus className="h-4 w-4" aria-hidden /> Rộng</button>
-              <button type="button" aria-label="Thấp bớt ô" onClick={() => patch(selected.id, { h: Math.max(30, layoutNode(selected).h - 30) })} className={tb}><Minus className="h-4 w-4" aria-hidden /> Cao</button>
-              <button type="button" aria-label="Cao thêm ô" onClick={() => patch(selected.id, { h: Math.min(1500, layoutNode(selected).h + 30) })} className={tb}><Plus className="h-4 w-4" aria-hidden /> Cao</button>
-            </span>
-          )}
-          {selected.img && (
-            <span className="flex flex-wrap items-center gap-1" role="group" aria-label="Chỉnh hình của nhánh">
-              <button type="button" onClick={() => setCropFor(selected.id)} className={tb}><RotateCw className="h-4 w-4" aria-hidden /> Xoay / cắt hình</button>
-              <button type="button" aria-label="Thu nhỏ hình" onClick={() => patch(selected.id, { w: Math.max(100, selected.w - 30) })} className={tb}><Minus className="h-4 w-4" aria-hidden /> Hình</button>
-              <button type="button" aria-label="Phóng to hình" onClick={() => patch(selected.id, { w: Math.min(600, selected.w + 30) })} className={tb}><Plus className="h-4 w-4" aria-hidden /> Hình</button>
-              <button type="button" onClick={() => patchSel({ img: undefined, imgRatio: undefined, imgOrig: undefined })} className={tb}><Trash2 className="h-4 w-4" aria-hidden /> Gỡ hình</button>
-            </span>
-          )}
-          <button type="button" onClick={() => void pasteBtn()} className={tb}><ClipboardPaste className="h-4 w-4" aria-hidden /> Dán hình</button>
-          <button type="button" onClick={remove} disabled={onlyRoot} className={`${tb} hover:!border-rose-300 hover:!text-rose-700`}><Trash2 className="h-4 w-4" aria-hidden /> Xóa nhánh</button>
-          <span className="ml-auto flex items-center gap-1" role="group" aria-label="Thu phóng">
-            <button type="button" aria-label="Thu nhỏ" onClick={() => setZoom((z) => Math.max(0.05, +(z - (z > 0.3 ? 0.1 : 0.05)).toFixed(2)))} className={tb}><Minus className="h-4 w-4" aria-hidden /></button>
-            <span className="w-12 text-center text-sm font-bold">{Math.round(zoom * 100)}%</span>
-            <button type="button" aria-label="Phóng to" onClick={() => setZoom((z) => Math.min(3, +(z + (z < 0.3 ? 0.05 : 0.1)).toFixed(2)))} className={tb}><Plus className="h-4 w-4" aria-hidden /></button>
-            <button type="button" aria-label="Vừa khung" onClick={() => fit()} className={tb}><Maximize2 className="h-4 w-4" aria-hidden /></button>
-          </span>
-          <input ref={fileRef} type="file" accept="image/*" className="sr-only" tabIndex={-1} aria-label="Chọn ảnh"
-            onChange={(e) => { void addImage(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
-        </div>
-
-        <div className={`${fmtOpen ? 'flex' : 'hidden'} flex-wrap items-center gap-x-3 gap-y-1.5 md:flex`} role="toolbar" aria-label="Định dạng chữ của nhánh đang chọn">
-          <FontPicker value={selected.font} onChange={(f) => patchSel({ font: f })} />
-          <span className="flex items-center gap-1" role="group" aria-label="Cỡ chữ">
-            <button type="button" aria-label="Chữ nhỏ lại" onClick={() => patchSel({ size: Math.max(11, selected.size - 2) })} className={tb}><Minus className="h-4 w-4" aria-hidden /></button>
-            <span className="w-9 text-center text-sm font-bold">{selected.size}</span>
-            <button type="button" aria-label="Chữ to lên" onClick={() => patchSel({ size: Math.min(48, selected.size + 2) })} className={tb}><Plus className="h-4 w-4" aria-hidden /></button>
-          </span>
-          <span className="flex gap-1" role="group" aria-label="Kiểu chữ">
-            <button type="button" aria-label="Đậm" aria-pressed={selected.bold} onClick={() => patchSel({ bold: !selected.bold })} className={`${tb} ${selected.bold ? '!border-brand-600 !bg-brand-50' : ''}`}><Bold className="h-4 w-4" aria-hidden /></button>
-            <button type="button" aria-label="Nghiêng" aria-pressed={selected.italic} onClick={() => patchSel({ italic: !selected.italic })} className={`${tb} ${selected.italic ? '!border-brand-600 !bg-brand-50' : ''}`}><Italic className="h-4 w-4" aria-hidden /></button>
-            <button type="button" aria-label="Gạch chân" aria-pressed={selected.underline} onClick={() => patchSel({ underline: !selected.underline })} className={`${tb} ${selected.underline ? '!border-brand-600 !bg-brand-50' : ''}`}><Underline className="h-4 w-4" aria-hidden /></button>
-          </span>
-          <span className="flex gap-1" role="group" aria-label="Căn lề">
-            {([['left', AlignLeft, 'Căn trái'], ['center', AlignCenter, 'Căn giữa'], ['right', AlignRight, 'Căn phải']] as const).map(([v, Icon, label]) => (
-              <button key={v} type="button" aria-label={label} aria-pressed={selected.align === v} onClick={() => patchSel({ align: v })} className={`${tb} ${selected.align === v ? '!border-brand-600 !bg-brand-50' : ''}`}><Icon className="h-4 w-4" aria-hidden /></button>
-            ))}
-          </span>
-          <span className="flex items-center gap-1" role="group" aria-label="Độ dày nhánh nối"><span className="text-xs font-bold text-ink-2">Độ dày nhánh</span>
-            <button type="button" aria-label="Nhánh mỏng đi" disabled={noLink} onClick={() => patchSel({ thick: Math.max(2, (selected.thick ?? defaultThick(selected.level)) - 2) })} className={tb}><Minus className="h-4 w-4" aria-hidden /></button>
-            <span className="w-8 text-center text-sm font-bold">{noLink ? '–' : selected.thick ?? defaultThick(selected.level)}</span>
-            <button type="button" aria-label="Nhánh dày lên" disabled={noLink} onClick={() => patchSel({ thick: Math.min(48, (selected.thick ?? defaultThick(selected.level)) + 2) })} className={tb}><Plus className="h-4 w-4" aria-hidden /></button>
-          </span>
-          <span className="relative flex flex-wrap items-center gap-1.5" role="group" aria-label="Tô màu">
-            <span className="text-xs font-bold text-ink-2">Tô màu</span>
+      <div className={`${toolsOpen ? 'block' : 'hidden'} border-b border-brand-100 bg-slate-50/90 px-2 py-1.5 sm:block`} role="toolbar" aria-label="Công cụ sơ đồ tư duy">
+        <div className="flex flex-wrap items-stretch gap-y-1.5">
+          <Group label="Chèn">
+            <RBtn Icon={Plus} label="Thêm nhánh" primary onClick={() => setEditing(addChild())} />
+            <RBtn Icon={StickyNote} label="Ô văn bản" aria="Thêm ô văn bản" onClick={() => addNote('note')} />
+            <RBtn Icon={Heading} label="Tên chủ đề" onClick={() => addNote('topic')} />
+            <RBtn Icon={ImagePlus} label={selected.img ? 'Đổi hình' : 'Thêm hình'} onClick={() => fileRef.current?.click()} />
+            <RBtn Icon={ClipboardPaste} label="Dán hình" onClick={() => void pasteBtn()} />
+          </Group>
+          <Group label="Chỉnh sửa">
+            <RBtn Icon={Pencil} label="Sửa chữ" onClick={() => setEditing(selected.id)} />
+            <RBtn Icon={Check} label="Chọn nhiều" active={pickMode} onClick={() => setPickMode((v) => !v)} />
+            <RBtn Icon={Maximize2} label="Chọn hết" onClick={() => { const all = nodesRef.current.map((n) => n.id); setSelRaw(all[all.length - 1]); setExtra(all.slice(0, -1)); }} />
+            <RBtn Icon={Trash2} label="Xóa nhánh" danger disabled={onlyRoot} onClick={remove} />
+          </Group>
+          <Group label="Chữ" ariaLabel="Định dạng chữ của nhánh đang chọn">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-1">
+                <FontPicker value={selected.font} onChange={(f) => patchSel({ font: f })} />
+                <span className="flex items-center rounded-lg bg-white ring-1 ring-brand-100" role="group" aria-label="Cỡ chữ">
+                  <IBtn Icon={Minus} label="Chữ nhỏ lại" onClick={() => patchSel({ size: Math.max(11, selected.size - 2) })} />
+                  <span className="w-7 text-center text-sm font-bold">{selected.size}</span>
+                  <IBtn Icon={Plus} label="Chữ to lên" onClick={() => patchSel({ size: Math.min(48, selected.size + 2) })} />
+                </span>
+              </div>
+              <div className="flex items-center gap-0.5">
+                <IBtn Icon={Bold} label="Đậm" active={selected.bold} onClick={() => patchSel({ bold: !selected.bold })} />
+                <IBtn Icon={Italic} label="Nghiêng" active={selected.italic} onClick={() => patchSel({ italic: !selected.italic })} />
+                <IBtn Icon={Underline} label="Gạch chân" active={selected.underline} onClick={() => patchSel({ underline: !selected.underline })} />
+                <span className="mx-1 h-5 w-px bg-brand-100" aria-hidden />
+                {([['left', AlignLeft, 'Căn trái'], ['center', AlignCenter, 'Căn giữa'], ['right', AlignRight, 'Căn phải']] as const).map(([v, Icon, label]) => (
+                  <IBtn key={v} Icon={Icon} label={label} active={selected.align === v} onClick={() => patchSel({ align: v })} />
+                ))}
+              </div>
+            </div>
+          </Group>
+          <Group label="Màu sắc" ariaLabel="Tô màu">
             {([['link', 'Nhánh nối', selected.color], ['fill', 'Nền ô', selected.fill], ['text', 'Chữ', selected.textColor]] as const).map(([k, label, col]) => (
-              <button key={k} type="button" aria-expanded={colorTarget === k} onClick={() => setColorTarget(colorTarget === k ? null : k)}
-                className={`${tb} !gap-2 ${colorTarget === k ? '!border-brand-600 !bg-brand-50' : ''}`}>
-                <span className="h-5 w-5 rounded-full border-2 border-black/15" style={{ background: col }} aria-hidden /> {label}
+              <button key={k} type="button" aria-expanded={colorTarget === k} onClick={() => setColorTarget(colorTarget === k ? null : k)} title={`Tô màu: ${label}`}
+                className={`flex min-h-[52px] min-w-[54px] flex-col items-center justify-center gap-1 rounded-lg px-1.5 py-1 text-[11px] font-semibold leading-tight transition duration-150 ${colorTarget === k ? 'bg-brand-100 text-brand-800' : 'text-ink-2 hover:bg-brand-50'}`}>
+                <span className="h-5 w-5 rounded-full border-2 border-black/15" style={{ background: col }} aria-hidden />{label}
               </button>
             ))}
             {colorTarget && (
               <ColorPanel title={colorTarget === 'link' ? 'nhánh nối' : colorTarget === 'fill' ? 'nền của ô' : 'chữ'} value={colorTarget === 'link' ? selected.color : colorTarget === 'fill' ? selected.fill : selected.textColor}
                 allowNone={colorTarget === 'fill'} recent={recent} onPick={applyColor} onClose={() => setColorTarget(null)} onPickFromMap={() => { setEyedrop(true); setColorTarget(null); setMsg('Bấm vào một nhánh để lấy màu của nó.'); }} />
             )}
-            {colorTarget === 'link' && !noLink && (
-              <label className="flex items-center gap-1 text-xs font-bold text-ink-2"><input type="checkbox" checked={withKids} onChange={(e) => setWithKids(e.target.checked)} className="h-4 w-4" /> Cả nhánh con</label>
-            )}
-          </span>
+          </Group>
+          <Group label="Nhánh nối" ariaLabel="Độ dày nhánh nối">
+            <div className="flex flex-col items-center gap-1">
+              <span className="flex items-center rounded-lg bg-white ring-1 ring-brand-100">
+                <IBtn Icon={Minus} label="Nhánh mỏng đi" disabled={noLink} onClick={() => patchSel({ thick: Math.max(2, (selected.thick ?? defaultThick(selected.level)) - 2) })} />
+                <span className="w-8 text-center text-sm font-bold" title="Độ dày nhánh nối">{noLink ? '–' : selected.thick ?? defaultThick(selected.level)}</span>
+                <IBtn Icon={Plus} label="Nhánh dày lên" disabled={noLink} onClick={() => patchSel({ thick: Math.min(48, (selected.thick ?? defaultThick(selected.level)) + 2) })} />
+              </span>
+              {colorTarget === 'link' && !noLink && (
+                <label className="flex items-center gap-1 text-[11px] font-bold text-ink-2"><input type="checkbox" checked={withKids} onChange={(e) => setWithKids(e.target.checked)} className="h-3.5 w-3.5" /> Cả nhánh con</label>
+              )}
+            </div>
+          </Group>
+          {selected.note && (
+            <Group label="Ô văn bản" ariaLabel="Kích thước ô văn bản">
+              <RBtn Icon={Minus} label="Hẹp" aria="Thu hẹp ô" onClick={() => patch(selected.id, { w: Math.max(90, selected.w - 30) })} />
+              <RBtn Icon={Plus} label="Rộng" aria="Mở rộng ô" onClick={() => patch(selected.id, { w: Math.min(1200, selected.w + 30) })} />
+              <RBtn Icon={Minus} label="Thấp" aria="Thấp bớt ô" onClick={() => patch(selected.id, { h: Math.max(30, layoutNode(selected).h - 30) })} />
+              <RBtn Icon={Plus} label="Cao" aria="Cao thêm ô" onClick={() => patch(selected.id, { h: Math.min(1500, layoutNode(selected).h + 30) })} />
+            </Group>
+          )}
+          {selected.img && (
+            <Group label="Hình" ariaLabel="Chỉnh hình của nhánh">
+              <RBtn Icon={RotateCw} label="Xoay / cắt" onClick={() => setCropFor(selected.id)} />
+              <RBtn Icon={Minus} label="Nhỏ lại" aria="Thu nhỏ hình" onClick={() => patch(selected.id, { w: Math.max(100, selected.w - 30) })} />
+              <RBtn Icon={Plus} label="Phóng to" aria="Phóng to hình" onClick={() => patch(selected.id, { w: Math.min(600, selected.w + 30) })} />
+              <RBtn Icon={Trash2} label="Gỡ hình" danger onClick={() => patchSel({ img: undefined, imgRatio: undefined, imgOrig: undefined })} />
+            </Group>
+          )}
+          <input ref={fileRef} type="file" accept="image/*" className="sr-only" tabIndex={-1} aria-label="Chọn ảnh"
+            onChange={(e) => { void addImage(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
         </div>
-        {paged && outside && <p role="status" className="w-full rounded-xl bg-amber-50 px-3 py-1.5 text-sm font-bold text-amber-900">Có nhánh nằm ngoài trang {pg.label.split(' (')[0]}: phần ngoài khung xanh sẽ bị cắt khi xuất ảnh.</p>}
-        {many && <p className="w-full text-sm font-bold text-brand-700" role="status">Đang chọn {selIds.length} nhánh: mọi định dạng sẽ áp cho tất cả các nhánh này.</p>}
-        {msg && <p role="alert" className="w-full rounded-xl bg-amber-50 px-3 py-1.5 text-sm font-bold text-amber-900">{msg}</p>}
+        {paged && outside && <p role="status" className="mt-1.5 w-full rounded-lg bg-amber-50 px-3 py-1 text-sm font-bold text-amber-900">Có nhánh nằm ngoài trang {pg.label.split(' (')[0]}: phần ngoài khung xanh sẽ bị cắt khi xuất ảnh.</p>}
+        {many && <p className="mt-1.5 flex w-full items-center gap-2 rounded-lg bg-amber-100 px-3 py-1 text-sm font-bold text-amber-900" role="status"><span aria-hidden className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-white"><Check size={13} strokeWidth={4} /></span>Đang chọn {selIds.length} nhánh (viền cam, có dấu ✓): mọi định dạng sẽ áp cho tất cả các nhánh này.</p>}
+        {msg && <p role="alert" className="mt-1.5 w-full rounded-lg bg-amber-50 px-3 py-1 text-sm font-bold text-amber-900">{msg}</p>}
       </div>
 
       <div ref={box} className={`min-h-0 flex-1 overflow-auto ${paged ? "bg-slate-300" : "bg-[radial-gradient(circle_at_1px_1px,rgba(22,104,242,.14)_1px,transparent_0)] [background-size:24px_24px]"}`} onPointerDown={cDown} onPointerMove={cMove} onPointerUp={cUp} onPointerCancel={cUp} style={{ touchAction: 'none', cursor: panning ? 'grabbing' : 'grab' }}>
@@ -575,7 +722,9 @@ export function MindMapEditor({ title = 'Sơ đồ tư duy', rootText = 'Ý chí
           <div style={{ width: world.w, height: world.h, transform: `scale(${zoom})`, transformOrigin: '0 0', position: 'relative' }}>
             {paged && <div aria-label={`Trang ${pg.label}`} className="pointer-events-none absolute bg-white" style={{ left: world.px, top: world.py, width: world.pw, height: world.ph, boxShadow: '0 0 0 2px #1668f2, 0 20px 60px -10px rgba(10,23,48,.35)' }} />}
             <svg width={world.w} height={world.h} className="pointer-events-none absolute inset-0" aria-hidden>
-              {links.map((l) => <polygon key={l.id} points={l.pts} fill={l.color} stroke={l.color} strokeWidth={1} strokeLinejoin="round" />)}
+              {links.map((l) => (l.stroke > 0
+                ? <g key={l.id}><polyline points={l.pts} fill="none" stroke={l.color} strokeWidth={l.stroke} strokeLinejoin="round" strokeLinecap="round" />{l.head && <polygon points={l.head} fill={l.color} />}</g>
+                : <polygon key={l.id} points={l.pts} fill={l.color} stroke={l.color} strokeWidth={1} strokeLinejoin="round" />))}
             </svg>
             {nodes.map((n) => {
               const lay = layoutNode(n);
@@ -585,7 +734,12 @@ export function MindMapEditor({ title = 'Sơ đồ tư duy', rootText = 'Ý chí
                   onPointerDown={(e) => down(e, n)} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
                   onDoubleClick={() => { setSel(n.id); setEditing(n.id); }}
                   onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) setEditing(n.id); }}
-                  style={{ position: 'absolute', left: n.x, top: n.y, width: n.w, height: lay.h, background: n.fill, border: `3px solid ${n.color}`, borderRadius: radiusOf(n), touchAction: 'none', cursor: 'grab', display: 'flex', flexDirection: 'column', justifyContent: n.note ? 'flex-start' : 'center', boxShadow: on ? '0 0 0 4px rgba(22,104,242,.35), 0 10px 24px -8px rgba(10,23,48,.35)' : n.fill === 'transparent' ? 'none' : '0 6px 14px -8px rgba(10,23,48,.35)', userSelect: 'none' }}>
+                  style={{ position: 'absolute', left: n.x, top: n.y, width: n.w, height: lay.h, background: n.fill, border: `3px solid ${n.color}`, borderRadius: radiusOf(n), touchAction: 'none', cursor: 'grab', display: 'flex', flexDirection: 'column', justifyContent: n.note ? 'flex-start' : 'center', boxShadow: on ? (many ? '0 0 0 3px #fff, 0 0 0 7px #f59e0b, 0 0 22px 8px rgba(245,158,11,.55)' : '0 0 0 3px #fff, 0 0 0 6px #1668f2, 0 10px 24px -8px rgba(10,23,48,.35)') : n.fill === 'transparent' ? 'none' : '0 6px 14px -8px rgba(10,23,48,.35)', opacity: many && !on ? 0.45 : 1, transition: 'opacity .15s, box-shadow .15s', userSelect: 'none' }}>
+                  {n.note && on && !many && (
+                    <span role="button" aria-label="Kéo để dời ô văn bản" title="Kéo để dời ô văn bản" onPointerDown={(e) => gripDown(e, n)} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
+                      style={{ position: 'absolute', zIndex: 8, left: '50%', top: -30, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 999, background: '#1668f2', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'move', touchAction: 'none', boxShadow: '0 2px 6px rgba(10,23,48,.35)', whiteSpace: 'nowrap', userSelect: 'none' }}><Move size={13} aria-hidden /> Kéo để dời</span>
+                  )}
+                  {many && on && <span aria-hidden style={{ position: 'absolute', top: -16, right: -16, zIndex: 7, width: 28, height: 28, borderRadius: '50%', background: '#f59e0b', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(10,23,48,.4)', border: '2px solid #fff', pointerEvents: 'none' }}><Check size={16} strokeWidth={4} /></span>}
                   {editing === n.id ? (
                     <>
                     {n.img && <img src={n.img} alt="" draggable={false} style={{ position: 'absolute', left: PAD, top: PAD, width: n.w - PAD * 2, height: lay.imgH, objectFit: 'cover', borderRadius: 10, pointerEvents: 'none' }} />}
@@ -611,13 +765,23 @@ export function MindMapEditor({ title = 'Sơ đồ tư duy', rootText = 'Ý chí
                 </div>
               );
             })}
+            {style === 'branch' && links.map((l) => {
+              const on = l.id === sel || extra.includes(l.id);
+              const size = (on ? 22 : 15) / zoom;
+              return (
+                <span key={`bend-${l.id}`} role="slider" aria-label="Kéo để uốn cong nhánh" title="Kéo để uốn cong nhánh · bấm đúp để thẳng lại"
+                  onPointerDown={(e) => bendDown(e, l.id)} onPointerMove={bendMove} onPointerUp={bendUp} onPointerCancel={bendUp}
+                  onDoubleClick={(e) => { e.stopPropagation(); if (l.bent) patch(l.id, { bend: undefined }); }}
+                  style={{ position: 'absolute', zIndex: 5, left: l.mid.x - size / 2, top: l.mid.y - size / 2, width: size, height: size, borderRadius: '50%', background: on ? '#fff' : 'rgba(255,255,255,.85)', border: `${2.5 / zoom}px solid ${l.color}`, boxShadow: '0 1px 4px rgba(10,23,48,.4)', cursor: 'move', touchAction: 'none' }} />
+              );
+            })}
           </div>
         </div>
       </div>
 
       {cropNode?.img && <ImageEditor src={cropNode.img} original={cropNode.imgOrig} onClose={() => setCropFor(null)} onApply={(src, ratio) => { patch(cropNode.id, { img: src, imgRatio: ratio }); setCropFor(null); }} />}
-      <footer className="border-t border-brand-100 bg-white/95 px-3 py-1.5 text-center text-xs text-ink-2">
-        Cuộn chuột để phóng to / thu nhỏ · kéo chỗ trống để di chuyển · Shift + cuộn để đi ngang · Ô văn bản kéo tự do · kéo ô vuông trắng quanh nhánh đang chọn để đổi rộng / cao (giữ Shift ở góc để phóng cả chữ) · bấm để chọn · giữ Shift hoặc Ctrl rồi bấm để chọn nhiều nhánh · kéo để di chuyển (các nhánh con đi theo) · bấm đúp hoặc “Sửa chữ” để gõ · Ctrl+V để dán hình vào nhánh đang chọn · hình và chữ mô tả nằm chung một nhánh
+      <footer className="hidden border-t border-brand-100 bg-white px-3 py-1 text-center text-xs text-ink-2 sm:block">
+        Cuộn chuột: thu phóng · kéo nền: di chuyển · kéo nhánh: đổi chỗ · bấm đúp nhánh: gõ chữ · chấm tròn giữa nét nối: uốn cong (bấm đúp: thẳng lại) · ô vuông trắng: đổi cỡ · Ctrl+V: dán hình
       </footer>
     </div>,
     document.body,
