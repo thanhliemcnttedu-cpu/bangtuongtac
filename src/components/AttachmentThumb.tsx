@@ -1,4 +1,4 @@
-import { AlignLeft, FileText, Image as ImageIcon, Link2, Mic, Play } from 'lucide-react';
+import { AlignLeft, Cloud, FileText, Image as ImageIcon, Link2, Mic, Play } from 'lucide-react';
 import type { Attachment } from '../types/board';
 import { parseEmbed } from '../lib/embeds';
 import { DOC_HUE, DOC_LABEL, docKindOf } from '../lib/media';
@@ -32,6 +32,9 @@ export function AttachmentThumb({ attachment, className = '', large = false }: P
   }
   const url = safeHref(attachment.url);
   const hue = attachment.hue ?? 210;
+
+  // Đã chuyển sang Drive: không có ảnh để xem trước, hiện khối "Trên Google Drive".
+  if (attachment.archived) return <Block hue={215} className={className} large={large} name={attachment.name}><Cloud className={icon} aria-hidden /></Block>;
 
   if (attachment.type === 'image' && url) return <img src={url} alt={attachment.name} loading="lazy" className={`object-cover ${className}`} />;
 

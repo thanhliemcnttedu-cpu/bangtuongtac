@@ -274,6 +274,12 @@ export async function setCardStatus(cardId: string, status: CardStatus): Promise
   if (error) fail('Không đổi được trạng thái', error.message);
 }
 
+/** Ghi lại danh sách đính kèm của một bài (dùng khi chuyển tệp sang Drive). */
+export async function updateCardAttachments(cardId: string, attachments: Attachment[]): Promise<void> {
+  const { error } = await db().from('cards').update({ attachments }).eq('id', cardId);
+  if (error) fail('Không cập nhật được tệp của bài', error.message);
+}
+
 export async function deleteCardAsManager(cardId: string): Promise<void> {
   const { error } = await db().from('cards').delete().eq('id', cardId);
   if (error) fail('Không xóa được bài', error.message);

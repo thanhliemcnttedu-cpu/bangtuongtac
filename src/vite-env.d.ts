@@ -3,6 +3,8 @@
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL?: string;
   readonly VITE_SUPABASE_ANON_KEY?: string;
+  /** Mã khách OAuth của Google (công khai) dùng để xin quyền Drive. */
+  readonly VITE_GOOGLE_CLIENT_ID?: string;
 }
 interface ImportMeta {
   readonly env: ImportMetaEnv;

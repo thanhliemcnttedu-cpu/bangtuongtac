@@ -35,6 +35,8 @@ import type { FeedbackActions } from './FeedbackPanel';
 import { getMyCardIds } from '../lib/peer';
 import { BoardMenu } from './BoardMenu';
 import { ConfirmModal } from './ConfirmModal';
+import { DriveBackupModal } from './DriveBackupModal';
+import type { CleanupReport } from '../hooks/useBoardStore';
 import { GradebookModal } from './GradebookModal';
 import { ActivityModal } from './ActivityModal';
 import { DuplicateBoardModal } from './DuplicateBoardModal';
@@ -46,6 +48,17 @@ const EDIT_WINDOW_MS = 15 * 60_000; // khách được xóa bài của mình tro
 const PROFILE_KEY = 'bt.lastProfile';
 
 type SlideRow = BoardRow & { card: SubmissionCard };
+
+/** Câu thông báo sau khi xóa bài: nói rõ đã xóa bao nhiêu tệp trên Drive / kho, hoặc tệp Drive nào chưa xóa được. */
+function cleanupText(base: string, rep: CleanupReport | void): string {
+  if (!rep) return `${base}.`;
+  const parts: string[] = [];
+  if (rep.driveDeleted > 0) parts.push(`${rep.driveDeleted} tệp trên Google Drive`);
+  if (rep.storageRemoved > 0) parts.push(`${rep.storageRemoved} tệp trong kho`);
+  const done = parts.length > 0 ? ` và đã xóa ${parts.join(', ')}` : '';
+  const fail = rep.driveFailed > 0 ? `. Chưa xóa được ${rep.driveFailed} tệp trên Drive${rep.driveError ? ` (${rep.driveError.slice(0, 80)})` : ''}, bạn xóa tay trong thư mục Bảng tương tác lớp học` : '';
+  return `${base}${done}${fail}.`;
+}
 
 function loadProfile(): { name: string; unit: string } {
   try {
@@ -74,7 +87,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
   const [view, setView] = useState<ViewMode>(savedBoard.settings.defaultView);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [shareTab, setShareTab] = useState<'students' | 'teachers'>('students');
-  const [modal, setModal] = useState<'post' | 'share' | 'roster' | 'resource' | 'duplicate' | 'activity' | 'gradebook' | 'details' | 'lesson' | 'task' | 'material' | 'confirm-card' | 'confirm-cards' | 'confirm-lesson' | 'confirm-task' | 'confirm-material' | 'confirm-clear' | 'confirm-trash' | 'confirm-archive' | null>(null);
+  const [modal, setModal] = useState<'post' | 'share' | 'roster' | 'resource' | 'duplicate' | 'activity' | 'gradebook' | 'details' | 'lesson' | 'task' | 'material' | 'drive' | 'confirm-card' | 'confirm-cards' | 'confirm-lesson' | 'confirm-task' | 'confirm-material' | 'confirm-clear' | 'confirm-trash' | 'confirm-archive' | null>(null);
   const [slideStart, setSlideStart] = useState<string | null>(null);
   // Đối tượng đang soạn trong các hộp Bài học / Bài tập / Tài liệu.
   const [editLesson, setEditLesson] = useState<Lesson | undefined>();
@@ -232,6 +245,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
     onFullscreen: toggleFullscreen,
     onToggleArchive: () => { if (closed) void run(() => store.setArchived(savedBoard.id, false), 'Đã mở lại bảng.'); else setModal('confirm-archive'); },
     onClear: () => setModal('confirm-clear'),
+    onDrive: () => setModal('drive'),
     onTrash: () => setModal('confirm-trash'),
     onShareTeachers: () => { setShareTab('teachers'); setModal('share'); },
   };
@@ -363,7 +377,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
         onSetStars={(cardId, stars) => store.setTeacherStars(savedBoard.id, cardId, stars)} />}
       {modal === 'confirm-clear' && (
         <ConfirmModal title="Xóa hết bài nộp?" confirmLabel={`Xóa ${savedBoard.cards.length} bài`} danger requireText="XÓA" onClose={() => setModal(null)}
-          onConfirm={async () => { await store.clearSubmissions(savedBoard.id); setModal(null); showToast('Đã xóa toàn bộ bài nộp.'); }}>
+          onConfirm={async () => { const rep = await store.clearSubmissions(savedBoard.id); setModal(null); showToast(cleanupText('Đã xóa toàn bộ bài nộp', rep)); }}>
           <p>Toàn bộ <b className="text-ink">{savedBoard.cards.length} bài nộp</b> (kèm điểm và nhận xét) của “{savedBoard.title}” sẽ bị xóa. Tài liệu ghim, danh sách sĩ số và cài đặt được giữ nguyên.</p>
           <p className="font-bold text-rose-700">Không thể hoàn tác. Hãy bấm “Xuất báo cáo” trước nếu cần lưu điểm.</p>
         </ConfirmModal>
@@ -413,17 +427,23 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
           if (editMaterial) { await store.updateResource(savedBoard.id, editMaterial.id, input); setModal(null); showToast('Đã lưu tài liệu.'); return; }
           await store.addResource(savedBoard.id, input); setModal(null); showToast('Đã thêm tài liệu.');
         }} />}
+      {modal === 'drive' && <DriveBackupModal board={savedBoard} real={store.isReal} onClose={() => setModal(null)}
+        onUpdateAttachments={(cardId, atts) => store.updateCardAttachments(savedBoard.id, cardId, atts)} onRemoveStored={store.removeStoredAttachments} />}
       {modal === 'confirm-card' && toDelete.card && (
         <ConfirmModal title="Xóa bài nộp này?" confirmLabel="Xóa bài" danger onClose={() => setModal(null)}
-          onConfirm={async () => { await store.deleteCard(savedBoard.id, toDelete.card!.id, true); setModal(null); showToast('Đã xóa bài nộp.'); }}>
+          onConfirm={async () => { const rep = await store.deleteCard(savedBoard.id, toDelete.card!.id, true); setModal(null); showToast(cleanupText('Đã xóa bài nộp', rep)); }}>
           <p>Bài “{toDelete.card.title}” của <b className="text-ink">{toDelete.card.authorName}</b> ({toDelete.card.unit}) sẽ bị xóa vĩnh viễn, kể cả tệp đính kèm, điểm và nhận xét. <b className="text-ink">Không thể hoàn tác.</b></p>
         </ConfirmModal>
       )}
       {modal === 'confirm-cards' && toDelete.cardIds && (
         <ConfirmModal title={`Xóa ${toDelete.cardIds.length} bài nộp?`} confirmLabel={`Xóa ${toDelete.cardIds.length} bài`} danger requireText="XOA" onClose={() => setModal(null)}
           onConfirm={async () => {
-            for (const id of toDelete.cardIds!) await store.deleteCard(savedBoard.id, id, true);
-            setModal(null); showToast(`Đã xóa ${toDelete.cardIds!.length} bài nộp.`);
+            const total = { storageRemoved: 0, driveDeleted: 0, driveFailed: 0 };
+            for (const id of toDelete.cardIds!) {
+              const rep = await store.deleteCard(savedBoard.id, id, true);
+              if (rep) { total.storageRemoved += rep.storageRemoved; total.driveDeleted += rep.driveDeleted; total.driveFailed += rep.driveFailed; }
+            }
+            setModal(null); showToast(cleanupText(`Đã xóa ${toDelete.cardIds!.length} bài nộp`, total));
           }}>
           <p>Mọi bài đang hiển thị theo bộ lọc hiện tại (<b className="text-ink">{toDelete.cardIds.length} bài</b>) sẽ bị xóa vĩnh viễn, kể cả tệp, điểm và nhận xét. <b className="text-ink">Không thể hoàn tác.</b> Hãy kiểm tra kỹ bộ lọc trước khi xóa.</p>
         </ConfirmModal>

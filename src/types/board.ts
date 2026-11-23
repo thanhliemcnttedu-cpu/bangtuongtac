@@ -94,6 +94,10 @@ export interface Attachment {
   hue?: number;
   /** Tên nút do giáo viên đặt (ví dụ “Tải gói Gemini cách A”). */
   label?: string;
+  /** Mã tệp bản sao trên Google Drive của giáo viên (dùng để xóa theo khi xóa bài). */
+  driveId?: string;
+  /** true = tệp đã chuyển hẳn sang Drive của giáo viên và không còn trên hệ thống (url trỏ tới Drive). */
+  archived?: boolean;
 }
 
 /** Bài tập hoặc yêu cầu của một bài học; bài nộp gắn vào đây. */

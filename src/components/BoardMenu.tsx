@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  Activity, Archive, ArchiveRestore, BookmarkCheck, BookmarkPlus, ClipboardList, Copy, Download, Eraser, Info,
+  Activity, Archive, ArchiveRestore, BookmarkCheck, BookmarkPlus, ClipboardList, CloudUpload, Copy, Download, Eraser, Info,
   ListChecks, Maximize, MoreHorizontal, Printer, Settings, Trash2, Users,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -21,6 +21,8 @@ export interface BoardMenuActions {
   onClear: () => void;
   onTrash: () => void;
   onShareTeachers: () => void;
+  /** Lưu bản sao bảng và tệp bài nộp lên Google Drive của giáo viên. */
+  onDrive: () => void;
 }
 
 interface Props {
@@ -66,6 +68,7 @@ export function BoardMenu({ board, canManage, isOwner, canView, actions }: Props
     ...(canView ? [{ label: 'Giáo viên cùng bảng', Icon: Users, run: actions.onShareTeachers }] : []),
     ...(isOwner ? [{ label: board.isTemplate ? 'Bỏ đánh dấu mẫu' : 'Đánh dấu là mẫu', Icon: board.isTemplate ? BookmarkCheck : BookmarkPlus, run: actions.onToggleTemplate }] : []),
     ...(canView ? [{ label: 'Xuất báo cáo (CSV, mở bằng Excel)', Icon: Download, run: actions.onExport }] : []),
+    ...(canManage ? [{ label: 'Lưu lên Google Drive của tôi…', Icon: CloudUpload, run: actions.onDrive }] : []),
     { label: 'In / Lưu thành PDF', Icon: Printer, run: actions.onPrint },
     { label: 'Toàn màn hình', Icon: Maximize, run: actions.onFullscreen },
   ];

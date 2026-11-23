@@ -9,11 +9,29 @@ import { isSupabaseConfigured } from '../lib/supabase';
 import * as api from '../lib/boardApi';
 import { linkToAttachment } from '../lib/embeds';
 import { attachmentTypeOf, baseMime, compressImage, docKindOf, formatSize, validateFile } from '../lib/media';
-import { uploadAttachment } from '../lib/storage';
+import { removeStoredFiles, uploadAttachment } from '../lib/storage';
+import { getDrive } from '../lib/drive';
 import { checkComment, textFlagged } from '../lib/moderation';
 import { getMyRatings, rememberMyCard, rememberMyComment, rememberRating } from '../lib/peer';
 import type { LessonInput, TaskInput } from '../lib/boardApi';
 import { checkSubmit } from '../lib/lessons';
+
+/** Kết quả dọn tệp khi xóa bài: số tệp đã xóa khỏi kho, trên Drive, và số tệp Drive chưa xóa được. */
+export interface CleanupReport { storageRemoved: number; driveDeleted: number; driveFailed: number; driveError?: string }
+
+/** Dọn tệp của các đính kèm bị xóa: kho Supabase (chế độ thật) và bản sao trên Google Drive của giáo viên. Lỗi từng phần không chặn việc xóa bài. */
+async function cleanupAttachments(list: Attachment[], real: boolean): Promise<CleanupReport> {
+  const rep: CleanupReport = { storageRemoved: 0, driveDeleted: 0, driveFailed: 0 };
+  if (real) { try { rep.storageRemoved = await removeStoredFiles(list.map((a) => a.url)); } catch { /* kho từ chối: để lại, không chặn */ } }
+  const ids = [...new Set(list.map((a) => a.driveId).filter((x): x is string => !!x))];
+  if (ids.length > 0) {
+    try {
+      const drive = getDrive(!real);
+      for (const id of ids) { try { await drive.deleteFile(id); rep.driveDeleted += 1; } catch (e) { rep.driveFailed += 1; rep.driveError = e instanceof Error ? e.message : undefined; } }
+    } catch (e) { rep.driveFailed += ids.length; rep.driveError = e instanceof Error ? e.message : undefined; }
+  }
+  return rep;
+}
 
 export interface NewCardInput {
   boardId: string;
@@ -76,8 +94,13 @@ export interface BoardStore {
   setGrade: (boardId: string, cardId: string, grade: number | null, note: string) => Promise<void>;
   vote: (boardId: string, cardId: string, optionId: string) => Promise<void>;
   setCardLayout: (boardId: string, cardId: string, patch: CardLayoutPatch) => Promise<void>;
-  deleteCard: (boardId: string, cardId: string, asManager: boolean) => Promise<void>;
-  clearSubmissions: (boardId: string) => Promise<void>;
+  /** Giáo viên xóa bài thì xóa luôn tệp trên kho và trên Drive của giáo viên; trả về kết quả dọn dẹp. */
+  deleteCard: (boardId: string, cardId: string, asManager: boolean) => Promise<CleanupReport | void>;
+  clearSubmissions: (boardId: string) => Promise<CleanupReport | void>;
+  /** Ghi lại đính kèm của một bài (sau khi chuyển tệp sang Drive). */
+  updateCardAttachments: (boardId: string, cardId: string, attachments: Attachment[]) => Promise<void>;
+  /** Xóa tệp khỏi kho Supabase (không đụng tới Drive). */
+  removeStoredAttachments: (attachments: Attachment[]) => Promise<void>;
   setRoster: (boardId: string, roster: RosterMember[]) => Promise<void>;
   setSettings: (boardId: string, patch: { linkMode?: LinkMode; moderation?: ModerationMode }) => Promise<void>;
   /** Bài học / buổi tập huấn: thêm (lessonId = null) hoặc sửa. */
@@ -339,18 +362,32 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     await note(boardId, 'cham_diem', `${who}: ${grade !== null ? String(grade).replace('.', ',') : teacherNote ? 'nhận xét' : 'bỏ điểm'}`, false);
   }, [isReal, patch, note]);
 
-  const deleteCard = useCallback(async (boardId: string, cardId: string, asManager: boolean): Promise<void> => {
+  const deleteCard = useCallback(async (boardId: string, cardId: string, asManager: boolean): Promise<CleanupReport | void> => {
+    const atts = boards.find((b) => b.id === boardId)?.cards.find((c) => c.id === cardId)?.attachments ?? [];
     if (isReal) await (asManager ? api.deleteCardAsManager(cardId) : api.deleteOwnCard(cardId));
     let label = '';
     patch(boardId, (b) => ({ ...b, cards: b.cards.filter((c) => { if (c.id === cardId) label = `${c.authorName} · ${c.title}`; return c.id !== cardId; }) }));
     await note(boardId, 'xoa_bai', label, false);
-  }, [isReal, patch, note]);
+    return asManager ? cleanupAttachments(atts, isReal) : undefined;
+  }, [isReal, boards, patch, note]);
 
-  const clearSubmissions = useCallback(async (boardId: string): Promise<void> => {
+  const updateCardAttachments = useCallback(async (boardId: string, cardId: string, attachments: Attachment[]): Promise<void> => {
+    if (isReal) await api.updateCardAttachments(cardId, attachments);
+    patch(boardId, (b) => ({ ...b, cards: b.cards.map((c) => (c.id === cardId ? { ...c, attachments } : c)) }));
+  }, [isReal, patch]);
+
+  const removeStoredAttachments = useCallback(async (attachments: Attachment[]): Promise<void> => {
+    if (isReal) await removeStoredFiles(attachments.map((a) => a.url));
+    else attachments.forEach((a) => { if (a.url?.startsWith('blob:')) URL.revokeObjectURL(a.url); });
+  }, [isReal]);
+
+  const clearSubmissions = useCallback(async (boardId: string): Promise<CleanupReport | void> => {
+    const atts = (boards.find((b) => b.id === boardId)?.cards ?? []).flatMap((c) => c.attachments);
     if (isReal) await api.clearSubmissions(boardId);
     patch(boardId, (b) => ({ ...b, cards: [] }));
     await note(boardId, 'xoa_het', 'Đã xóa toàn bộ bài nộp', true);
-  }, [isReal, patch, note]);
+    return cleanupAttachments(atts, isReal);
+  }, [isReal, boards, patch, note]);
 
   const updateMeta = useCallback(async (boardId: string, meta: api.BoardMetaPatch): Promise<void> => {
     if (isReal) await api.updateBoardMeta(boardId, meta);
@@ -641,7 +678,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     boards: visibleBoards, loading, error, isReal, linkToken,
     rateCard, addComment, deleteOwnComment, setCommentStatus, deleteComment, setTeacherStars,
     inviteCollaborator, changeCollaboratorRole, removeCollaborator, leaveBoard,
-    createBoard, duplicateBoard, updateMeta, addCard, setCardLayout, setStatus, setGrade, vote, deleteCard, clearSubmissions,
+    createBoard, duplicateBoard, updateMeta, addCard, setCardLayout, setStatus, setGrade, vote, deleteCard, clearSubmissions, updateCardAttachments, removeStoredAttachments,
     setRoster, setSettings, saveLesson, removeLesson, saveTask, removeTask, addResource, removeResource, updateResource, assignToBoards, setProgram, setArchived, setTrashed, deleteForever, setTemplate, loadActivity,
   };
 }

@@ -1,4 +1,4 @@
-import { ExternalLink, Mic } from 'lucide-react';
+import { Cloud, ExternalLink, Mic } from 'lucide-react';
 import type { Attachment } from '../types/board';
 import { parseEmbed } from '../lib/embeds';
 import { safeHref } from '../lib/safeUrl';
@@ -8,6 +8,18 @@ import { FileFallback, OfficeViewer, PdfViewer, TextViewer } from './FileViewers
 /** Xem đầy đủ tệp đính kèm (dùng trong chế độ trình chiếu): phát video/âm thanh, nhúng YouTube/Drive/Spotify. */
 export function AttachmentView({ attachment }: { attachment: Attachment }) {
   const url = safeHref(attachment.url);
+
+  // Tệp đã được giáo viên chuyển hẳn sang Google Drive: không còn trên hệ thống nên chỉ có nút mở trên Drive (giáo viên đăng nhập Google mới mở được).
+  if (attachment.archived) {
+    return (
+      <div className="flex w-full flex-col items-center gap-3 rounded-3xl bg-gradient-to-br from-slate-100 to-brand-50 p-8 text-center">
+        <Cloud className="h-12 w-12 text-brand-600" aria-hidden />
+        <p className="max-w-full truncate text-lg font-extrabold">{attachment.name}</p>
+        <p className="text-sm text-ink-2">Tệp này đã được lưu trên Google Drive của giáo viên.</p>
+        {url && <a href={url} target="_blank" rel="noopener noreferrer" className="btn-primary"><ExternalLink className="h-4 w-4" aria-hidden /> Mở trên Drive</a>}
+      </div>
+    );
+  }
 
   if (attachment.type === 'image' && url) {
     return <img src={url} alt={attachment.name} className="viewer-media max-h-[62vh] w-full rounded-3xl bg-brand-50 object-contain" />;
