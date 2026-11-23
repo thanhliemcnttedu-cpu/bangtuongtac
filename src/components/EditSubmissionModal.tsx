@@ -1,79 +1,110 @@
-import { useState } from 'react';
-import type { FormEvent } from 'react';
-import { KeyRound, Link2, Paperclip, Save, Trash2, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import type { ClipboardEvent, FormEvent } from 'react';
+import { KeyRound, Paperclip, Save, Trash2, X } from 'lucide-react';
 import type { Attachment, SubmissionCard } from '../types/board';
 import type { CardEditInput } from '../hooks/useBoardStore';
-import { forgetCode, formatEditCode, myCodes, normalizeEditCode } from '../lib/editCode';
+import { MAX_ATTACHMENTS, usePostDraft } from '../hooks/usePostDraft';
+import { forgetCode, myCodes, normalizeEditCode } from '../lib/editCode';
 import { formatSize } from '../lib/media';
 import { ModalShell } from './ModalShell';
+import { AttachmentPicker } from './attach/AttachmentPicker';
 
 interface Props {
   boardToken: string;
   isClass: boolean;
+  /** Mở thẳng bài có mã này (khi bấm từ băng báo "bài cần sửa"). */
+  initialCode?: string;
   onFind: (code: string) => Promise<SubmissionCard | null>;
+  onFindByName: (name: string) => Promise<SubmissionCard[]>;
+  /** Giới hạn dung lượng khi bảng đã nối cổng Drive. */
+  limits?: { maxFile: number; maxTotal: number };
   /** del = true: xóa bài. Trả bài sau khi sửa (null nếu đã xóa) hoặc ném lỗi. */
   onSave: (code: string, input: CardEditInput, del: boolean) => Promise<SubmissionCard | null>;
   onDone: (message: string) => void;
   onClose: () => void;
 }
 
-const MAX_ATTACH = 10;
+const isEditable = (el: EventTarget | null): boolean => el instanceof HTMLElement && el.matches('input, textarea, select, [contenteditable="true"]');
 
-/** Học sinh không đăng nhập: nhập mã sửa bài → sửa chữ, bỏ hoặc thêm tệp/liên kết, hoặc xóa bài của chính mình. */
-export function EditSubmissionModal({ boardToken, isClass, onFind, onSave, onDone, onClose }: Props) {
-  const [code, setCode] = useState('');
+/**
+ * Học sinh không đăng nhập: gõ TÊN đã ghi lúc nộp (hoặc mã dự phòng) → sửa chữ, bỏ hoặc thêm tệp, ảnh, liên kết,
+ * video, sơ đồ tư duy… như lúc nộp bài mới, hoặc xóa bài của chính mình.
+ */
+export function EditSubmissionModal({ boardToken, isClass, initialCode, onFind, onFindByName, limits, onSave, onDone, onClose }: Props) {
+  const [query, setQuery] = useState('');
+  const [choices, setChoices] = useState<SubmissionCard[]>([]);
   const [card, setCard] = useState<SubmissionCard | null>(null);
   const [form, setForm] = useState({ authorName: '', unit: '', title: '', body: '' });
   const [keep, setKeep] = useState<Attachment[]>([]);
-  const [files, setFiles] = useState<File[]>([]);
-  const [links, setLinks] = useState<string[]>([]);
-  const [link, setLink] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
+  const { draft, addFiles, addLinks, removeFile, removeLink, ingest, attachError } = usePostDraft(
+    { authorName: '', unit: '', title: '', body: '', taskId: '', files: [], links: [], location: null, poll: null }, limits);
   const saved = myCodes(boardToken);
 
-  const open = async (raw: string): Promise<void> => {
+  const openCard = (c: SubmissionCard): void => {
+    setCard(c); setChoices([]); setError('');
+    setForm({ authorName: c.authorName, unit: c.unit, title: c.title, body: c.body });
+    setKeep(c.attachments);
+  };
+
+  const byCode = async (raw: string): Promise<SubmissionCard | null> => {
     const clean = normalizeEditCode(raw);
-    if (clean.length < 10) { setError('Mã sửa bài gồm 10 chữ và số (ví dụ ABCDE-FGHJK).'); return; }
+    return clean.length >= 10 ? onFind(clean) : null;
+  };
+
+  const lookup = async (raw: string): Promise<void> => {
+    const text = raw.trim();
+    if (text.length < 2) { setError(isClass ? 'Em gõ tên của em nhé.' : 'Vui lòng nhập họ tên đã dùng khi nộp.'); return; }
     setBusy(true); setError('');
     try {
-      const found = await onFind(clean);
-      if (!found) { setError('Mã này không khớp bài nào. Em kiểm tra lại từng ký tự nhé.'); return; }
-      setCard(found);
-      setCode(clean);
-      setForm({ authorName: found.authorName, unit: found.unit, title: found.title, body: found.body });
-      setKeep(found.attachments);
+      let list = (await onFindByName(text)).filter((c) => !!c.editCode);
+      if (list.length === 0) { const c = await byCode(text); if (c) list = [c]; }
+      if (list.length === 0) { setError('Chưa thấy bài nào của em. Em gõ đúng tên đã ghi lúc nộp bài nhé (có dấu, đúng như lúc nộp).'); return; }
+      if (list.length === 1) openCard(list[0]); else setChoices(list);
     } catch (e) { setError(e instanceof Error ? e.message : 'Không mở được bài.'); } finally { setBusy(false); }
   };
 
-  const total = keep.length + files.length + links.length;
+  // Mở thẳng từ băng báo "cô nhờ em sửa lại bài".
+  useEffect(() => {
+    if (!initialCode) return;
+    void (async () => { try { const c = await byCode(initialCode); if (c) openCard(c); } catch { /* để học sinh gõ tên */ } })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const addLink = (): void => {
-    const v = link.trim();
-    if (!v) return;
-    if (total >= MAX_ATTACH) { setError(`Mỗi bài tối đa ${MAX_ATTACH} đính kèm.`); return; }
-    setLinks((l) => [...l, v]); setLink(''); setError('');
-  };
+  const total = keep.length + draft.files.length + draft.links.length;
 
   const submit = async (ev: FormEvent): Promise<void> => {
     ev.preventDefault();
+    if (!card?.editCode) return;
     if (!form.authorName.trim()) { setError(isClass ? 'Em nhớ ghi tên nhé.' : 'Vui lòng nhập họ tên.'); return; }
     if (!form.title.trim()) { setError('Bài cần có tên.'); return; }
+    if (total > MAX_ATTACHMENTS) { setError(`Mỗi bài tối đa ${MAX_ATTACHMENTS} đính kèm. Em bỏ bớt ${total - MAX_ATTACHMENTS} nhé.`); return; }
     setBusy(true); setError('');
     try {
-      const next = await onSave(code, { title: form.title.trim(), body: form.body.trim(), authorName: form.authorName.trim(), unit: form.unit.trim(), keep, files, links }, false);
+      const next = await onSave(card.editCode, { title: form.title.trim(), body: form.body.trim(), authorName: form.authorName.trim(), unit: form.unit.trim(), keep, files: draft.files, links: draft.links }, false);
       onDone(next?.status === 'pending' ? 'Đã lưu bài sửa. Bài sẽ hiện lại sau khi giáo viên duyệt.' : 'Đã lưu bài sửa.');
     } catch (e) { setError(e instanceof Error ? e.message : 'Không lưu được bài.'); setBusy(false); }
   };
 
   const remove = async (): Promise<void> => {
+    if (!card?.editCode) return;
     setBusy(true); setError('');
     try {
-      await onSave(code, { ...form, keep: [], files: [], links: [] }, true);
-      forgetCode(code);
+      await onSave(card.editCode, { ...form, keep: [], files: [], links: [] }, true);
+      forgetCode(card.editCode);
       onDone('Đã xóa bài. Em có thể nộp lại bài mới.');
     } catch (e) { setError(e instanceof Error ? e.message : 'Không xóa được bài.'); setBusy(false); setConfirmDel(false); }
+  };
+
+  /** Dán (Ctrl+V): ảnh/tệp thành đính kèm; ngoài ô nhập thì liên kết cũng thành đính kèm. */
+  const onPaste = (e: ClipboardEvent<HTMLElement>): void => {
+    if (!card) return;
+    const files = Array.from(e.clipboardData.files);
+    const text = e.clipboardData.getData('text/plain');
+    if (files.length > 0) { e.preventDefault(); ingest(files, ''); return; }
+    if (!isEditable(e.target) && text) { e.preventDefault(); ingest([], text); }
   };
 
   const inp = isClass ? 'input !min-h-[50px] !text-base' : 'input';
@@ -81,21 +112,37 @@ export function EditSubmissionModal({ boardToken, isClass, onFind, onSave, onDon
   if (!card) {
     return (
       <ModalShell title="Sửa bài đã nộp" onClose={onClose} maxWidth="max-w-md">
-        <form onSubmit={(e) => { e.preventDefault(); void open(code); }} className="space-y-3" noValidate>
-          <p className="text-sm text-ink-2">Nhập <b>mã sửa bài</b> mà em nhận được lúc nộp. Chỉ người có mã mới sửa hoặc xóa được bài đó.</p>
+        <form onSubmit={(e) => { e.preventDefault(); void lookup(query); }} className="space-y-3" noValidate>
+          <p className="text-sm text-ink-2">{isClass ? 'Em gõ ' : 'Gõ '}<b>tên đã ghi lúc nộp bài</b> (ví dụ: Loan) để mở lại bài của mình.</p>
           <div>
-            <label htmlFor="ec-code" className="field-label flex items-center gap-1.5"><KeyRound className="h-4 w-4" aria-hidden /> Mã sửa bài</label>
-            <input id="ec-code" className={`${inp} font-mono text-lg uppercase tracking-widest`} value={code} onChange={(e) => setCode(e.target.value)} placeholder="ABCDE-FGHJK"
-              autoComplete="off" autoCapitalize="characters" spellCheck={false} autoFocus />
+            <label htmlFor="ec-name" className="field-label flex items-center gap-1.5"><KeyRound className="h-4 w-4" aria-hidden /> {isClass ? 'Tên của em' : 'Họ tên đã dùng khi nộp'}</label>
+            <input id="ec-name" className={`${inp} !text-lg`} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Ví dụ: Loan"
+              autoComplete="off" autoFocus />
           </div>
-          {saved.length > 0 && (
+          {choices.length > 0 && (
+            <div>
+              <p className="text-xs font-bold text-ink-2">Có {choices.length} bài cùng tên. Em chọn bài của mình:</p>
+              <ul className="mt-1 space-y-1">
+                {choices.map((c) => (
+                  <li key={c.id}>
+                    <button type="button" onClick={() => openCard(c)} className="flex w-full items-center justify-between gap-2 rounded-xl bg-brand-50 px-3 py-2 text-left text-sm hover:bg-brand-100">
+                      <span className="truncate font-bold text-ink">{c.title} · {c.unit}</span>
+                      <span className="shrink-0 text-xs text-ink-2">{new Date(c.submittedAt).toLocaleString('vi-VN')}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {saved.length > 0 && choices.length === 0 && (
             <div>
               <p className="text-xs font-bold text-ink-2">Bài em đã nộp trên máy này:</p>
               <ul className="mt-1 space-y-1">
                 {saved.map((s) => (
                   <li key={s.code}>
-                    <button type="button" onClick={() => { setCode(s.code); void open(s.code); }} className="flex w-full items-center justify-between gap-2 rounded-xl bg-brand-50 px-3 py-2 text-left text-sm hover:bg-brand-100">
-                      <span className="truncate font-bold text-ink">{s.title}</span><span className="shrink-0 font-mono text-xs text-ink-2">{formatEditCode(s.code)}</span>
+                    <button type="button" onClick={() => { setBusy(true); void byCode(s.code).then((c) => { if (c) openCard(c); else setError('Không mở được bài này nữa (có thể cô đã xóa).'); }).catch((e: unknown) => setError(e instanceof Error ? e.message : 'Không mở được bài.')).finally(() => setBusy(false)); }}
+                      className="flex w-full items-center justify-between gap-2 rounded-xl bg-brand-50 px-3 py-2 text-left text-sm hover:bg-brand-100">
+                      <span className="truncate font-bold text-ink">{s.title}</span><span className="shrink-0 text-xs text-ink-2">{new Date(s.at).toLocaleDateString('vi-VN')}</span>
                     </button>
                   </li>
                 ))}
@@ -105,7 +152,7 @@ export function EditSubmissionModal({ boardToken, isClass, onFind, onSave, onDon
           {error && <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700" role="alert">{error}</p>}
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onClose} className="btn-ghost">Đóng</button>
-            <button type="submit" disabled={busy} className="btn-primary">{busy ? 'Đang mở…' : 'Mở bài của em'}</button>
+            <button type="submit" disabled={busy} className="btn-primary">{busy ? 'Đang tìm…' : 'Mở bài của em'}</button>
           </div>
         </form>
       </ModalShell>
@@ -113,9 +160,9 @@ export function EditSubmissionModal({ boardToken, isClass, onFind, onSave, onDon
   }
 
   return (
-    <ModalShell title="Sửa bài của em" onClose={onClose} maxWidth="max-w-lg">
+    <ModalShell title="Sửa bài của em" onClose={onClose} onPaste={onPaste} maxWidth={isClass ? 'max-w-2xl' : 'max-w-lg'} large={isClass}>
       <form onSubmit={(e) => void submit(e)} className="space-y-3" noValidate>
-        <p className="rounded-xl bg-brand-50 px-3 py-2 text-xs text-ink-2">Mã <span className="font-mono font-bold text-ink">{formatEditCode(code)}</span> · bài nộp lúc {new Date(card.submittedAt).toLocaleString('vi-VN')}</p>
+        <p className="rounded-xl bg-brand-50 px-3 py-2 text-xs text-ink-2">Bài nộp lúc {new Date(card.submittedAt).toLocaleString('vi-VN')}{card.teacherNote ? ` · Lời cô: ${card.teacherNote}` : ''}</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div><label htmlFor="es-name" className="field-label">{isClass ? 'Em tên là gì?' : 'Họ tên'}</label>
             <input id="es-name" className={inp} value={form.authorName} onChange={(e) => setForm({ ...form, authorName: e.target.value })} /></div>
@@ -127,44 +174,24 @@ export function EditSubmissionModal({ boardToken, isClass, onFind, onSave, onDon
         <div><label htmlFor="es-body" className="field-label">Nội dung</label>
           <textarea id="es-body" className={`${inp} min-h-[90px] py-2`} value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} /></div>
 
-        <div>
-          <p className="field-label">Tệp và liên kết đính kèm ({total}/{MAX_ATTACH})</p>
-          <ul className="space-y-1">
-            {keep.map((a, i) => (
-              <li key={`k${i}`} className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-1.5 text-sm">
-                <Paperclip className="h-4 w-4 shrink-0 text-ink-2" aria-hidden /><span className="min-w-0 flex-1 truncate">{a.label || a.name}</span>
-                {a.size ? <span className="shrink-0 text-xs text-ink-2">{formatSize(a.size)}</span> : null}
-                <button type="button" onClick={() => setKeep(keep.filter((_, j) => j !== i))} className="shrink-0 rounded-full p-1 text-rose-700 hover:bg-rose-50" aria-label={`Bỏ ${a.name}`}><X className="h-4 w-4" aria-hidden /></button>
-              </li>
-            ))}
-            {files.map((f, i) => (
-              <li key={`f${i}`} className="flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-1.5 text-sm">
-                <Paperclip className="h-4 w-4 shrink-0 text-emerald-700" aria-hidden /><span className="min-w-0 flex-1 truncate">{f.name} <span className="text-xs text-ink-2">(mới)</span></span>
-                <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} className="shrink-0 rounded-full p-1 text-rose-700 hover:bg-rose-50" aria-label={`Bỏ ${f.name}`}><X className="h-4 w-4" aria-hidden /></button>
-              </li>
-            ))}
-            {links.map((l, i) => (
-              <li key={`l${i}`} className="flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-1.5 text-sm">
-                <Link2 className="h-4 w-4 shrink-0 text-emerald-700" aria-hidden /><span className="min-w-0 flex-1 truncate">{l} <span className="text-xs text-ink-2">(mới)</span></span>
-                <button type="button" onClick={() => setLinks(links.filter((_, j) => j !== i))} className="shrink-0 rounded-full p-1 text-rose-700 hover:bg-rose-50" aria-label="Bỏ liên kết"><X className="h-4 w-4" aria-hidden /></button>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <label className="btn-ghost cursor-pointer !min-h-[40px] text-sm">
-              <Paperclip className="h-4 w-4" aria-hidden /> Thêm tệp
-              <input type="file" multiple className="sr-only" onChange={(e) => {
-                const picked = Array.from(e.target.files ?? []);
-                e.target.value = '';
-                if (total + picked.length > MAX_ATTACH) { setError(`Mỗi bài tối đa ${MAX_ATTACH} đính kèm.`); return; }
-                setFiles((f) => [...f, ...picked]); setError('');
-              }} />
-            </label>
-            <input className="input !min-h-[40px] min-w-0 flex-1 text-sm" value={link} onChange={(e) => setLink(e.target.value)} placeholder="Dán liên kết rồi bấm Thêm"
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addLink(); } }} aria-label="Liên kết mới" />
-            <button type="button" onClick={addLink} className="btn-ghost !min-h-[40px] text-sm">Thêm</button>
+        {keep.length > 0 && (
+          <div>
+            <p className="field-label">Tệp đã nộp ({keep.length})</p>
+            <ul className="space-y-1">
+              {keep.map((a, i) => (
+                <li key={`k${i}`} className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-1.5 text-sm">
+                  <Paperclip className="h-4 w-4 shrink-0 text-ink-2" aria-hidden /><span className="min-w-0 flex-1 truncate">{a.label || a.name}</span>
+                  {a.size ? <span className="shrink-0 text-xs text-ink-2">{formatSize(a.size)}</span> : null}
+                  <button type="button" onClick={() => setKeep(keep.filter((_, j) => j !== i))} className="shrink-0 rounded-full p-1 text-rose-700 hover:bg-rose-50" aria-label={`Bỏ ${a.name}`}><X className="h-4 w-4" aria-hidden /></button>
+                </li>
+              ))}
+            </ul>
           </div>
-        </div>
+        )}
+
+        <AttachmentPicker files={draft.files} links={draft.links} poll={null} location={null} onLocation={() => undefined} error={attachError}
+          onAddFiles={addFiles} onRemoveFile={removeFile} onAddLinks={addLinks} onRemoveLink={removeLink} onPoll={() => undefined} onIngest={ingest}
+          extraCount={keep.length} hideTools={['poll', 'location']} />
 
         <p className="text-xs text-ink-2">Nếu bảng đang kiểm duyệt, bài sau khi sửa có thể cần giáo viên duyệt lại.</p>
         {error && <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700" role="alert">{error}</p>}

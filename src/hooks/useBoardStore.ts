@@ -17,7 +17,7 @@ import { checkComment, textFlagged } from '../lib/moderation';
 import { getMyCardIds, getMyRatings, rememberMyCard, rememberMyComment, rememberRating } from '../lib/peer';
 import type { LessonInput, TaskInput } from '../lib/boardApi';
 import { checkSubmit } from '../lib/lessons';
-import { newEditCode, normalizeEditCode } from '../lib/editCode';
+import { newEditCode, normalizeEditCode, normalizeName } from '../lib/editCode';
 
 /** Cứ mỗi chừng này mili giây trang hỏi "dấu vân tay" của bảng; có đổi thì tải lại êm, không cần bấm F5. */
 const POLL_MS = 5000;
@@ -126,6 +126,12 @@ export interface BoardStore {
   deleteCard: (boardId: string, cardId: string, asManager: boolean) => Promise<CleanupReport | void>;
   /** Học sinh (không cần đăng nhập) mở lại bài của mình bằng mã sửa bài; null nếu mã không đúng. */
   findCardByCode: (boardId: string, code: string) => Promise<SubmissionCard | null>;
+  /** Danh sách tên để học sinh chọn khi nộp bài (không cần đăng nhập). */
+  loadRosterNames: (boardId: string) => Promise<{ name: string; unit: string }[]>;
+  /** Giáo viên gán bài nộp cho một thành viên trong danh sách (sửa tên và tổ cho khớp). */
+  reassignCard: (boardId: string, cardId: string, member: { name: string; unit: string }) => Promise<void>;
+  /** Tìm bài theo tên người nộp (tên chính là chìa khóa để sửa). */
+  findCardsByName: (boardId: string, name: string) => Promise<SubmissionCard[]>;
   /** Sửa (del = false) hoặc xóa (del = true) bài bằng mã sửa bài. Trả bài sau khi sửa, hoặc null nếu đã xóa. */
   saveCardByCode: (boardId: string, code: string, input: CardEditInput, del?: boolean) => Promise<SubmissionCard | null>;
   clearSubmissions: (boardId: string) => Promise<CleanupReport | void>;
@@ -500,6 +506,27 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     return api.getCardByCode(b.shareToken, clean);
   }, [isReal, boards]);
 
+  const loadRosterNames = useCallback(async (boardId: string): Promise<{ name: string; unit: string }[]> => {
+    const b = boards.find((x) => x.id === boardId);
+    if (!b) return [];
+    if (!isReal) return b.roster.map((m) => ({ name: m.name, unit: m.unit }));
+    try { return await api.getRosterPublic(b.shareToken); } catch { return []; }
+  }, [isReal, boards]);
+
+  const reassignCard = useCallback(async (boardId: string, cardId: string, member: { name: string; unit: string }): Promise<void> => {
+    if (isReal) await api.reassignCard(cardId, member.name, member.unit);
+    patch(boardId, (b) => ({ ...b, cards: b.cards.map((c) => (c.id === cardId ? { ...c, authorName: member.name, unit: member.unit || c.unit } : c)) }));
+  }, [isReal, patch]);
+
+  const findCardsByName = useCallback(async (boardId: string, name: string): Promise<SubmissionCard[]> => {
+    const key = normalizeName(name);
+    if (key.length < 2) return [];
+    const b = boards.find((x) => x.id === boardId);
+    if (!b) return [];
+    if (!isReal) return b.cards.filter((c) => c.editCode && normalizeName(c.authorName) === key);
+    return api.getCardsByName(b.shareToken, key);
+  }, [isReal, boards]);
+
   const saveCardByCode = useCallback(async (boardId: string, code: string, input: CardEditInput, del = false): Promise<SubmissionCard | null> => {
     const clean = normalizeEditCode(code);
     const b = boards.find((x) => x.id === boardId);
@@ -521,7 +548,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     const keptKeys = new Set(del ? [] : attachments.map((a) => a.url ?? a.driveId));
     const dropped = old.attachments.filter((a) => !keptKeys.has(a.url ?? a.driveId));
     if (dropped.length > 0) { try { await cleanupAttachments(dropped, isReal, cfg); } catch { /* bỏ qua */ } }
-    const next: SubmissionCard = { ...old, title: input.title, body: input.body, authorName: input.authorName, unit: input.unit, attachments, status, editCode: clean };
+    const next: SubmissionCard = { ...old, title: input.title, body: input.body, authorName: input.authorName, unit: input.unit, attachments, status, editCode: clean, resubmittedAt: new Date().toISOString(), revisions: (old.revisions ?? 0) + 1 };
     patch(boardId, (bd) => ({ ...bd, cards: del ? bd.cards.filter((c) => c.id !== old.id) : bd.cards.some((c) => c.id === old.id) ? bd.cards.map((c) => (c.id === old.id ? next : c)) : [next, ...bd.cards] }));
     return del ? null : next;
   }, [isReal, boards, patch]);
@@ -839,7 +866,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     boards: visibleBoards, loading, error, isReal, linkToken,
     rateCard, addComment, deleteOwnComment, setCommentStatus, deleteComment, setTeacherStars,
     inviteCollaborator, changeCollaboratorRole, removeCollaborator, leaveBoard,
-    createBoard, duplicateBoard, updateMeta, addCard, setCardLayout, setStatus, setGrade, vote, deleteCard, findCardByCode, saveCardByCode, clearSubmissions, updateCardAttachments, removeStoredAttachments,
+    createBoard, duplicateBoard, updateMeta, addCard, setCardLayout, setStatus, setGrade, vote, deleteCard, loadRosterNames, reassignCard, findCardByCode, findCardsByName, saveCardByCode, clearSubmissions, updateCardAttachments, removeStoredAttachments,
     setRoster, setSettings, saveLesson, removeLesson, saveTask, removeTask, addResource, removeResource, updateResource, assignToBoards, setProgram, setArchived, setTrashed, deleteForever, setTemplate, loadActivity,
   };
 }

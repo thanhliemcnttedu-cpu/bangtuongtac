@@ -30,9 +30,13 @@ interface Props {
   onPoll: (p: string[] | null) => void;
   /** Dữ liệu từ kéo thả / nút Dán: tệp + văn bản. */
   onIngest: (files: File[], text: string) => void;
+  /** Số đính kèm đã có sẵn ngoài danh sách này (khi sửa bài), tính vào giới hạn 10. */
+  extraCount?: number;
+  /** Ẩn bớt công cụ (khi sửa bài không đổi được thăm dò và vị trí). */
+  hideTools?: Tool[];
 }
 
-type Tool = 'camera' | 'video' | 'audio' | 'screen' | 'draw' | 'mindmap' | 'link' | 'poll' | 'location';
+export type Tool = 'camera' | 'video' | 'audio' | 'screen' | 'draw' | 'mindmap' | 'link' | 'poll' | 'location';
 
 const TOOLS: { id: Tool | 'file'; label: string; Icon: LucideIcon }[] = [
   { id: 'file', label: 'Tải nhiều tệp', Icon: Upload },
@@ -75,14 +79,15 @@ function FileRow({ file, onRemove }: { file: File; onRemove: () => void }) {
  * Bộ đính kèm: MỘT bài có thể chứa cùng lúc nhiều tệp (ảnh, video, tài liệu), ảnh chụp, hình vẽ, nhiều liên kết,
  * kèm văn bản và một thăm dò. Có thể chọn tệp, kéo thả, hoặc dán (Ctrl+V / nút Dán) ảnh, liên kết, đoạn văn.
  */
-export function AttachmentPicker({ files, links, poll, location, onLocation, error, onAddFiles, onRemoveFile, onAddLinks, onRemoveLink, onPoll, onIngest }: Props) {
+export function AttachmentPicker({ files, links, poll, location, onLocation, error, onAddFiles, onRemoveFile, onAddLinks, onRemoveLink, onPoll, onIngest, extraCount = 0, hideTools = [] }: Props) {
   const [tool, setTool] = useState<Tool | null>(null);
   const [dragging, setDragging] = useState(false);
   const [msg, setMsg] = useState('');
   const [linkText, setLinkText] = useState('');
   const [options, setOptions] = useState<string[]>(poll ?? ['', '']);
   const inputRef = useRef<HTMLInputElement>(null);
-  const count = files.length + links.length;
+  const own = files.length + links.length;
+  const count = own + extraCount;
   const full = count >= MAX_ATTACHMENTS;
 
   const take = (f: File): void => { onAddFiles([f]); setTool(null); };
@@ -192,7 +197,7 @@ export function AttachmentPicker({ files, links, poll, location, onLocation, err
         <>
           <button type="button" disabled={full} onClick={() => pick('mindmap')} className="btn-primary mb-3 !min-h-[56px] w-full !rounded-2xl text-base"><Network className="h-6 w-6" aria-hidden /> Vẽ sơ đồ tư duy ngay tại đây</button>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-            {TOOLS.map(({ id, label, Icon }) => {
+            {TOOLS.filter((t) => t.id === 'file' || !hideTools.includes(t.id)).map(({ id, label, Icon }) => {
               const disabled = full && id !== 'poll';
               return (
                 <button key={id} type="button" disabled={(disabled && id !== 'location') || (id === 'poll' && !!poll)} onClick={() => pick(id)}
@@ -207,7 +212,7 @@ export function AttachmentPicker({ files, links, poll, location, onLocation, err
         </>
       )}
 
-      {(count > 0 || poll || location) && (
+      {(own > 0 || poll || location) && (
         <ul className="mt-3 space-y-2" aria-label="Danh sách đính kèm">
           {files.map((f, i) => <FileRow key={`${f.name}-${f.size}-${f.lastModified}`} file={f} onRemove={() => onRemoveFile(i)} />)}
           {links.map((l, i) => {

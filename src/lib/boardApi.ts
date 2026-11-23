@@ -9,7 +9,7 @@ import type { BoardSettings } from '../types/board';
 import type { BoardTemplate } from '../data/boardTemplates';
 import { parseSettings } from './boardSettings';
 import { supabase } from './supabase';
-import { newEditCode, normalizeEditCode } from './editCode';
+import { newEditCode, normalizeEditCode, normalizeName } from './editCode';
 
 /* ---------- Kiểu hàng trong CSDL (snake_case) ---------- */
 interface BoardDb {
@@ -23,6 +23,8 @@ interface CardDb {
   task_id: string | null; status: CardStatus; teacher_note: string | null; created_at: string;
   loc: CardLocation | null; pos: { x: number; y: number } | null; venn: VennRegion | null;
   teacher_stars: number | null; lesson_id?: string | null; late?: boolean | null;
+  edit_token?: string | null;
+  resubmitted_at?: string | null; revisions?: number | null;
   attachments: Attachment[] | null; poll: { id: string; label: string }[] | null; grade: number | string | null;
   /** Trình bày thẻ tài liệu: { badge, color, steps }. */
   meta?: { badge?: string; color?: string; steps?: string[] } | null;
@@ -116,6 +118,9 @@ function toSubmission(c: CardDb, boardId: string, votes: VoteCount[], ratings: R
     late: c.late ?? undefined,
     submittedAt: c.created_at,
     teacherNote: c.teacher_note ?? undefined,
+    editCode: c.edit_token ?? undefined,
+    resubmittedAt: c.resubmitted_at ?? undefined,
+    revisions: c.revisions ? Number(c.revisions) : undefined,
     grade: c.grade === null || c.grade === undefined ? undefined : Number(c.grade),
     teacherStars: c.teacher_stars ?? undefined,
     ratingCount: rate ? Number(rate.n) : 0,
@@ -413,6 +418,26 @@ export async function getCardByCode(token: string, code: string): Promise<Submis
   if (!data) return null;
   const c = data as CardDb;
   return { ...toSubmission(c, c.board_id ?? '', []), editCode: normalizeEditCode(code) };
+}
+
+/** Tên và tổ/lớp trong danh sách thành viên, để học sinh chọn tên khi nộp bài (không cần đăng nhập). */
+export async function getRosterPublic(token: string): Promise<{ name: string; unit: string }[]> {
+  const { data, error } = await db().rpc('get_roster_public', { p_token: token });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as { name: string; unit: string }[]).map((r) => ({ name: r.name, unit: r.unit ?? '' }));
+}
+
+/** Giáo viên gán bài cho đúng thành viên trong danh sách (đổi tên người nộp thành tên chuẩn). */
+export async function reassignCard(cardId: string, name: string, unit: string): Promise<void> {
+  const { error } = await db().from('cards').update({ author_name: name, group_name: unit }).eq('id', cardId);
+  if (error) fail('Không gán được bài', error.message);
+}
+
+/** Các bài của người nộp có tên này (tối đa 10, mới nhất trước). */
+export async function getCardsByName(token: string, name: string): Promise<SubmissionCard[]> {
+  const { data, error } = await db().rpc('get_cards_by_name', { p_token: token, p_name: normalizeName(name) });
+  if (error) fail('Không tìm được bài', error.message);
+  return ((data ?? []) as CardDb[]).map((c) => toSubmission(c, c.board_id ?? '', []));
 }
 
 export interface CardEdit { title: string; body: string; authorName: string; unit: string; attachments: Attachment[] }

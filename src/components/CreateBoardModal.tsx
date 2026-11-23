@@ -89,7 +89,8 @@ export function CreateBoardModal({ extraTemplates = [], onCreate, onClose }: Pro
     setBusy(true);
     setError('');
     try {
-      await onCreate(title, template, {
+      const scoped: BoardTemplate = def.mode === 'classroom' ? { ...template, settings: { ...template.settings, scope: scope as 'class' | 'grade' | 'lesson' } } : template;
+      await onCreate(title, scoped, {
         lessonTitle: scope === 'lesson' ? name.trim() : undefined,
         program: scope === 'training' && extra.trim() ? extra.trim() : undefined,
       });

@@ -14,7 +14,7 @@ begin
   m := coalesce(p_manage, false) and public.is_board_member(b.id);
   return md5(
     coalesce((select string_agg(to_jsonb(c)::text, '|' order by c.id) from cards c
-              where c.board_id = b.id and (m or c.kind = 'resource' or c.status in ('approved','featured'))), '')
+              where c.board_id = b.id), '')
     || '#' || coalesce((select string_agg(to_jsonb(cm)::text, '|' order by cm.id) from comments cm where cm.board_id = b.id and (m or cm.status = 'visible')), '')
     || '#' || coalesce((select string_agg(v.card_id::text || v.option_id, '|' order by v.card_id, v.session_id) from card_votes v join cards c on c.id = v.card_id where c.board_id = b.id), '')
     || '#' || coalesce((select string_agg(r.card_id::text || r.stars, '|' order by r.card_id, r.session_id) from card_ratings r join cards c on c.id = r.card_id where c.board_id = b.id), '')
@@ -68,7 +68,40 @@ begin
     else 'pending'
   end;
   update cards set title = trim(p_title), body = p_body, author_name = trim(p_author), group_name = trim(coalesce(p_group, group_name)),
-                   attachments = p_attachments, status = st where id = c.id;
+                   attachments = p_attachments, status = st, resubmitted_at = now(), revisions = coalesce(revisions, 0) + 1 where id = c.id;
   return st;
 end $$;
 grant execute on function public.update_card_by_code to anon, authenticated;
+
+-- Tìm bài theo tên người nộp (học sinh tiểu học khó nhớ mã nên dùng chính tên làm chìa khóa).
+-- Lưu ý: ai biết tên và có link bảng đều sửa/xóa được bài đó; chỉ hợp với lớp nhỏ tin nhau. Hàm trả cả mã sửa bài để mở hộp sửa.
+create or replace function public.get_cards_by_name(p_token text, p_name text) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare b boards; k text;
+begin
+  select * into b from boards where share_token = p_token and deleted_at is null;
+  if not found then return '[]'::jsonb; end if;
+  k := lower(regexp_replace(btrim(coalesce(p_name, '')), '\s+', ' ', 'g'));
+  if length(k) < 2 then return '[]'::jsonb; end if;
+  return coalesce((select jsonb_agg(to_jsonb(c) - 'session_id' - 'grade' order by c.created_at desc)
+                   from (select * from cards where board_id = b.id and kind = 'submission'
+                           and lower(regexp_replace(btrim(coalesce(author_name, '')), '\s+', ' ', 'g')) = k
+                         order by created_at desc limit 10) c), '[]'::jsonb);
+end $$;
+grant execute on function public.get_cards_by_name to anon, authenticated;
+
+-- ===== 3) Bản nộp lại: ghi giờ mới nhất và số lần nộp lại =====
+alter table public.cards add column if not exists resubmitted_at timestamptz;
+alter table public.cards add column if not exists revisions integer not null default 0;
+
+-- ===== 4) Học sinh chọn tên từ danh sách lớp khi nộp bài =====
+-- Chỉ trả TÊN và tổ/lớp của danh sách thành viên (không có gì khác). Lưu ý: ai có link bảng đều xem được các tên này.
+create or replace function public.get_roster_public(p_token text) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare b boards;
+begin
+  select * into b from boards where share_token = p_token and deleted_at is null;
+  if not found then return '[]'::jsonb; end if;
+  return coalesce((select jsonb_agg(jsonb_build_object('name', r.name, 'unit', r.unit) order by r.name) from board_roster r where r.board_id = b.id), '[]'::jsonb);
+end $$;
+grant execute on function public.get_roster_public to anon, authenticated;

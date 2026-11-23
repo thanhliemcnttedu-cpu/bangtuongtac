@@ -1,7 +1,8 @@
 // Logic thuần cho Bài học / Bài tập / Yêu cầu: trạng thái giao–hạn, đối tượng được giao, định dạng thời gian.
 // Quyết định cuối cùng nằm ở trigger `cards_guard` trong docs/schema.sql; các hàm này chỉ để giao diện báo trước cho học sinh.
 
-import type { BoardData, Lesson, TaskItem } from '../types/board';
+import type { BoardData, Lesson, RosterMember, SubmissionCard, TaskItem } from '../types/board';
+import { normalize } from './boardLogic';
 
 /** scheduled: chưa đến giờ giao · open: đang nhận bài · soon: sắp hết hạn (≤ 24 giờ) · overdue: quá hạn. */
 export type TaskPhase = 'scheduled' | 'open' | 'soon' | 'overdue';
@@ -22,6 +23,56 @@ export function taskPhase(t: TaskItem, now: number): TaskPhase {
   if (due !== null && due < now) return 'overdue';
   if (due !== null && due - now <= DAY) return 'soon';
   return 'open';
+}
+
+/** Đèn giao thông theo 3 ngưỡng của cả khoảng thời gian từ lúc giao đến hạn nộp: xanh (đầu) → vàng (giữa) → đỏ (cuối). */
+export type Urgency = 'green' | 'amber' | 'red';
+
+/**
+ * Tỉ lệ thời gian đã trôi (0–1) từ lúc giao đến hạn nộp. Chưa đặt giờ giao thì lấy 72 giờ trước hạn làm mốc đầu.
+ * Trả null khi bài không có hạn, chưa đến giờ giao hoặc đã quá hạn.
+ */
+export function timeElapsed(t: TaskItem, now: number): number | null {
+  const due = ms(t.dueAt);
+  if (due === null || due <= now) return null;
+  const from = ms(t.assignedAt) ?? Math.min(now, due - 3 * DAY);
+  if (from > now) return null;
+  const span = due - from;
+  return span <= 0 ? 1 : Math.min(1, Math.max(0, (now - from) / span));
+}
+
+export function urgencyOf(t: TaskItem, now: number): Urgency | null {
+  const f = timeElapsed(t, now);
+  if (f === null) return null;
+  return f < 1 / 3 ? 'green' : f < 2 / 3 ? 'amber' : 'red';
+}
+
+export const URGENCY_TEXT: Record<Urgency, string> = { green: 'Còn nhiều thời gian', amber: 'Còn ít thời gian', red: 'Sắp hết giờ, cần nộp ngay' };
+
+export interface TaskProgress {
+  /** Thành viên trong danh sách được giao bài tập này. */
+  total: number;
+  done: RosterMember[];
+  missing: RosterMember[];
+  /** Số bài nộp từ người không có trong danh sách. */
+  outside: number;
+}
+
+/** Ai trong danh sách đã nộp bài tập này, ai chưa (chỉ tính thành viên thuộc đối tượng được giao). */
+export function taskProgress(board: BoardData, task: TaskItem): TaskProgress {
+  const cards = board.cards.filter((c) => c.taskId === task.id);
+  const names = new Set(cards.map((c) => normalize(c.authorName)));
+  const targeted = board.roster.filter((m) => targetsUnit(task, m.unit));
+  const done = targeted.filter((m) => names.has(normalize(m.name)));
+  const missing = targeted.filter((m) => !names.has(normalize(m.name)));
+  const inRoster = new Set(board.roster.map((m) => normalize(m.name)));
+  const outside = new Set(cards.filter((c) => !inRoster.has(normalize(c.authorName))).map((c) => normalize(c.authorName))).size;
+  return { total: targeted.length, done, missing, outside };
+}
+
+/** Giờ ghi trên bài: lần nộp lại mới nhất nếu có, kèm số lần nộp lại. */
+export function stampOf(card: SubmissionCard): { at: string; revised: boolean; revisions: number } {
+  return card.resubmittedAt ? { at: card.resubmittedAt, revised: true, revisions: card.revisions ?? 1 } : { at: card.submittedAt, revised: false, revisions: 0 };
 }
 
 /** Học sinh đã thấy bài tập này chưa (đã đến giờ giao). Giáo viên luôn thấy hết. */
@@ -108,8 +159,8 @@ export function groupTasks(lessons: Lesson[], tasks: TaskItem[]): { lesson: Less
 export const KIND_LABEL = { assignment: 'Bài tập', requirement: 'Yêu cầu' } as const;
 
 /** Từ ngữ theo kiểu lớp: lớp học dùng "Bài học / Tổ, nhóm"; lớp tập huấn dùng "Buổi tập huấn / Đơn vị". */
-export function wordsFor(mode: BoardData['mode']) {
+export function wordsFor(mode: BoardData['mode'], scope?: 'class' | 'grade' | 'lesson') {
   return mode === 'classroom'
-    ? { lesson: 'Bài học', lessonLower: 'bài học', unit: 'tổ / nhóm', panel: 'Bài học & tài liệu của lớp', learner: 'học sinh' }
+    ? { lesson: 'Bài học', lessonLower: 'bài học', unit: scope === 'grade' ? 'lớp / tổ' : 'tổ / nhóm', panel: scope === 'grade' ? 'Bài học & tài liệu của khối' : scope === 'lesson' ? 'Bài học & tài liệu' : 'Bài học & tài liệu của lớp', learner: 'học sinh' }
     : { lesson: 'Buổi tập huấn', lessonLower: 'buổi tập huấn', unit: 'đơn vị', panel: 'Buổi tập huấn & tài liệu của giảng viên', learner: 'học viên' };
 }

@@ -12,6 +12,9 @@ export const formatEditCode = (code: string): string => (code.length === 10 ? `$
 /** Học sinh gõ hoa hay thường, có hay không có dấu gạch, có khoảng trắng đều nhận. */
 export const normalizeEditCode = (input: string): string => input.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
+/** Tên dùng làm chìa khóa: không phân biệt hoa thường, bỏ khoảng trắng thừa (khớp với hàm SQL get_cards_by_name). */
+export const normalizeName = (name: string): string => name.trim().replace(/\s+/g, ' ').toLowerCase();
+
 const KEY = 'bt.myCodes';
 export interface MyCode { code: string; title: string; token: string; at: number }
 

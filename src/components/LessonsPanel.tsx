@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Attachment, BoardData, Lesson, PinnedResource, ResourceKind, TaskItem } from '../types/board';
-import { KIND_LABEL, countdown, formatDateTime, groupTasks, taskPhase, wordsFor } from '../lib/lessons';
+import { KIND_LABEL, URGENCY_TEXT, countdown, formatDateTime, groupTasks, taskPhase, taskProgress, timeElapsed, urgencyOf, wordsFor } from '../lib/lessons';
 import { MaterialReader } from './MaterialReader';
 import { docKindOf, formatSize } from '../lib/media';
 import { colorOf } from '../lib/cardColors';
@@ -152,8 +152,54 @@ function PhaseChip({ task, now }: { task: TaskItem; now: number }) {
       ? <span className="chip bg-orange-100 text-orange-900 ring-orange-200">Quá hạn · vẫn nộp muộn được</span>
       : <span className="chip bg-rose-100 text-rose-800 ring-rose-200">Đã hết hạn nộp</span>;
   }
-  if (phase === 'soon') return <span className="chip bg-amber-100 text-amber-900 ring-amber-200">Sắp hết hạn · {countdown(task.dueAt, now)}</span>;
+  const u = urgencyOf(task, now);
+  if (u) {
+    const tone = u === 'green' ? 'bg-emerald-100 text-emerald-800 ring-emerald-200' : u === 'amber' ? 'bg-amber-100 text-amber-900 ring-amber-200' : 'bg-rose-100 text-rose-800 ring-rose-200';
+    return <span className={`chip ${tone}`}><span className={`h-2.5 w-2.5 rounded-full ${u === 'green' ? 'bg-emerald-500' : u === 'amber' ? 'bg-amber-500' : 'bg-rose-500 animate-pulse'}`} aria-hidden /> {URGENCY_TEXT[u]} · {countdown(task.dueAt, now)}</span>;
+  }
   return <span className="chip bg-emerald-100 text-emerald-800 ring-emerald-200">Đang nhận bài{task.dueAt ? ` · ${countdown(task.dueAt, now)}` : ''}</span>;
+}
+
+/** Thanh thời gian chia 3 đoạn xanh – vàng – đỏ; con trỏ chỉ lúc này. */
+function TimeBar({ task, now }: { task: TaskItem; now: number }) {
+  const f = timeElapsed(task, now);
+  if (f === null) return null;
+  return (
+    <div className="mt-2" role="img" aria-label={`Đã trôi ${Math.round(f * 100)}% thời gian. ${URGENCY_TEXT[urgencyOf(task, now) ?? 'green']}`}>
+      <div className="relative h-2.5 overflow-hidden rounded-full bg-slate-100">
+        <div className="absolute inset-y-0 left-0 w-1/3 bg-emerald-300" /><div className="absolute inset-y-0 left-1/3 w-1/3 bg-amber-300" /><div className="absolute inset-y-0 right-0 w-1/3 bg-rose-300" />
+        <div className="absolute inset-y-0 w-1 -translate-x-1/2 rounded-full bg-ink shadow" style={{ left: `${f * 100}%` }} />
+      </div>
+      <div className="mt-0.5 flex justify-between text-[10px] text-ink-3"><span>{task.assignedAt ? formatDateTime(task.assignedAt) : 'Bắt đầu'}</span><span>Hạn {formatDateTime(task.dueAt)}</span></div>
+    </div>
+  );
+}
+
+/** Giáo viên: bao nhiêu thành viên trong danh sách đã nộp, ai còn chưa nộp. */
+function ProgressBlock({ board, task }: { board: BoardData; task: TaskItem }) {
+  const p = taskProgress(board, task);
+  const [copied, setCopied] = useState(false);
+  const copyMissing = async (): Promise<void> => {
+    const text = `Chưa nộp “${task.label}”${task.dueAt ? ` (hạn ${formatDateTime(task.dueAt)})` : ''}:\n${p.missing.map((m) => `- ${m.name}${m.unit ? ` (${m.unit})` : ''}`).join('\n')}`;
+    try { await navigator.clipboard.writeText(text); setCopied(true); window.setTimeout(() => setCopied(false), 2000); } catch { /* không chép được */ }
+  };
+  if (p.total === 0 && p.outside === 0) return null;
+  const pct = p.total === 0 ? 0 : Math.round((p.done.length / p.total) * 100);
+  return (
+    <div className="mt-2 rounded-xl bg-slate-50 p-2.5 text-xs">
+      {p.total > 0 ? (
+        <>
+          <p className="font-bold text-ink">{p.done.length}/{p.total} thành viên đã nộp{p.missing.length > 0 ? `, ${p.missing.length} chưa nộp` : ' · đủ cả'}{p.outside > 0 ? ` · +${p.outside} ngoài danh sách` : ''}</p>
+          <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full ${pct === 100 ? 'bg-emerald-500' : 'bg-brand-500'}`} style={{ width: `${pct}%` }} /></div>
+          {p.missing.length > 0 && (
+            <details className="mt-1.5"><summary className="cursor-pointer font-bold text-rose-700">Chưa nộp ({p.missing.length})</summary>
+              <button type="button" onClick={() => void copyMissing()} className="btn-ghost btn-sm mt-1">{copied ? 'Đã chép' : 'Chép danh sách để nhắc nhở'}</button>
+              <ul className="mt-1 flex flex-wrap gap-1">{p.missing.map((m) => <li key={m.id} className="chip bg-rose-50 text-rose-800 ring-rose-200">{m.name}{m.unit ? ` · ${m.unit}` : ''}</li>)}</ul></details>
+          )}
+        </>
+      ) : <p className="font-bold text-ink">{p.outside} người nộp (chưa có danh sách thành viên)</p>}
+    </div>
+  );
 }
 
 /**
@@ -161,7 +207,7 @@ function PhaseChip({ task, now }: { task: TaskItem; now: number }) {
  * Giáo viên thêm, sửa, xóa; học sinh xem tài liệu ngay trong trang và bấm "Nộp bài" ở đúng bài tập.
  */
 export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Props) {
-  const w = wordsFor(board.mode);
+  const w = wordsFor(board.mode, board.settings.scope);
   const [open, setOpen] = useState(true);
   const [viewing, setViewing] = useState<PinnedResource | null>(null);
   const [closedLessons, setClosedLessons] = useState<Record<string, boolean>>({});
@@ -196,6 +242,8 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
           {t.dueAt && <span className="chip bg-brand-50 text-ink-2 ring-brand-100"><CalendarClock className="h-3.5 w-3.5" aria-hidden /> Hạn: {formatDateTime(t.dueAt)}</span>}
           <span>{submissions(t.id)} bài nộp</span>
         </div>
+        <TimeBar task={t} now={now} />
+        {canManage && <ProgressBlock board={board} task={t} />}
         <div className="mt-2 flex flex-wrap gap-2">
           {mayPost && <button type="button" onClick={() => actions.onSubmitTo(t.id)} className={kid ? 'btn-primary !min-h-[52px] !px-6 text-base' : 'btn-primary btn-sm'}>Nộp bài</button>}
           <button type="button" onClick={() => actions.onViewSubmissions(t.id)} className="btn-ghost btn-sm">Xem bài nộp</button>

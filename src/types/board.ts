@@ -189,6 +189,9 @@ export interface SubmissionCard {
   teacherNote?: string;
   /** Mã sửa bài (chỉ có ở trình duyệt vừa nộp bài; máy chủ không trả lại cho người khác). */
   editCode?: string;
+  /** Giờ nộp lại mới nhất (bản sửa sau khi đã nộp) và số lần nộp lại. */
+  resubmittedAt?: string;
+  revisions?: number;
 }
 
 export interface RosterMember {
@@ -219,6 +222,8 @@ export interface BoardSettings {
   peerComments: boolean;
   /** Cho học sinh xem điểm số của giáo viên (mặc định tắt vì điểm là riêng tư). */
   showGrades: boolean;
+  /** Phạm vi do giáo viên chọn khi tạo bảng; quyết định cách gọi (lớp / khối / bài học). */
+  scope?: 'class' | 'grade' | 'lesson';
   /** Cổng Google Drive của giáo viên (địa chỉ ứng dụng web Apps Script và mật khẩu cổng): tệp học sinh nộp được lưu thẳng vào Drive. */
   driveUrl?: string;
   driveSecret?: string;

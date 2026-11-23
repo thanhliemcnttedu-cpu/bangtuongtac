@@ -1,4 +1,4 @@
-import { Suspense, lazy, useMemo, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { KeyRound, ListChecks, Lock, Pencil, Plus, Presentation, Settings, Share2, Trash2 } from 'lucide-react';
 import type {
   BoardData, BoardRow, CardLayoutPatch, CardStatus, FilterState, Lesson, PinnedResource, RosterMember, SubmissionCard, TaskItem, ViewMode, ViewerRole,
@@ -38,7 +38,8 @@ import { ConfirmModal } from './ConfirmModal';
 import { DriveBackupModal } from './DriveBackupModal';
 import { EditCodeModal } from './EditCodeModal';
 import { EditSubmissionModal } from './EditSubmissionModal';
-import { rememberCode } from '../lib/editCode';
+import { myCodes, rememberCode } from '../lib/editCode';
+import { DRIVE_MAX_BYTES, gatewayOf } from '../lib/drive';
 import type { CleanupReport } from '../hooks/useBoardStore';
 import { GradebookModal } from './GradebookModal';
 import { ActivityModal } from './ActivityModal';
@@ -104,9 +105,29 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
   const [myPosts, setMyPosts] = useState<Record<string, number>>({});
   const [toast, setToast] = useState('');
   /** Mã sửa bài vừa cấp cho học sinh sau khi nộp. */
-  const [codeShown, setCodeShown] = useState<{ code: string; title: string; note?: string } | null>(null);
+  /** Bài của chính em này (tra bằng mã đã lưu trên máy): máy chủ không đưa bài chờ duyệt / cần sửa vào danh sách công khai. */
+  const [mine, setMine] = useState<SubmissionCard[]>([]);
+  /** Tên trong danh sách lớp, để học sinh chọn khi nộp bài. */
+  const [rosterNames, setRosterNames] = useState<{ name: string; unit: string }[]>([]);
+  const [editCodePick, setEditCodePick] = useState<string | undefined>();
+  const [codeShown, setCodeShown] = useState<{ code: string; name: string; title: string; note?: string } | null>(null);
 
   const access = savedBoard.access ?? 'owner';
+  useEffect(() => {
+    if (role !== 'guest') { setRosterNames([]); return; }
+    let alive = true;
+    void store.loadRosterNames(savedBoard.id).then((l) => { if (alive) setRosterNames(l); });
+    return () => { alive = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, savedBoard.id, savedBoard.roster]);
+  useEffect(() => {
+    if (role !== 'guest') { setMine([]); return; }
+    let alive = true;
+    void Promise.all(myCodes(savedBoard.shareToken).map((c) => store.findCardByCode(savedBoard.id, c.code).catch(() => null)))
+      .then((list) => { if (alive) setMine(list.filter((c): c is SubmissionCard => !!c)); });
+    return () => { alive = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, savedBoard.id, savedBoard.cards, codeShown]);
   // canManage: chủ bảng hoặc đồng quản lý đang xem bằng vai giáo viên; isOwner: riêng chủ bảng; canView: xem toàn bộ dữ liệu (cả giáo viên chỉ xem).
   const canManage = role === 'owner';
   const isOwner = canManage && access === 'owner';
@@ -185,7 +206,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
       setModal(null);
       if (card.editCode && !canManage) {
         rememberCode({ code: card.editCode, title: card.title, token: savedBoard.shareToken, at: Date.now() });
-        setCodeShown({ code: card.editCode, title: card.title, note: card.status === 'pending' ? 'Bài sẽ hiện công khai sau khi giáo viên duyệt.' : undefined });
+        setCodeShown({ code: card.editCode, name: card.authorName, title: card.title, note: card.status === 'pending' ? 'Bài sẽ hiện công khai sau khi giáo viên duyệt.' : undefined });
       }
       showToast(card.status !== 'pending' ? 'Đã nộp bài thành công.'
         : savedBoard.settings.moderation === 'auto' ? 'Đã nộp bài. Hệ thống giữ bài lại để giáo viên xem rồi mới hiện công khai.'
@@ -216,6 +237,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
     onDeleteComment: (cardId, id) => store.deleteComment(savedBoard.id, cardId, id),
     onTeacherStars: (cardId, stars) => store.setTeacherStars(savedBoard.id, cardId, stars),
     onGrade: (cardId, grade, note) => store.setGrade(savedBoard.id, cardId, grade, note),
+    onReassign: (cardId, member) => store.reassignCard(savedBoard.id, cardId, member),
   };
 
   const rowActions = {
@@ -349,6 +371,15 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
           </p>
         )}
 
+        {role === 'guest' && mine.filter((c) => c.status === 'needs_edit' || c.status === 'pending').map((c) => (
+          <div key={c.id} className={`flex flex-wrap items-center gap-3 rounded-2xl border-[1.5px] p-3 text-sm ${c.status === 'needs_edit' ? 'border-rose-200 bg-rose-50' : 'border-amber-200 bg-amber-50'}`}>
+            <div className="min-w-0 flex-1">
+              <p className="font-extrabold text-ink">{c.status === 'needs_edit' ? 'Cô giáo nhờ em sửa lại bài' : 'Bài của em đang chờ cô duyệt'}: “{c.title}”</p>
+              {c.teacherNote && <p className="mt-0.5 text-ink-2">Lời cô: {c.teacherNote}</p>}
+            </div>
+            {c.status === 'needs_edit' && <button type="button" onClick={() => { setEditCodePick(c.editCode); setModal('edit-mine'); }} className="btn-primary btn-sm">Sửa ngay</button>}
+          </div>
+        ))}
         <section aria-label="Bài nộp và sản phẩm" aria-live="polite">
           {(effectiveView === 'wall' || effectiveView === 'grid' || effectiveView === 'columns') && (
             <GridAndColumnsView rows={filtered} board={visibleBoard} mode={effectiveView} {...rowActions} />
@@ -371,7 +402,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
       </main>
 
       {showFab && role === 'guest' && !fabLocked && (
-        <button type="button" onClick={() => setModal('edit-mine')}
+        <button type="button" onClick={() => { setEditCodePick(undefined); setModal('edit-mine'); }}
           className="btn-ghost fixed bottom-[calc(max(1.25rem,env(safe-area-inset-bottom))+4.5rem)] right-5 z-[19] !min-h-[44px] bg-white/95 text-sm shadow-soft sm:right-8">
           <KeyRound className="h-4 w-4" aria-hidden /> Sửa bài đã nộp
         </button>
@@ -419,12 +450,13 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
           onCancel={() => setMetaDraft(null)}
         />
       )}
-      {modal === 'edit-mine' && <EditSubmissionModal boardToken={savedBoard.shareToken} isClass={board.mode === 'classroom'}
-        onFind={(code) => store.findCardByCode(savedBoard.id, code)}
+      {modal === 'edit-mine' && <EditSubmissionModal key={editCodePick ?? 'tay'} initialCode={editCodePick} boardToken={savedBoard.shareToken} isClass={board.mode === 'classroom'}
+        onFind={(code) => store.findCardByCode(savedBoard.id, code)} onFindByName={(name) => store.findCardsByName(savedBoard.id, name)}
+        limits={gatewayOf(savedBoard.settings) ? { maxFile: DRIVE_MAX_BYTES, maxTotal: DRIVE_MAX_BYTES } : undefined}
         onSave={(code, input, del) => store.saveCardByCode(savedBoard.id, code, input, del)}
         onDone={(msg) => { setModal(null); showToast(msg); }} onClose={() => setModal(null)} />}
-      {codeShown && <EditCodeModal code={codeShown.code} title={codeShown.title} note={codeShown.note} onClose={() => setCodeShown(null)} />}
-      {modal === 'post' && <QuickPostModal board={visibleBoard} initialName={profile.name} initialUnit={profile.unit} initialTaskId={postTask} onSubmit={submitPost} onClose={() => setModal(null)} />}
+      {codeShown && <EditCodeModal code={codeShown.code} name={codeShown.name} title={codeShown.title} note={codeShown.note} onClose={() => setCodeShown(null)} />}
+      {modal === 'post' && <QuickPostModal board={visibleBoard} roster={rosterNames} initialName={profile.name} initialUnit={profile.unit} initialTaskId={postTask} onSubmit={submitPost} onClose={() => setModal(null)} />}
       {modal === 'share' && <ShareBoardModal board={board} canManage={canManage} access={access} myEmail={myEmail} initialTab={shareTab}
         onInvite={(email, r) => store.inviteCollaborator(savedBoard.id, email, r)}
         onChangeRole={(email, r) => store.changeCollaboratorRole(savedBoard.id, email, r)}

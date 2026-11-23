@@ -75,7 +75,7 @@ export function SlidesView({ rows, board, onOpen, onVote, feedback }: LayoutView
         )}
         {feedback && <div className="mt-4"><FeedbackPanel card={card} board={board} fb={feedback} /></div>}
         {!feedback && card.teacherNote && <p className="mt-3 rounded-2xl bg-amber-50 p-3 text-amber-900">Nhận xét của giáo viên: {card.teacherNote}</p>}
-        <p className="mt-3 text-sm text-ink-3">Nộp lúc {formatDateTime(card.submittedAt)}</p>
+        <p className="mt-3 text-sm text-ink-3">{card.resubmittedAt ? <>Nộp lại lúc <b>{formatDateTime(card.resubmittedAt)}</b> <span className="chip ml-1 bg-violet-100 text-violet-800 ring-violet-200">Bản nộp lại{(card.revisions ?? 1) > 1 ? ` lần ${card.revisions}` : ''}</span> · nộp đầu lúc {formatDateTime(card.submittedAt)}</> : <>Nộp lúc {formatDateTime(card.submittedAt)}</>}</p>
       </section>
     </div>
   );

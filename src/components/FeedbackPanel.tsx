@@ -6,6 +6,8 @@ import { formatRelative } from '../lib/format';
 import { formatGrade, parseGrade } from '../lib/grade';
 import { formatStars, getMyComments, getMyRatings, ratingAvg } from '../lib/peer';
 import { StarsDisplay, StarsInput } from './StarRating';
+import { formatEditCode } from '../lib/editCode';
+import { normalize } from '../lib/boardLogic';
 
 const PROFILE_KEY = 'bt.lastProfile';
 const COMMENT_DELETE_MS = 15 * 60_000;
@@ -24,6 +26,8 @@ export interface FeedbackActions {
   onDeleteComment: (cardId: string, commentId: string) => Promise<void>;
   onTeacherStars: (cardId: string, stars: number | null) => Promise<void>;
   onGrade: (cardId: string, grade: number | null, note: string) => Promise<void>;
+  /** Gán bài cho thành viên trong danh sách (khi học sinh gõ sai tên). */
+  onReassign: (cardId: string, member: { name: string; unit: string }) => Promise<void>;
 }
 
 function loadName(): string {
@@ -40,7 +44,26 @@ function Section({ title, children, tone = 'bg-white' }: { title: string; childr
 }
 
 /** Phần giáo viên chấm: sao, điểm số (0–10) và lời phê. Tự lưu khi rời ô. */
-function TeacherGrading({ card, fb }: { card: SubmissionCard; fb: FeedbackActions }) {
+/** Tên người nộp chưa có trong danh sách (gõ sai, viết tắt…): giáo viên gán bài cho đúng thành viên chưa nộp nhiệm vụ này. */
+function ReassignRow({ card, board, fb }: { card: SubmissionCard; board: BoardData; fb: FeedbackActions }) {
+  const [busy, setBusy] = useState(false);
+  const known = new Set(board.roster.map((m) => normalize(m.name)));
+  if (board.roster.length === 0 || known.has(normalize(card.authorName))) return null;
+  const doneNames = new Set(board.cards.filter((c) => c.taskId === card.taskId && c.id !== card.id).map((c) => normalize(c.authorName)));
+  const options = board.roster.filter((m) => !doneNames.has(normalize(m.name)));
+  return (
+    <div className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">
+      <label htmlFor={`fb-reassign-${card.id}`} className="font-bold">“{card.authorName}” chưa có trong danh sách thành viên. Gán bài này cho:</label>
+      <select id={`fb-reassign-${card.id}`} disabled={busy} defaultValue="" className="input mt-1 !min-h-[40px]"
+        onChange={(e) => { const m = board.roster.find((x) => x.id === e.target.value); if (!m) return; setBusy(true); void fb.onReassign(card.id, { name: m.name, unit: m.unit }).finally(() => setBusy(false)); }}>
+        <option value="">Chọn thành viên…</option>
+        {options.map((m) => <option key={m.id} value={m.id}>{m.name}{m.unit ? ` · ${m.unit}` : ''}</option>)}
+      </select>
+    </div>
+  );
+}
+
+function TeacherGrading({ card, board, fb }: { card: SubmissionCard; board: BoardData; fb: FeedbackActions }) {
   const [grade, setGrade] = useState(card.grade !== undefined ? formatGrade(card.grade) : '');
   const [note, setNote] = useState(card.teacherNote ?? '');
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -57,6 +80,8 @@ function TeacherGrading({ card, fb }: { card: SubmissionCard; fb: FeedbackAction
   return (
     <Section title="Chấm bài (chỉ giáo viên)" tone="bg-teal2-50">
       <div className="space-y-3">
+        <ReassignRow card={card} board={board} fb={fb} />
+        {card.editCode && <p className="rounded-xl bg-white/70 px-3 py-2 text-xs text-ink-2">Mã sửa bài của em này: <b className="select-all font-mono text-sm tracking-widest text-ink">{formatEditCode(card.editCode)}</b> (đọc cho em nếu em quên mã)</p>}
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-sm font-bold">Sao</span>
           <StarsInput label="Số sao giáo viên chấm" value={card.teacherStars ?? 0} onChange={(n) => void fb.onTeacherStars(card.id, n === card.teacherStars ? null : n)} />
@@ -176,7 +201,7 @@ export function FeedbackPanel({ card, board, fb }: { card: SubmissionCard; board
 
   return (
     <div className="space-y-3 text-left" aria-label="Đánh giá và nhận xét">
-      {fb.canManage && <TeacherGrading key={card.id} card={card} fb={fb} />}
+      {fb.canManage && <TeacherGrading key={card.id} card={card} board={board} fb={fb} />}
 
       {(card.teacherStars !== undefined || card.teacherNote || (settings.showGrades && card.grade !== undefined)) && !fb.canManage && (
         <Section title="Đánh giá của giáo viên" tone="bg-teal2-50">

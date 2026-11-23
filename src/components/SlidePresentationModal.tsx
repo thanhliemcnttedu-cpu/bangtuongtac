@@ -104,7 +104,7 @@ export function SlidePresentationModal({ items, startCardId, board, canManage, o
           )}
           {feedback && <FeedbackPanel card={card} board={board} fb={feedback} />}
           {!feedback && card.teacherNote && <p className="rounded-2xl bg-amber-50 p-3 text-base text-amber-900">Nhận xét của giáo viên: {card.teacherNote}</p>}
-          <p className="text-sm text-ink-3">Nộp lúc {formatDateTime(card.submittedAt)}</p>
+          <p className="text-sm text-ink-3">{card.resubmittedAt ? <>Nộp lại lúc <b>{formatDateTime(card.resubmittedAt)}</b> <span className="chip ml-1 bg-violet-100 text-violet-800 ring-violet-200">Bản nộp lại{(card.revisions ?? 1) > 1 ? ` lần ${card.revisions}` : ''}</span> · nộp đầu lúc {formatDateTime(card.submittedAt)}</> : <>Nộp lúc {formatDateTime(card.submittedAt)}</>}</p>
         </div>
       </main>
 

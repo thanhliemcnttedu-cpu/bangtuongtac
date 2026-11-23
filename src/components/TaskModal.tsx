@@ -22,7 +22,7 @@ interface Props {
  * giao cho cả lớp hay chỉ một số tổ / nhóm, và giao thêm cho các lớp khác.
  */
 export function TaskModal({ board, task, defaultLessonId = null, otherBoards, onSave, onClose }: Props) {
-  const w = wordsFor(board.mode);
+  const w = wordsFor(board.mode, board.settings.scope);
   const [kind, setKind] = useState<TaskKind>(task?.kind ?? 'assignment');
   const [label, setLabel] = useState(task?.label ?? '');
   const [lessonId, setLessonId] = useState(task ? task.lessonId ?? '' : defaultLessonId ?? '');
@@ -56,7 +56,8 @@ export function TaskModal({ board, task, defaultLessonId = null, otherBoards, on
     try {
       await onSave({
         label, lessonId: lessonId || null, kind, instructions,
-        assignedAt: scheduled ? fromLocalInput(assignedAt) : null, dueAt: fromLocalInput(dueAt), allowLate,
+        assignedAt: scheduled ? fromLocalInput(assignedAt) : (task?.assignedAt && Date.parse(task.assignedAt) <= Date.now() ? task.assignedAt : new Date().toISOString()), // "giao ngay" ghi đúng lúc giao để chia 3 ngưỡng thời gian chính xác
+        dueAt: fromLocalInput(dueAt), allowLate,
         targetUnits: targetAll ? [] : targets,
       }, others);
     } catch (err) { setError(err instanceof Error ? err.message : 'Không lưu được.'); setBusy(false); }

@@ -104,7 +104,7 @@ export function Tile({ row, board, compact, wall, canManage, onOpen, onSetStatus
           <h3 className={`font-extrabold leading-snug ${compact ? 'text-sm' : 'text-base'}`}>{card.title}</h3>
           {!compact && <p className={`${wall ? '' : 'line-clamp-2'} whitespace-pre-line text-sm text-ink-2`}>{card.body}</p>}
           <p className="text-xs text-ink-2">
-            {[s.showAuthor ? card.unit : '', taskLabel(board, card.taskId), s.showTime ? formatRelative(card.submittedAt) : ''].filter(Boolean).join(' · ')}
+            {[s.showAuthor ? card.unit : '', taskLabel(board, card.taskId), s.showTime ? (card.resubmittedAt ? `nộp lại ${formatRelative(card.resubmittedAt)}` : formatRelative(card.submittedAt)) : ''].filter(Boolean).join(' · ')}
           </p>
           {card.teacherNote && <p className="rounded-xl bg-amber-50 px-2 py-1 text-xs text-amber-900">Nhận xét: {card.teacherNote}</p>}
         </div>
