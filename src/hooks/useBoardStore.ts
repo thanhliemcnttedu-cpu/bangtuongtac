@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   ActivityEntry, Attachment, BoardData, CardComment, ModerationMode, CardLayoutPatch, CardLocation, CardStatus, CollabRole, LinkMode, Lesson, PinnedResource, ResourceKind, RosterMember, SubmissionCard, TaskItem,
 } from '../types/board';
@@ -14,9 +14,32 @@ import { DRIVE_MAX_BYTES, driveAttachment, gatewayDelete, gatewayOf, gatewaySend
 import type { GatewayConfig } from '../lib/drive';
 import { ROOT_FOLDER, boardFolderName, safe } from '../lib/driveBackup';
 import { checkComment, textFlagged } from '../lib/moderation';
-import { getMyRatings, rememberMyCard, rememberMyComment, rememberRating } from '../lib/peer';
+import { getMyCardIds, getMyRatings, rememberMyCard, rememberMyComment, rememberRating } from '../lib/peer';
 import type { LessonInput, TaskInput } from '../lib/boardApi';
 import { checkSubmit } from '../lib/lessons';
+import { newEditCode, normalizeEditCode } from '../lib/editCode';
+
+/** Cứ mỗi chừng này mili giây trang hỏi "dấu vân tay" của bảng; có đổi thì tải lại êm, không cần bấm F5. */
+const POLL_MS = 5000;
+/** Chưa chạy lệnh SQL cập nhật thì không có dấu vân tay: tải lại cả bảng thưa hơn để đỡ tốn dữ liệu. */
+const POLL_FALLBACK_MS = 20000;
+
+export interface CardEditInput { title: string; body: string; authorName: string; unit: string; keep: Attachment[]; files: File[]; links: string[] }
+
+/** Giữ lại những thứ chỉ có ở trình duyệt này khi dữ liệu mới về: mã sửa bài, và bài đang chờ duyệt của chính học sinh (máy chủ không trả bài chờ duyệt cho người khác). */
+function keepLocal(prev: BoardData[], next: BoardData[], signedIn: boolean): BoardData[] {
+  const mine = signedIn ? new Set<string>() : getMyCardIds();
+  const merged = next.map((nb) => {
+    const pb = prev.find((b) => b.id === nb.id);
+    if (!pb) return nb;
+    const codes = new Map(pb.cards.filter((c) => c.editCode).map((c) => [c.id, c.editCode]));
+    const have = new Set(nb.cards.map((c) => c.id));
+    const cards = nb.cards.map((c) => (codes.has(c.id) ? { ...c, editCode: codes.get(c.id) } : c));
+    const own = pb.cards.filter((c) => !have.has(c.id) && mine.has(c.id) && c.status === 'pending');
+    return own.length > 0 ? { ...nb, cards: [...own, ...cards] } : { ...nb, cards };
+  });
+  return JSON.stringify(merged) === JSON.stringify(prev) ? prev : merged;
+}
 
 /** Kết quả dọn tệp khi xóa bài: số tệp đã xóa khỏi kho, trên Drive, và số tệp Drive chưa xóa được. */
 export interface CleanupReport { storageRemoved: number; driveDeleted: number; driveFailed: number; driveError?: string }
@@ -101,6 +124,10 @@ export interface BoardStore {
   setCardLayout: (boardId: string, cardId: string, patch: CardLayoutPatch) => Promise<void>;
   /** Giáo viên xóa bài thì xóa luôn tệp trên kho và trên Drive của giáo viên; trả về kết quả dọn dẹp. */
   deleteCard: (boardId: string, cardId: string, asManager: boolean) => Promise<CleanupReport | void>;
+  /** Học sinh (không cần đăng nhập) mở lại bài của mình bằng mã sửa bài; null nếu mã không đúng. */
+  findCardByCode: (boardId: string, code: string) => Promise<SubmissionCard | null>;
+  /** Sửa (del = false) hoặc xóa (del = true) bài bằng mã sửa bài. Trả bài sau khi sửa, hoặc null nếu đã xóa. */
+  saveCardByCode: (boardId: string, code: string, input: CardEditInput, del?: boolean) => Promise<SubmissionCard | null>;
   clearSubmissions: (boardId: string) => Promise<CleanupReport | void>;
   /** Ghi lại đính kèm của một bài (sau khi chuyển tệp sang Drive). */
   updateCardAttachments: (boardId: string, cardId: string, attachments: Attachment[]) => Promise<void>;
@@ -249,26 +276,87 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     setMockLog((m) => ({ ...m, [boardId]: [entry, ...(m[boardId] ?? [])] }));
   }, [isReal, actor]);
 
+  const boardsRef = useRef<BoardData[]>(boards);
+  boardsRef.current = boards;
+  /** Dấu vân tay đã thấy của từng bảng (theo token). */
+  const fpRef = useRef<Record<string, string | null>>({});
+
+  const loadAll = useCallback(async (first: boolean): Promise<{ all: BoardData[]; missing: boolean }> => {
+    if (first && userId) { try { await api.purgeTrash(); } catch { /* chưa có hàm dọn thùng rác: bỏ qua */ } }
+    const mine = userId ? await api.loadMyBoards(actor) : [];
+    const isMine = linkToken ? mine.some((b) => b.shareToken === linkToken) : true;
+    const pub = linkToken && !isMine ? await api.loadPublicBoard(linkToken) : null;
+    return { all: pub ? [pub, ...mine] : mine, missing: !!linkToken && !pub && !isMine };
+  }, [userId, linkToken, actor]);
+
   // Nạp dữ liệu thật mỗi khi đổi tài khoản Gmail hoặc mở link /b/<token>.
   useEffect(() => {
     if (!isReal) return;
     let alive = true;
     setLoading(true);
     setError('');
+    fpRef.current = {};
     (async () => {
-      if (userId) { try { await api.purgeTrash(); } catch { /* chưa có hàm dọn thùng rác: bỏ qua */ } }
-      const mine = userId ? await api.loadMyBoards(actor) : [];
-      const isMine = linkToken ? mine.some((b) => b.shareToken === linkToken) : true;
-      const pub = linkToken && !isMine ? await api.loadPublicBoard(linkToken) : null;
+      const { all, missing } = await loadAll(true);
       if (!alive) return;
-      const all = pub ? [pub, ...mine] : mine;
       setBoards(all);
-      if (linkToken && !pub && !isMine) setError('Không tìm thấy bảng với liên kết này.');
+      if (missing) setError('Không tìm thấy bảng với liên kết này.');
     })()
       .catch((e: unknown) => { if (alive) setError(e instanceof Error ? e.message : 'Không tải được dữ liệu.'); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [isReal, userId, linkToken, actor]);
+  }, [isReal, loadAll]);
+
+  // Tự làm mới êm mỗi 5 giây: hỏi dấu vân tay (rất nhẹ), có đổi mới tải lại. Tạm nghỉ khi thẻ trình duyệt bị ẩn hoặc đang kéo thả.
+  useEffect(() => {
+    if (!isReal) return;
+    let stop = false;
+    let busy = false;
+    let down = false;
+    let useFallback = false;
+    let lastFull = Date.now();
+    const refresh = async (): Promise<void> => {
+      const { all } = await loadAll(false);
+      if (!stop) setBoards((prev) => keepLocal(prev, all, !!userId));
+      lastFull = Date.now();
+    };
+    const tick = async (): Promise<void> => {
+      if (busy || stop || document.hidden || down) return;
+      busy = true;
+      try {
+        if (useFallback) { if (Date.now() - lastFull >= POLL_FALLBACK_MS) await refresh(); return; }
+        const tokens = [...new Set([...(linkToken ? [linkToken] : []), ...boardsRef.current.filter((b) => !b.deletedAt).map((b) => b.shareToken)])].slice(0, 20);
+        if (tokens.length === 0) return;
+        const fps = await Promise.all(tokens.map((t) => api.boardFingerprint(t, !!userId).then((f) => ({ f }), (e: unknown) => ({ e }))));
+        let changed = false;
+        let missingFn = false;
+        tokens.forEach((t, i) => {
+          const r = fps[i];
+          if ('e' in r) { missingFn = true; return; }
+          if (t in fpRef.current && fpRef.current[t] !== r.f) changed = true;
+          fpRef.current[t] = r.f;
+        });
+        if (missingFn && !changed) { useFallback = true; return; }
+        if (changed) await refresh();
+      } catch { /* mất mạng một lúc: lần sau thử lại */ } finally { busy = false; }
+    };
+    const timer = window.setInterval(() => { void tick(); }, POLL_MS);
+    const onShow = (): void => { if (!document.hidden) void tick(); };
+    const onDown = (): void => { down = true; };
+    const onUp = (): void => { down = false; };
+    document.addEventListener('visibilitychange', onShow);
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('pointerup', onUp, true);
+    document.addEventListener('pointercancel', onUp, true);
+    return () => {
+      stop = true;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onShow);
+      document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('pointerup', onUp, true);
+      document.removeEventListener('pointercancel', onUp, true);
+    };
+  }, [isReal, userId, linkToken, loadAll]);
 
   const createBoard = useCallback(async (title: string, tpl: BoardTemplate, extras: { lessonTitle?: string; program?: string } = {}): Promise<BoardData> => {
     // Bảng mới dùng luôn cổng Drive đã kết nối trên trình duyệt này (nếu có).
@@ -336,7 +424,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
         id: `${input.boardId}-new-${Date.now()}`, boardId: input.boardId, authorName: input.authorName, unit: input.unit,
         title: input.title, taskId: input.taskId, body: input.body, attachments, loc: input.location ?? undefined,
         poll: input.poll?.map((label, i) => ({ id: `o${i + 1}`, label, votes: 0 })),
-        status, late: late || undefined, submittedAt: new Date().toISOString(),
+        status, late: late || undefined, submittedAt: new Date().toISOString(), editCode: newEditCode(),
       };
     }
     patch(input.boardId, (b) => ({ ...b, cards: [card, ...b.cards] }));
@@ -402,6 +490,41 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     await note(boardId, 'xoa_bai', label, false);
     return asManager ? cleanupAttachments(atts, isReal, gatewayOf(boards.find((b) => b.id === boardId)?.settings)) : undefined;
   }, [isReal, boards, patch, note]);
+
+  const findCardByCode = useCallback(async (boardId: string, code: string): Promise<SubmissionCard | null> => {
+    const clean = normalizeEditCode(code);
+    if (clean.length < 6) return null;
+    const b = boards.find((x) => x.id === boardId);
+    if (!b) return null;
+    if (!isReal) return b.cards.find((c) => c.editCode === clean) ?? null;
+    return api.getCardByCode(b.shareToken, clean);
+  }, [isReal, boards]);
+
+  const saveCardByCode = useCallback(async (boardId: string, code: string, input: CardEditInput, del = false): Promise<SubmissionCard | null> => {
+    const clean = normalizeEditCode(code);
+    const b = boards.find((x) => x.id === boardId);
+    if (!b) throw new Error('Không tìm thấy bảng.');
+    const old = isReal ? await api.getCardByCode(b.shareToken, clean) : b.cards.find((c) => c.editCode === clean) ?? null;
+    if (!old) throw new Error('Mã sửa bài không đúng.');
+    const cfg = gatewayOf(b.settings);
+    let attachments = input.keep;
+    if (!del) {
+      const added = await prepareAttachments({ boardId, files: input.files, links: input.links }, isReal, false, cfg ? { cfg, folder: [ROOT_FOLDER, boardFolderName(b), 'Bài nộp'], author: input.authorName, mode: 'all' } : undefined);
+      attachments = [...input.keep, ...added];
+    }
+    let status: CardStatus = old.status;
+    if (isReal) {
+      const st = await api.updateCardByCode(b.shareToken, clean, { title: input.title, body: input.body, authorName: input.authorName, unit: input.unit, attachments }, del);
+      if (st !== 'deleted') status = st as CardStatus;
+    }
+    // Tệp bị bỏ khỏi bài (hoặc cả bài bị xóa) thì dọn khỏi kho và Drive; lỗi dọn không chặn việc sửa.
+    const keptKeys = new Set(del ? [] : attachments.map((a) => a.url ?? a.driveId));
+    const dropped = old.attachments.filter((a) => !keptKeys.has(a.url ?? a.driveId));
+    if (dropped.length > 0) { try { await cleanupAttachments(dropped, isReal, cfg); } catch { /* bỏ qua */ } }
+    const next: SubmissionCard = { ...old, title: input.title, body: input.body, authorName: input.authorName, unit: input.unit, attachments, status, editCode: clean };
+    patch(boardId, (bd) => ({ ...bd, cards: del ? bd.cards.filter((c) => c.id !== old.id) : bd.cards.some((c) => c.id === old.id) ? bd.cards.map((c) => (c.id === old.id ? next : c)) : [next, ...bd.cards] }));
+    return del ? null : next;
+  }, [isReal, boards, patch]);
 
   const updateCardAttachments = useCallback(async (boardId: string, cardId: string, attachments: Attachment[]): Promise<void> => {
     if (isReal) await api.updateCardAttachments(cardId, attachments);
@@ -716,7 +839,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     boards: visibleBoards, loading, error, isReal, linkToken,
     rateCard, addComment, deleteOwnComment, setCommentStatus, deleteComment, setTeacherStars,
     inviteCollaborator, changeCollaboratorRole, removeCollaborator, leaveBoard,
-    createBoard, duplicateBoard, updateMeta, addCard, setCardLayout, setStatus, setGrade, vote, deleteCard, clearSubmissions, updateCardAttachments, removeStoredAttachments,
+    createBoard, duplicateBoard, updateMeta, addCard, setCardLayout, setStatus, setGrade, vote, deleteCard, findCardByCode, saveCardByCode, clearSubmissions, updateCardAttachments, removeStoredAttachments,
     setRoster, setSettings, saveLesson, removeLesson, saveTask, removeTask, addResource, removeResource, updateResource, assignToBoards, setProgram, setArchived, setTrashed, deleteForever, setTemplate, loadActivity,
   };
 }

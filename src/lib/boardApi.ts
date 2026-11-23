@@ -9,6 +9,7 @@ import type { BoardSettings } from '../types/board';
 import type { BoardTemplate } from '../data/boardTemplates';
 import { parseSettings } from './boardSettings';
 import { supabase } from './supabase';
+import { newEditCode, normalizeEditCode } from './editCode';
 
 /* ---------- Kiểu hàng trong CSDL (snake_case) ---------- */
 interface BoardDb {
@@ -373,7 +374,7 @@ export interface GuestCardInput {
  */
 export async function insertSubmission(input: GuestCardInput, status: CardStatus): Promise<SubmissionCard> {
   const id = crypto.randomUUID();
-  const editToken = crypto.randomUUID().replace(/-/g, '');
+  const editToken = newEditCode();
   const pollOptions = input.poll ? input.poll.map((label, i) => ({ id: `o${i + 1}`, label })) : null;
   const row = {
     id, board_id: input.boardId, kind: 'submission', author_name: input.authorName, group_name: input.unit,
@@ -391,11 +392,38 @@ export async function insertSubmission(input: GuestCardInput, status: CardStatus
   } catch { /* hỏi lại không được thì dùng giá trị dự đoán */ }
   return {
     id, boardId: input.boardId, authorName: input.authorName, unit: input.unit, title: input.title, taskId: input.taskId,
-    body: input.body, attachments: input.attachments,
+    body: input.body, attachments: input.attachments, editCode: editToken,
     poll: pollOptions?.map((o) => ({ ...o, votes: 0 })),
     loc: input.location ?? undefined,
     status: finalStatus, submittedAt: new Date().toISOString(),
   };
+}
+
+/** Dấu vân tay của bảng (chuỗi băm): đổi khi có bài, điểm, nhận xét, bình chọn… thay đổi. Rất nhẹ, dùng để biết có cần tải lại không. */
+export async function boardFingerprint(token: string, manage: boolean): Promise<string | null> {
+  const { data, error } = await db().rpc('board_fingerprint', { p_token: token, p_manage: manage });
+  if (error) throw new Error(error.message);
+  return (data as string | null) ?? null;
+}
+
+/** Mở bài của mình bằng mã sửa bài. Trả null nếu mã không khớp bài nào của bảng. */
+export async function getCardByCode(token: string, code: string): Promise<SubmissionCard | null> {
+  const { data, error } = await db().rpc('get_card_by_code', { p_token: token, p_code: code });
+  if (error) fail('Không mở được bài', error.message);
+  if (!data) return null;
+  const c = data as CardDb;
+  return { ...toSubmission(c, c.board_id ?? '', []), editCode: normalizeEditCode(code) };
+}
+
+export interface CardEdit { title: string; body: string; authorName: string; unit: string; attachments: Attachment[] }
+
+/** Sửa hoặc xóa bài bằng mã sửa bài. Trả trạng thái mới của bài ('deleted' nếu đã xóa). */
+export async function updateCardByCode(token: string, code: string, edit: CardEdit, del = false): Promise<string> {
+  const { data, error } = await db().rpc('update_card_by_code', {
+    p_token: token, p_code: code, p_title: edit.title, p_body: edit.body, p_author: edit.authorName, p_group: edit.unit, p_attachments: edit.attachments, p_delete: del,
+  });
+  if (error) fail(del ? 'Không xóa được bài' : 'Không lưu được bài', error.message);
+  return String(data);
 }
 
 /** Khách xóa bài của mình trong 15 phút đầu (hàm edit_card kiểm tra edit_token và thời gian). */

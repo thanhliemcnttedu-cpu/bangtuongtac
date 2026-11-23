@@ -187,6 +187,8 @@ export interface SubmissionCard {
   late?: boolean;
   submittedAt: string; // ISO
   teacherNote?: string;
+  /** Mã sửa bài (chỉ có ở trình duyệt vừa nộp bài; máy chủ không trả lại cho người khác). */
+  editCode?: string;
 }
 
 export interface RosterMember {

@@ -163,7 +163,7 @@ export function QuickPostModal({ board, initialName = '', initialUnit = '', init
         {board.settings.moderation === 'auto' && (
           <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">Hệ thống sẽ kiểm tra bài của bạn. Bài phù hợp hiện ngay; nếu cần xem lại, giáo viên sẽ duyệt.</p>
         )}
-        <p className="text-xs text-ink-2">Bạn có thể xóa bài vừa nộp trong 15 phút đầu, không cần tài khoản.</p>
+        <p className="text-xs text-ink-2">Sau khi nộp, bạn nhận một mã sửa bài (không cần tài khoản): giữ mã để sửa hoặc xóa bài về sau.</p>
         {errors.submit && <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700" role="alert">{errors.submit}</p>}
 
         <div className="flex justify-end gap-2 pt-1">

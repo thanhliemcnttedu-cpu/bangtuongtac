@@ -1,5 +1,5 @@
 import { Suspense, lazy, useMemo, useState } from 'react';
-import { ListChecks, Lock, Pencil, Plus, Presentation, Settings, Share2, Trash2 } from 'lucide-react';
+import { KeyRound, ListChecks, Lock, Pencil, Plus, Presentation, Settings, Share2, Trash2 } from 'lucide-react';
 import type {
   BoardData, BoardRow, CardLayoutPatch, CardStatus, FilterState, Lesson, PinnedResource, RosterMember, SubmissionCard, TaskItem, ViewMode, ViewerRole,
 } from '../types/board';
@@ -36,6 +36,9 @@ import { getMyCardIds } from '../lib/peer';
 import { BoardMenu } from './BoardMenu';
 import { ConfirmModal } from './ConfirmModal';
 import { DriveBackupModal } from './DriveBackupModal';
+import { EditCodeModal } from './EditCodeModal';
+import { EditSubmissionModal } from './EditSubmissionModal';
+import { rememberCode } from '../lib/editCode';
 import type { CleanupReport } from '../hooks/useBoardStore';
 import { GradebookModal } from './GradebookModal';
 import { ActivityModal } from './ActivityModal';
@@ -87,7 +90,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
   const [view, setView] = useState<ViewMode>(savedBoard.settings.defaultView);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [shareTab, setShareTab] = useState<'students' | 'teachers'>('students');
-  const [modal, setModal] = useState<'post' | 'share' | 'roster' | 'resource' | 'duplicate' | 'activity' | 'gradebook' | 'details' | 'lesson' | 'task' | 'material' | 'drive' | 'confirm-card' | 'confirm-cards' | 'confirm-lesson' | 'confirm-task' | 'confirm-material' | 'confirm-clear' | 'confirm-trash' | 'confirm-archive' | null>(null);
+  const [modal, setModal] = useState<'post' | 'share' | 'roster' | 'resource' | 'duplicate' | 'activity' | 'gradebook' | 'details' | 'lesson' | 'task' | 'material' | 'drive' | 'edit-mine' | 'confirm-card' | 'confirm-cards' | 'confirm-lesson' | 'confirm-task' | 'confirm-material' | 'confirm-clear' | 'confirm-trash' | 'confirm-archive' | null>(null);
   const [slideStart, setSlideStart] = useState<string | null>(null);
   // Đối tượng đang soạn trong các hộp Bài học / Bài tập / Tài liệu.
   const [editLesson, setEditLesson] = useState<Lesson | undefined>();
@@ -100,6 +103,8 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
   const [postTask, setPostTask] = useState<string | undefined>();
   const [myPosts, setMyPosts] = useState<Record<string, number>>({});
   const [toast, setToast] = useState('');
+  /** Mã sửa bài vừa cấp cho học sinh sau khi nộp. */
+  const [codeShown, setCodeShown] = useState<{ code: string; title: string; note?: string } | null>(null);
 
   const access = savedBoard.access ?? 'owner';
   // canManage: chủ bảng hoặc đồng quản lý đang xem bằng vai giáo viên; isOwner: riêng chủ bảng; canView: xem toàn bộ dữ liệu (cả giáo viên chỉ xem).
@@ -178,6 +183,10 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
       setMyPosts((m) => ({ ...m, [card.id]: Date.now() }));
       try { localStorage.setItem(PROFILE_KEY, JSON.stringify({ name: card.authorName, unit: card.unit })); } catch { /* bỏ qua */ }
       setModal(null);
+      if (card.editCode && !canManage) {
+        rememberCode({ code: card.editCode, title: card.title, token: savedBoard.shareToken, at: Date.now() });
+        setCodeShown({ code: card.editCode, title: card.title, note: card.status === 'pending' ? 'Bài sẽ hiện công khai sau khi giáo viên duyệt.' : undefined });
+      }
       showToast(card.status !== 'pending' ? 'Đã nộp bài thành công.'
         : savedBoard.settings.moderation === 'auto' ? 'Đã nộp bài. Hệ thống giữ bài lại để giáo viên xem rồi mới hiện công khai.'
           : 'Đã nộp bài. Bài sẽ hiện công khai sau khi giáo viên duyệt.');
@@ -361,6 +370,12 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
         <p className="pb-4 text-center text-xs text-ink-3">{store.isReal ? 'Dữ liệu lưu trên Supabase' : 'Bản giao diện mẫu · dữ liệu giả lập, chưa lưu lên máy chủ'}</p>
       </main>
 
+      {showFab && role === 'guest' && !fabLocked && (
+        <button type="button" onClick={() => setModal('edit-mine')}
+          className="btn-ghost fixed bottom-[calc(max(1.25rem,env(safe-area-inset-bottom))+4.5rem)] right-5 z-[19] !min-h-[44px] bg-white/95 text-sm shadow-soft sm:right-8">
+          <KeyRound className="h-4 w-4" aria-hidden /> Sửa bài đã nộp
+        </button>
+      )}
       {showFab && (
         <button type="button" disabled={fabLocked} onClick={() => { setPostTask(undefined); setModal('post'); }} aria-label={fabLocked ? 'Bảng đã khóa nộp bài' : 'Thêm bài nộp'}
           className="btn-primary fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-5 z-[19] !min-h-[60px] !gap-2 !px-6 text-base sm:right-8">
@@ -404,6 +419,11 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
           onCancel={() => setMetaDraft(null)}
         />
       )}
+      {modal === 'edit-mine' && <EditSubmissionModal boardToken={savedBoard.shareToken} isClass={board.mode === 'classroom'}
+        onFind={(code) => store.findCardByCode(savedBoard.id, code)}
+        onSave={(code, input, del) => store.saveCardByCode(savedBoard.id, code, input, del)}
+        onDone={(msg) => { setModal(null); showToast(msg); }} onClose={() => setModal(null)} />}
+      {codeShown && <EditCodeModal code={codeShown.code} title={codeShown.title} note={codeShown.note} onClose={() => setCodeShown(null)} />}
       {modal === 'post' && <QuickPostModal board={visibleBoard} initialName={profile.name} initialUnit={profile.unit} initialTaskId={postTask} onSubmit={submitPost} onClose={() => setModal(null)} />}
       {modal === 'share' && <ShareBoardModal board={board} canManage={canManage} access={access} myEmail={myEmail} initialTab={shareTab}
         onInvite={(email, r) => store.inviteCollaborator(savedBoard.id, email, r)}
