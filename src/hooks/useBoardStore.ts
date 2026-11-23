@@ -39,6 +39,8 @@ export interface MaterialInput {
   lessonId: string | null;
   files: File[];
   links: string[];
+  /** Chỉ khi sửa: các đính kèm cũ được giữ lại (bỏ khỏi danh sách = gỡ khỏi tài liệu). */
+  keep?: Attachment[];
 }
 
 export interface DuplicateOptions {
@@ -76,6 +78,7 @@ export interface BoardStore {
   removeTask: (boardId: string, taskId: string) => Promise<void>;
   addResource: (boardId: string, input: MaterialInput) => Promise<void>;
   removeResource: (boardId: string, resourceId: string) => Promise<void>;
+  updateResource: (boardId: string, resourceId: string, input: MaterialInput) => Promise<void>;
   /** Giao một bài tập (kèm bài học và tài liệu của bài) cho các lớp khác của tôi. Trả về số lớp đã giao. */
   assignToBoards: (sourceBoardId: string, task: TaskItem, targetBoardIds: string[]) => Promise<number>;
   /** Gán lớp vào chương trình tập huấn (rỗng = bỏ khỏi chương trình). */
@@ -440,6 +443,22 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     await note(boardId, 'ghim_tai_lieu', input.title, true);
   }, [isReal, patch, note]);
 
+  const updateResource = useCallback(async (boardId: string, resourceId: string, input: MaterialInput): Promise<void> => {
+    if (!input.title.trim()) throw new Error('Hãy nhập tên tài liệu.');
+    const kept = input.keep ?? [];
+    if (kept.length + input.files.length + input.links.length === 0) throw new Error('Tài liệu cần ít nhất một tệp hoặc một liên kết.');
+    const added = await prepareAttachments({ boardId, files: input.files, links: input.links }, isReal);
+    const attachments = [...kept, ...added];
+    const kind: ResourceKind = input.kind === 'auto' ? inferKind(attachments) : input.kind;
+    const first = attachments.find((a) => a.type === 'link' || a.type === 'embed');
+    const payload = { title: input.title.trim(), description: input.description.trim(), url: first?.url ?? '', kind, lessonId: input.lessonId, attachments };
+    const res: PinnedResource = isReal
+      ? await api.updateResource(resourceId, payload)
+      : { id: resourceId, kind, title: payload.title, description: payload.description, url: payload.url || attachments[0]?.url || '#', lessonId: input.lessonId ?? undefined, attachments };
+    patch(boardId, (b) => ({ ...b, pinned: b.pinned.map((r) => (r.id === resourceId ? { ...res, sizeLabel: sizeLabelOf(attachments) } : r)) }));
+    await note(boardId, 'sua_tai_lieu', input.title, true);
+  }, [isReal, patch, note]);
+
   const removeResource = useCallback(async (boardId: string, resourceId: string): Promise<void> => {
     if (isReal) await api.deleteResource(resourceId);
     patch(boardId, (b) => ({ ...b, pinned: b.pinned.filter((r) => r.id !== resourceId) }));
@@ -609,6 +628,6 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     rateCard, addComment, deleteOwnComment, setCommentStatus, deleteComment, setTeacherStars,
     inviteCollaborator, changeCollaboratorRole, removeCollaborator, leaveBoard,
     createBoard, duplicateBoard, updateMeta, addCard, setCardLayout, setStatus, setGrade, vote, deleteCard, clearSubmissions,
-    setRoster, setSettings, saveLesson, removeLesson, saveTask, removeTask, addResource, removeResource, assignToBoards, setProgram, setArchived, setTrashed, deleteForever, setTemplate, loadActivity,
+    setRoster, setSettings, saveLesson, removeLesson, saveTask, removeTask, addResource, removeResource, updateResource, assignToBoards, setProgram, setArchived, setTrashed, deleteForever, setTemplate, loadActivity,
   };
 }

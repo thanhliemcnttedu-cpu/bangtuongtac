@@ -17,6 +17,7 @@ export interface LessonsPanelActions {
   onDeleteTask: (t: TaskItem) => void;
   onAddMaterial: (lessonId: string | null, opts?: { mindmap?: boolean }) => void;
   onDeleteMaterial: (r: PinnedResource) => void;
+  onEditMaterial: (r: PinnedResource) => void;
   /** Học sinh bấm "Nộp bài" ở một bài tập: mở form nộp với bài tập đã chọn. */
   onSubmitTo: (taskId: string) => void;
   /** Lọc danh sách bài nộp theo bài tập. */
@@ -43,23 +44,28 @@ const KIND: Record<ResourceKind, { label: string; icon: LucideIcon; tone: string
   image: { label: 'Hình ảnh', icon: ImageIcon, tone: 'bg-emerald-100 text-emerald-700' },
 };
 
-function MaterialCard({ r, canManage, onOpen, onDelete }: { r: PinnedResource; canManage: boolean; onOpen: () => void; onDelete: () => void }) {
+function MaterialCard({ r, canManage, onOpen, onDelete, onEdit }: { r: PinnedResource; canManage: boolean; onOpen: () => void; onDelete: () => void; onEdit: () => void }) {
   const k = KIND[r.kind];
   const Icon = k.icon;
   return (
     <li className="relative">
       <button type="button" onClick={onOpen} className="group flex h-full w-full items-start gap-3 rounded-2xl border border-teal2-100 bg-white p-3 text-left transition duration-200 hover:-translate-y-0.5 hover:shadow-lift">
         <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${k.tone}`}><Icon className="h-6 w-6" aria-hidden /></span>
-        <span className="min-w-0 pr-6">
+        <span className="min-w-0 pr-14">
           <span className="block text-xs font-bold text-teal2-700">{k.label}{r.sizeLabel ? ` · ${r.sizeLabel}` : ''}{r.attachments && r.attachments.length > 1 ? ` · ${r.attachments.length} tệp` : ''}</span>
           <span className="block text-base font-extrabold leading-snug">{r.title}</span>
           {r.description && <span className="mt-0.5 block text-xs text-ink-2">{r.description}</span>}
         </span>
       </button>
       {canManage && (
-        <button type="button" onClick={onDelete} aria-label={`Gỡ tài liệu ${r.title}`} className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full text-ink-3 transition hover:bg-rose-50 hover:text-rose-700">
-          <X className="h-4 w-4" aria-hidden />
-        </button>
+        <span className="absolute right-1.5 top-1.5 flex items-center gap-0.5">
+          <button type="button" onClick={onEdit} aria-label={`Sửa tài liệu ${r.title}`} title="Sửa tài liệu" className="flex h-8 w-8 items-center justify-center rounded-full text-ink-3 transition hover:bg-brand-50 hover:text-brand-700">
+            <Pencil className="h-4 w-4" aria-hidden />
+          </button>
+          <button type="button" onClick={onDelete} aria-label={`Gỡ tài liệu ${r.title}`} title="Gỡ tài liệu" className="flex h-8 w-8 items-center justify-center rounded-full text-ink-3 transition hover:bg-rose-50 hover:text-rose-700">
+            <X className="h-4 w-4" aria-hidden />
+          </button>
+        </span>
       )}
     </li>
   );
@@ -145,7 +151,7 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
 
   const materialList = (list: PinnedResource[]) => (
     <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      {list.map((r) => <MaterialCard key={r.id} r={r} canManage={canManage} onOpen={() => setViewing(r)} onDelete={() => actions.onDeleteMaterial(r)} />)}
+      {list.map((r) => <MaterialCard key={r.id} r={r} canManage={canManage} onOpen={() => setViewing(r)} onDelete={() => actions.onDeleteMaterial(r)} onEdit={() => actions.onEditMaterial(r)} />)}
     </ul>
   );
 

@@ -15,6 +15,8 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   khoi_phuc: 'Khôi phục bảng',
   danh_dau_mau: 'Đánh dấu mẫu',
   ghim_tai_lieu: 'Ghim tài liệu',
+
+  sua_tai_lieu: 'Sửa tài liệu',
   go_tai_lieu: 'Gỡ tài liệu',
   tao_bai_hoc: 'Tạo bài học',
   sua_bai_hoc: 'Sửa bài học',

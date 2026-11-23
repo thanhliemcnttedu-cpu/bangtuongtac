@@ -82,6 +82,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
   const [taskLesson, setTaskLesson] = useState<string | null>(null);
   const [materialLesson, setMaterialLesson] = useState<string | null>(null);
   const [materialMM, setMaterialMM] = useState(false);
+  const [editMaterial, setEditMaterial] = useState<PinnedResource | undefined>(undefined);
   const [toDelete, setToDelete] = useState<{ lesson?: Lesson; task?: TaskItem; resource?: PinnedResource; card?: SubmissionCard; cardIds?: string[] }>({});
   const [postTask, setPostTask] = useState<string | undefined>();
   const [myPosts, setMyPosts] = useState<Record<string, number>>({});
@@ -304,7 +305,8 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
             onAddTask: (lessonId) => { setEditTask(undefined); setTaskLesson(lessonId); setModal('task'); },
             onEditTask: (t) => { setEditTask(t); setTaskLesson(null); setModal('task'); },
             onDeleteTask: (t) => { setToDelete({ task: t }); setModal('confirm-task'); },
-            onAddMaterial: (lessonId, opts) => { setMaterialLesson(lessonId); setMaterialMM(!!opts?.mindmap); setModal('material'); },
+            onAddMaterial: (lessonId, opts) => { setEditMaterial(undefined); setMaterialLesson(lessonId); setMaterialMM(!!opts?.mindmap); setModal('material'); },
+            onEditMaterial: (r) => { setEditMaterial(r); setMaterialLesson(r.lessonId ?? null); setMaterialMM(false); setModal('material'); },
             onDeleteMaterial: (r) => { setToDelete({ resource: r }); setModal('confirm-material'); },
             onSubmitTo: (taskId) => { setPostTask(taskId); setModal('post'); },
             onViewSubmissions: (taskId) => { patchFilters({ taskId }); document.querySelector('section[aria-label="Bài nộp và sản phẩm"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
@@ -406,8 +408,11 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
           setModal(null);
           showToast(n > 0 ? `Đã lưu và giao thêm cho ${n} lớp khác.` : editTask ? 'Đã lưu thay đổi.' : 'Đã giao bài.');
         }} />}
-      {modal === 'material' && <MaterialModal board={savedBoard} defaultLessonId={materialLesson} startMindMap={materialMM} onClose={() => setModal(null)}
-        onAdd={async (input) => { await store.addResource(savedBoard.id, input); setModal(null); showToast('Đã thêm tài liệu.'); }} />}
+      {modal === 'material' && <MaterialModal board={savedBoard} defaultLessonId={materialLesson} startMindMap={materialMM} resource={editMaterial} onClose={() => setModal(null)}
+        onAdd={async (input) => {
+          if (editMaterial) { await store.updateResource(savedBoard.id, editMaterial.id, input); setModal(null); showToast('Đã lưu tài liệu.'); return; }
+          await store.addResource(savedBoard.id, input); setModal(null); showToast('Đã thêm tài liệu.');
+        }} />}
       {modal === 'confirm-card' && toDelete.card && (
         <ConfirmModal title="Xóa bài nộp này?" confirmLabel="Xóa bài" danger onClose={() => setModal(null)}
           onConfirm={async () => { await store.deleteCard(savedBoard.id, toDelete.card!.id, true); setModal(null); showToast('Đã xóa bài nộp.'); }}>

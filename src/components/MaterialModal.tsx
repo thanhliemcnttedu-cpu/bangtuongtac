@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import type { ChangeEvent, DragEvent, FormEvent } from 'react';
 import { Link2, Network, Trash2, Upload } from 'lucide-react';
 import { MindMapEditor } from './mindmap/MindMapEditor';
-import type { BoardData, ResourceKind } from '../types/board';
+import type { Attachment, BoardData, PinnedResource, ResourceKind } from '../types/board';
 import type { MaterialInput } from '../hooks/useBoardStore';
 import { ACCEPT_ATTR, formatSize, validateFile } from '../lib/media';
 import { linkToAttachment, normalizeLink } from '../lib/embeds';
@@ -14,6 +14,8 @@ interface Props {
   defaultLessonId: string | null;
   /** Mở ngay trình thiết kế sơ đồ tư duy khi vào hộp thoại. */
   startMindMap?: boolean;
+  /** Có thì mở ở chế độ sửa tài liệu này (đổi tên, mô tả, loại, vị trí; gỡ hoặc thêm tệp, liên kết). */
+  resource?: PinnedResource;
   onAdd: (input: MaterialInput) => Promise<void>;
   onClose: () => void;
 }
@@ -26,12 +28,15 @@ const KINDS: { id: ResourceKind | 'auto'; label: string }[] = [
 const MAX_ITEMS = 10;
 
 /** Giáo viên / giảng viên cung cấp tài liệu: tải nhiều tệp đa phương tiện (Word, Excel, PowerPoint, PDF, ảnh, âm thanh, video) và/hoặc dán liên kết. */
-export function MaterialModal({ board, defaultLessonId, startMindMap = false, onAdd, onClose }: Props) {
+export function MaterialModal({ board, defaultLessonId, startMindMap = false, resource, onAdd, onClose }: Props) {
+  const editing = !!resource;
+  // Tài liệu cũ chưa có danh sách đính kèm mà chỉ có địa chỉ thì coi như một liên kết.
+  const [keep, setKeep] = useState<Attachment[]>(() => resource ? (resource.attachments && resource.attachments.length > 0 ? resource.attachments : resource.url && resource.url !== '#' ? [linkToAttachment(resource.url)] : []) : []);
   const [mm, setMm] = useState(startMindMap);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [kind, setKind] = useState<ResourceKind | 'auto'>('auto');
-  const [lessonId, setLessonId] = useState(defaultLessonId ?? '');
+  const [title, setTitle] = useState(resource?.title ?? '');
+  const [description, setDescription] = useState(resource?.description ?? '');
+  const [kind, setKind] = useState<ResourceKind | 'auto'>(resource?.kind ?? 'auto');
+  const [lessonId, setLessonId] = useState(resource?.lessonId ?? defaultLessonId ?? '');
   const [files, setFiles] = useState<File[]>([]);
   const [linkText, setLinkText] = useState('');
   const [error, setError] = useState('');
@@ -47,7 +52,7 @@ export function MaterialModal({ board, defaultLessonId, startMindMap = false, on
       const p = validateFile(f);
       if (p) { problems.push(`${f.name}: ${p}`); continue; }
       if (next.some((x) => x.name === f.name && x.size === f.size)) continue;
-      if (next.length + links.length >= MAX_ITEMS) { problems.push(`Tối đa ${MAX_ITEMS} tệp / liên kết cho mỗi tài liệu.`); break; }
+      if (next.length + links.length + keep.length >= MAX_ITEMS) { problems.push(`Tối đa ${MAX_ITEMS} tệp / liên kết cho mỗi tài liệu.`); break; }
       next.push(f);
     }
     setFiles(next);
@@ -62,9 +67,9 @@ export function MaterialModal({ board, defaultLessonId, startMindMap = false, on
     if (!title.trim()) { setError('Hãy nhập tên tài liệu.'); document.getElementById('mt-title')?.focus(); return; }
     const bad = links.find((l) => { const a = linkToAttachment(l); return a.type === 'link' && !a.url; });
     if (bad) { setError(`“${bad.slice(0, 40)}” chưa phải liên kết (cần bắt đầu bằng https://).`); return; }
-    if (files.length + links.length === 0) { setError('Hãy tải lên ít nhất một tệp hoặc dán một liên kết.'); return; }
+    if (files.length + links.length + keep.length === 0) { setError('Tài liệu cần ít nhất một tệp hoặc một liên kết.'); return; }
     setBusy(true);
-    try { await onAdd({ title, description, kind, lessonId: lessonId || null, files, links }); }
+    try { await onAdd({ title, description, kind, lessonId: lessonId || null, files, links, keep: editing ? keep : undefined }); }
     catch (err) { setError(err instanceof Error ? err.message : 'Không thêm được tài liệu.'); setBusy(false); }
   };
 
@@ -76,7 +81,7 @@ export function MaterialModal({ board, defaultLessonId, startMindMap = false, on
   };
 
   return (
-    <ModalShell title="Thêm tài liệu" onClose={onClose} maxWidth="max-w-xl">
+    <ModalShell title={editing ? 'Sửa tài liệu' : 'Thêm tài liệu'} onClose={onClose} maxWidth="max-w-xl">
       <form onSubmit={(e) => void submit(e)} noValidate className="space-y-3">
         <div>
           <label htmlFor="mt-title" className="field-label">Tên tài liệu *</label>
@@ -102,10 +107,26 @@ export function MaterialModal({ board, defaultLessonId, startMindMap = false, on
           <input id="mt-desc" className="input" value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
 
+        {editing && (
+          <div>
+            <p className="field-label">Tệp và liên kết đang có <span className="font-normal text-ink-2">({keep.length})</span></p>
+            {keep.length === 0 ? <p className="text-sm text-ink-3">Đã gỡ hết. Hãy thêm tệp hoặc liên kết mới bên dưới.</p> : (
+              <ul className="space-y-1">
+                {keep.map((a, i) => (
+                  <li key={`${a.name}-${i}`} className="flex items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 text-sm ring-1 ring-brand-100">
+                    <span className="min-w-0 truncate">{a.name} <span className="text-xs text-ink-2">· {a.type === 'link' || a.type === 'embed' ? 'Liên kết' : a.size ? formatSize(a.size) : 'Tệp'}</span></span>
+                    <button type="button" aria-label={`Gỡ ${a.name}`} onClick={() => setKeep((k) => k.filter((_, j) => j !== i))} className="btn-ghost btn-sm !px-2"><Trash2 className="h-3.5 w-3.5" aria-hidden /></button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
         <div onDragOver={(e) => e.preventDefault()} onDrop={onDrop} className="rounded-2xl border-2 border-dashed border-brand-200 bg-brand-50/60 p-3">
           <input ref={input} type="file" multiple accept={ACCEPT_ATTR} onChange={onPick} className="sr-only" aria-label="Chọn tệp tài liệu" />
           <button type="button" onClick={() => setMm(true)} className="btn-primary mb-2 w-full"><Network className="h-4 w-4" aria-hidden /> Tạo sơ đồ tư duy ngay trên bảng</button>
-          <button type="button" onClick={() => input.current?.click()} className="btn-ghost w-full"><Upload className="h-4 w-4" aria-hidden /> Tải nhiều tệp (hoặc kéo thả vào đây)</button>
+          <button type="button" onClick={() => input.current?.click()} className="btn-ghost w-full"><Upload className="h-4 w-4" aria-hidden /> {editing ? 'Thêm tệp mới' : 'Tải nhiều tệp'} (hoặc kéo thả vào đây)</button>
           <p className="mt-1 text-center text-xs text-ink-2">Word, Excel, PowerPoint, PDF, ảnh, âm thanh, video · tối đa 25 MB mỗi tệp</p>
           {files.length > 0 && (
             <ul className="mt-2 space-y-1">
@@ -128,7 +149,7 @@ export function MaterialModal({ board, defaultLessonId, startMindMap = false, on
         {error && <p role="alert" className="text-sm font-bold text-rose-700">{error}</p>}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="btn-ghost">Hủy</button>
-          <button type="submit" disabled={busy} className="btn-primary">{busy ? 'Đang tải lên…' : 'Thêm tài liệu'}</button>
+          <button type="submit" disabled={busy} className="btn-primary">{busy ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Thêm tài liệu'}</button>
         </div>
       </form>
       {mm && <MindMapEditor title={title.trim() || 'Sơ đồ tư duy'} rootText={title.trim() || 'Ý chính'} onDone={mindMapDone} onClose={() => setMm(false)} />}

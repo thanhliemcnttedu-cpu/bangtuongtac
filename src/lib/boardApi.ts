@@ -310,6 +310,18 @@ export async function addResource(boardId: string, input: ResourceInput): Promis
   return toResource(data as CardDb);
 }
 
+export async function updateResource(id: string, input: ResourceInput): Promise<PinnedResource> {
+  const { data, error } = await db()
+    .from('cards')
+    .update({ title: input.title, body: input.description, link_url: input.url || null, file_type: input.kind, lesson_id: input.lessonId || null, attachments: input.attachments ?? [] })
+    .eq('id', id)
+    .eq('kind', 'resource')
+    .select('*')
+    .single();
+  if (error) fail('Không lưu được tài liệu', error.message);
+  return toResource(data as CardDb);
+}
+
 /* ---------- Khách không đăng nhập ---------- */
 
 const SESSION_KEY = 'bt.sessionId';
