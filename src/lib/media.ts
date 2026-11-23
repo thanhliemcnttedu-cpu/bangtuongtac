@@ -17,6 +17,9 @@ export const ALLOWED_MIME = [
   'text/plain', 'text/csv',
 ];
 
+/** Tệp nén (zip, rar, 7z): chỉ giáo viên được đính kèm vào tài liệu; học sinh không nộp được để tránh tệp lạ. */
+export const ARCHIVE_MIME = ['application/zip', 'application/vnd.rar', 'application/x-7z-compressed'];
+
 export function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
@@ -32,6 +35,7 @@ const EXT_MIME: Record<string, string> = {
   ppt: 'application/vnd.ms-powerpoint',
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   txt: 'text/plain', csv: 'text/csv',
+  zip: 'application/zip', rar: 'application/vnd.rar', '7z': 'application/x-7z-compressed',
   mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', aac: 'audio/aac', ogg: 'audio/ogg', oga: 'audio/ogg',
   mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm',
   jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', avif: 'image/avif',
@@ -41,6 +45,7 @@ const EXT_MIME: Record<string, string> = {
 const MIME_ALIAS: Record<string, string> = {
   'audio/x-m4a': 'audio/mp4', 'audio/m4a': 'audio/mp4', 'audio/mp3': 'audio/mpeg', 'audio/x-mpeg': 'audio/mpeg',
   'audio/x-wav': 'audio/wav', 'audio/wave': 'audio/wav', 'video/x-m4v': 'video/mp4', 'image/jpg': 'image/jpeg', 'image/pjpeg': 'image/jpeg',
+  'application/x-zip-compressed': 'application/zip', 'application/x-rar-compressed': 'application/vnd.rar', 'application/x-rar': 'application/vnd.rar',
   'application/x-pdf': 'application/pdf', 'text/x-csv': 'text/csv', 'application/csv': 'text/csv',
 };
 
@@ -53,15 +58,17 @@ export function baseMime(file: File): string {
 }
 
 /** Phần mở rộng cho thuộc tính accept của ô chọn tệp (một số máy không gán MIME cho .docx, .m4a…). */
-export const ACCEPT_ATTR = [...ALLOWED_MIME, ...Object.keys(EXT_MIME).map((e) => `.${e}`)].join(',');
+export const ACCEPT_ATTR = [...ALLOWED_MIME, ...Object.keys(EXT_MIME).filter((e) => !['zip', 'rar', '7z'].includes(e)).map((e) => `.${e}`)].join(',');
+/** Danh sách cho giáo viên: thêm tệp nén. */
+export const ACCEPT_ATTR_TEACHER = [...ALLOWED_MIME, ...ARCHIVE_MIME, ...Object.keys(EXT_MIME).map((e) => `.${e}`)].join(',');
 
-export type DocKind = 'pdf' | 'word' | 'excel' | 'powerpoint' | 'text' | 'csv' | 'other';
+export type DocKind = 'pdf' | 'word' | 'excel' | 'powerpoint' | 'text' | 'csv' | 'archive' | 'other';
 
 export const DOC_LABEL: Record<DocKind, string> = {
-  pdf: 'PDF', word: 'Word', excel: 'Excel', powerpoint: 'PowerPoint', text: 'Văn bản', csv: 'CSV', other: 'Tệp',
+  pdf: 'PDF', word: 'Word', excel: 'Excel', powerpoint: 'PowerPoint', text: 'Văn bản', csv: 'CSV', archive: 'Tệp nén', other: 'Tệp',
 };
 /** Màu nhận diện theo loại tệp (giống thói quen: PDF đỏ, Word xanh dương, Excel xanh lá, PowerPoint cam). */
-export const DOC_HUE: Record<DocKind, number> = { pdf: 355, word: 215, excel: 145, powerpoint: 22, text: 200, csv: 160, other: 210 };
+export const DOC_HUE: Record<DocKind, number> = { pdf: 355, word: 215, excel: 145, powerpoint: 22, text: 200, csv: 160, archive: 30, other: 210 };
 
 /** Phân loại tài liệu theo MIME hoặc đuôi tên tệp. Dùng cho thẻ, trình xem và danh sách đính kèm. */
 export function docKindOf(a: { mime?: string; name: string }): DocKind {
@@ -73,13 +80,14 @@ export function docKindOf(a: { mime?: string; name: string }): DocKind {
   if (mime.includes('presentationml') || mime === 'application/vnd.ms-powerpoint' || ext === 'ppt' || ext === 'pptx') return 'powerpoint';
   if (mime === 'text/csv' || ext === 'csv') return 'csv';
   if (mime === 'text/plain' || ext === 'txt') return 'text';
+  if (ARCHIVE_MIME.includes(mime) || ['zip', 'rar', '7z'].includes(ext)) return 'archive';
   return 'other';
 }
 
 /** Trả về thông báo lỗi tiếng Việt, hoặc null nếu tệp hợp lệ. */
-export function validateFile(file: File): string | null {
+export function validateFile(file: File, allowArchive = false): string | null {
   const mime = baseMime(file);
-  if (!ALLOWED_MIME.includes(mime)) return `Loại tệp "${mime || 'không rõ'}" chưa được hỗ trợ. Dùng ảnh, video, âm thanh, PDF, Word, Excel, PowerPoint hoặc văn bản.`;
+  if (!ALLOWED_MIME.includes(mime) && !(allowArchive && ARCHIVE_MIME.includes(mime))) return `Loại tệp "${mime || 'không rõ'}" chưa được hỗ trợ. Dùng ảnh, video, âm thanh, PDF, Word, Excel, PowerPoint hoặc văn bản.`;
   const limit = mime.startsWith('image/') ? MAX_IMAGE_BYTES : MAX_FILE_BYTES;
   if (file.size > limit) return `Tệp ${formatSize(file.size)} vượt giới hạn ${formatSize(limit)}.`;
   return null;

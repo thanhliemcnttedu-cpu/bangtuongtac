@@ -109,10 +109,10 @@ export interface BoardStore {
  * Chuẩn bị mọi đính kèm của một bài: nén ảnh, kiểm tra loại/dung lượng, tải song song lên kho (dữ liệu thật)
  * hoặc tạo liên kết tạm (bản mẫu). Một tệp lỗi thì cả bài dừng và báo rõ tệp nào; không gửi bài thiếu tệp.
  */
-async function prepareAttachments(input: { boardId: string; files: File[]; links: string[] }, real: boolean): Promise<Attachment[]> {
+async function prepareAttachments(input: { boardId: string; files: File[]; links: string[] }, real: boolean, allowArchive = false): Promise<Attachment[]> {
   const files = await Promise.all(input.files.map(async (raw): Promise<Attachment> => {
     const file = await compressImage(raw);
-    const problem = validateFile(file);
+    const problem = validateFile(file, allowArchive);
     if (problem) throw new Error(`${raw.name}: ${problem}`);
     const base = { type: attachmentTypeOf(file), name: file.name, mime: baseMime(file), size: file.size };
     if (real) {
@@ -432,7 +432,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
   const addResource = useCallback(async (boardId: string, input: MaterialInput): Promise<void> => {
     if (!input.title.trim()) throw new Error('Hãy nhập tên tài liệu.');
     if (input.files.length + input.links.length === 0) throw new Error('Hãy tải lên tệp hoặc dán ít nhất một liên kết.');
-    const attachments = await prepareAttachments({ boardId, files: input.files, links: input.links }, isReal);
+    const attachments = await prepareAttachments({ boardId, files: input.files, links: input.links }, isReal, true);
     const kind: ResourceKind = input.kind === 'auto' ? inferKind(attachments) : input.kind;
     const first = attachments.find((a) => a.type === 'link' || a.type === 'embed');
     const payload = { title: input.title.trim(), description: input.description.trim(), url: first?.url ?? '', kind, lessonId: input.lessonId, attachments };
@@ -447,7 +447,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     if (!input.title.trim()) throw new Error('Hãy nhập tên tài liệu.');
     const kept = input.keep ?? [];
     if (kept.length + input.files.length + input.links.length === 0) throw new Error('Tài liệu cần ít nhất một tệp hoặc một liên kết.');
-    const added = await prepareAttachments({ boardId, files: input.files, links: input.links }, isReal);
+    const added = await prepareAttachments({ boardId, files: input.files, links: input.links }, isReal, true);
     const attachments = [...kept, ...added];
     const kind: ResourceKind = input.kind === 'auto' ? inferKind(attachments) : input.kind;
     const first = attachments.find((a) => a.type === 'link' || a.type === 'embed');
