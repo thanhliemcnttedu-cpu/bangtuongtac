@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
-import { Archive, LayoutDashboard, Plus } from 'lucide-react';
+import { Archive, LayoutDashboard, Phone, Plus } from 'lucide-react';
 import { Logo } from './components/Logo';
 import { BoardSwitcher } from './components/BoardSwitcher';
 import { Dashboard } from './components/Dashboard';
@@ -14,6 +14,14 @@ import { LoginScreen } from './components/LoginScreen';
 // Nạp khi cần (chia nhỏ gói mã để trang mở nhanh).
 const CreateBoardModal = lazy(() => import('./components/CreateBoardModal').then((m) => ({ default: m.CreateBoardModal })));
 const ArchiveManagerModal = lazy(() => import('./components/ArchiveManagerModal').then((m) => ({ default: m.ArchiveManagerModal })));
+
+/** Giờ cập nhật bản này, đổi sang giờ máy của người xem: "23/11/2026 23:40". */
+function buildStamp(): string {
+  const d = new Date(__BUILD_TIME__);
+  if (Number.isNaN(d.getTime())) return '';
+  const p = (n: number): string => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 
 export default function App() {
   const accounts = useAccounts();
@@ -110,6 +118,19 @@ export default function App() {
       </header>
 
       {renderBody()}
+
+      <footer className="border-t border-brand-200/70 bg-white/70 px-4 pb-24 pt-5 text-center text-sm text-ink-2 backdrop-blur-sm print:hidden sm:pb-16">
+        <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+          <span>Phần mềm được phát triển bởi <b className="font-extrabold text-ink">Nguyễn Thanh Liêm</b></span>
+          <span className="hidden text-ink-3 sm:inline" aria-hidden>·</span>
+          <a href="tel:0888358363" className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 font-bold text-brand-700 hover:bg-brand-50 hover:underline" aria-label="Gọi số 0888 358 363">
+            <Phone className="h-4 w-4" aria-hidden /> 0888 358 363
+          </a>
+        </p>
+        <p className="mt-1 text-xs text-ink-3">
+          Phiên bản {__APP_VERSION__}{__BUILD_COMMIT__ ? ` (${__BUILD_COMMIT__})` : ''} · Cập nhật lúc <time dateTime={__BUILD_TIME__}>{buildStamp()}</time>
+        </p>
+      </footer>
 
       <Suspense fallback={null}>
       {creating && <CreateBoardModal extraTemplates={myTemplates} onCreate={createBoard} onClose={() => setCreating(false)} />}
