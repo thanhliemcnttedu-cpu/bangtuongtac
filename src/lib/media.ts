@@ -86,11 +86,11 @@ export function docKindOf(a: { mime?: string; name: string }): DocKind {
 }
 
 /** Trả về thông báo lỗi tiếng Việt, hoặc null nếu tệp hợp lệ. */
-export function validateFile(file: File, allowArchive = false): string | null {
+export function validateFile(file: File, allowArchive = false, maxBytes?: number): string | null {
   const mime = baseMime(file);
   if (!ALLOWED_MIME.includes(mime) && !(allowArchive && ARCHIVE_MIME.includes(mime))) return `Loại tệp "${mime || 'không rõ'}" chưa được hỗ trợ. Dùng ảnh, video, âm thanh, PDF, Word, Excel, PowerPoint hoặc văn bản.`;
-  const limit = mime.startsWith('image/') ? MAX_IMAGE_BYTES : MAX_FILE_BYTES;
-  if (file.size > limit) return `Tệp ${formatSize(file.size)} vượt giới hạn ${formatSize(limit)}. Tệp lớn hơn: hãy tải lên Google Drive hoặc YouTube rồi dán liên kết vào ô “Liên kết”.`;
+  const limit = maxBytes ?? (mime.startsWith('image/') ? MAX_IMAGE_BYTES : MAX_FILE_BYTES);
+  if (file.size > limit) return `Tệp ${formatSize(file.size)} vượt giới hạn ${formatSize(limit)}. Tệp lớn hơn: kết nối cổng Google Drive (Thêm → Lưu lên Google Drive của tôi) để nhận tệp tới 1 GB, hoặc tải lên Drive / YouTube rồi dán liên kết vào ô “Liên kết”.`;
   return null;
 }
 

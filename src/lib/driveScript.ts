@@ -15,6 +15,7 @@ export function buildGatewayScript(secret: string): string {
 // Không cần sửa gì. Dán nguyên đoạn này, rồi bấm Triển khai > Ứng dụng web.
 var SECRET = '${secret}';
 var ROOT_NAME = 'Bảng tương tác lớp học';
+var VERSION = 2;
 
 function doPost(e) {
   var lock = LockService.getScriptLock();
@@ -23,7 +24,9 @@ function doPost(e) {
     if (req.secret !== SECRET) return reply({ ok: false, error: 'Sai mật khẩu cổng' });
     lock.waitLock(25000);
     var out;
-    if (req.action === 'ping') out = { ok: true, root: folderAt([ROOT_NAME]).getUrl() };
+    if (req.action === 'ping') out = { ok: true, version: VERSION, root: folderAt([ROOT_NAME]).getUrl() };
+    else if (req.action === 'begin') out = begin(req);
+    else if (req.action === 'finish') out = finish(req);
     else if (req.action === 'upload') out = upload(req);
     else if (req.action === 'json') out = saveJson(req);
     else if (req.action === 'delete') out = removeFiles(req.ids);
@@ -57,6 +60,31 @@ function upload(req) {
   var file = folder.createFile(blob);
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   return { ok: true, id: file.getId(), url: file.getUrl(), size: file.getSize(), folderUrl: folder.getUrl() };
+}
+
+// Tệp lớn: cổng chỉ mở một "phiên tải lên" của Drive rồi trả địa chỉ phiên về; trình duyệt tự gửi tệp từng phần thẳng lên Google.
+function begin(req) {
+  var folder = folderAt(req.path);
+  var headers = {
+    Authorization: 'Bearer ' + ScriptApp.getOAuthToken(),
+    'X-Upload-Content-Type': req.mime || 'application/octet-stream',
+    'X-Upload-Content-Length': String(req.size)
+  };
+  if (req.origin) headers['Origin'] = req.origin;
+  var res = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
+    method: 'post', contentType: 'application/json; charset=UTF-8', headers: headers,
+    payload: JSON.stringify({ name: req.name, parents: [folder.getId()] }), muteHttpExceptions: true
+  });
+  if (res.getResponseCode() !== 200) throw new Error('Drive từ chối: ' + res.getContentText().slice(0, 200));
+  var h = res.getHeaders();
+  return { ok: true, session: h['Location'] || h['location'], folderUrl: folder.getUrl() };
+}
+
+function finish(req) {
+  var file = DriveApp.getFileById(req.id);
+  if (!inRoot(file)) throw new Error('Tệp không nằm trong thư mục của ứng dụng');
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return { ok: true, id: file.getId(), url: file.getUrl(), size: file.getSize() };
 }
 
 function saveJson(req) {

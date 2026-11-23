@@ -25,7 +25,7 @@ export function saveDefaultGateway(c: GatewayConfig): void { try { localStorage.
 
 /* ---------- Gọi cổng ---------- */
 
-interface Reply { ok: boolean; error?: string; id?: string; url?: string; size?: number; folderUrl?: string; deleted?: number; root?: string }
+interface Reply { ok: boolean; error?: string; id?: string; url?: string; size?: number; folderUrl?: string; deleted?: number; root?: string; version?: number; session?: string }
 
 async function call(cfg: GatewayConfig, body: Record<string, unknown>, tries = 2): Promise<Reply> {
   let last = '';
@@ -56,6 +56,11 @@ export async function gatewayPing(cfg: GatewayConfig): Promise<string> {
   return r.root ?? '';
 }
 
+/** Phiên bản mã cổng đang chạy (cổng cũ chưa có số phiên bản = 1). Tải tệp lớn cần từ phiên bản 2. */
+export async function gatewayVersion(cfg: GatewayConfig): Promise<number> {
+  return (await call(cfg, { action: 'ping' }, 1)).version ?? 1;
+}
+
 export interface GatewayFile { id: string; url: string; size: number; folderUrl: string }
 
 /** Giới hạn mỗi tệp qua cổng (Apps Script nhận tối đa khoảng 50 MB, mã hóa base64 làm tăng thêm 1/3). */
@@ -66,6 +71,58 @@ export async function gatewayUpload(cfg: GatewayConfig, path: string[], name: st
   const r = await call(cfg, { action: 'upload', path, name, mime: blob.type || 'application/octet-stream', data: await toBase64(blob) });
   if (!r.id) throw new Error('Cổng Drive không trả mã tệp.');
   return { id: r.id, url: r.url ?? driveFileUrl(r.id), size: r.size ?? blob.size, folderUrl: r.folderUrl ?? '' };
+}
+
+/** Tệp lớn hơn mức này không gửi một lần qua cổng mà tải theo phiên thẳng lên Drive. */
+export const DRIVE_MAX_BYTES = 1024 * 1024 * 1024;
+const CHUNK = 8 * 1024 * 1024; // bội số của 256 KB theo yêu cầu của Drive
+
+const SESSION_RE = /^https:\/\/www\.googleapis\.com\/upload\/drive\//;
+const DEV_SESSION_RE = /^http:\/\/localhost:\d{2,5}\/session\//;
+
+/** Gửi một phần của tệp vào phiên tải lên. XMLHttpRequest vì phản hồi 308 "đã nhận, gửi tiếp" không xử lý tốt bằng fetch. */
+function putChunk(session: string, blob: Blob, start: number, total: number, onProgress?: (sent: number) => void): Promise<{ done: boolean; id?: string }> {
+  return new Promise((resolve, reject) => {
+    const x = new XMLHttpRequest();
+    x.open('PUT', session);
+    x.setRequestHeader('Content-Range', `bytes ${start}-${start + blob.size - 1}/${total}`);
+    x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress?.(start + e.loaded); };
+    x.onload = () => {
+      if (x.status === 308) { resolve({ done: false }); return; }
+      if (x.status === 200 || x.status === 201) {
+        try { resolve({ done: true, id: (JSON.parse(x.responseText) as { id?: string }).id }); } catch { reject(new Error('Drive trả kết quả lạ.')); }
+        return;
+      }
+      reject(new Error(`Drive từ chối phần tệp (${x.status}).`));
+    };
+    x.onerror = () => reject(new Error('Mất kết nối khi tải tệp lên Drive.'));
+    x.send(blob);
+  });
+}
+
+/** Tải tệp lớn: cổng mở phiên, trình duyệt gửi từng phần 8 MB thẳng lên Google (có thanh tiến độ), cổng đặt quyền xem. */
+export async function gatewayUploadLarge(cfg: GatewayConfig, path: string[], name: string, blob: Blob, onProgress?: (fraction: number) => void): Promise<GatewayFile> {
+  if (blob.size > DRIVE_MAX_BYTES) throw new Error('Tệp quá lớn (tối đa 1 GB).');
+  const ver = await gatewayVersion(cfg);
+  if (ver < 2) throw new Error('Cổng Google Drive của bạn là bản cũ, chưa nhận được tệp lớn. Mở Thêm → Lưu lên Google Drive của tôi → Đổi cổng, dán mã mới đè lên mã cũ trong Apps Script rồi Triển khai phiên bản mới.');
+  const begin = await call(cfg, { action: 'begin', path, name, mime: blob.type || 'application/octet-stream', size: blob.size, origin: window.location.origin });
+  const session = begin.session ?? '';
+  if (!SESSION_RE.test(session) && !(import.meta.env.DEV && DEV_SESSION_RE.test(session))) throw new Error('Cổng trả địa chỉ tải lên không hợp lệ.');
+  let id: string | undefined;
+  for (let start = 0; start < blob.size; start += CHUNK) {
+    const part = blob.slice(start, Math.min(blob.size, start + CHUNK));
+    const r = await putChunk(session, part, start, blob.size, (sent) => onProgress?.(Math.min(1, sent / blob.size)));
+    onProgress?.(Math.min(1, (start + part.size) / blob.size));
+    if (r.done) id = r.id;
+  }
+  if (!id) throw new Error('Drive chưa trả mã tệp sau khi tải xong.');
+  const fin = await call(cfg, { action: 'finish', id });
+  return { id, url: fin.url ?? driveFileUrl(id), size: fin.size ?? blob.size, folderUrl: begin.folderUrl ?? '' };
+}
+
+/** Chọn cách tải theo dung lượng: nhỏ gửi một lần, lớn tải theo phiên. */
+export function gatewaySend(cfg: GatewayConfig, path: string[], name: string, blob: Blob, onProgress?: (fraction: number) => void): Promise<GatewayFile> {
+  return blob.size > GATEWAY_MAX_BYTES ? gatewayUploadLarge(cfg, path, name, blob, onProgress) : gatewayUpload(cfg, path, name, blob);
 }
 
 export async function gatewayJson(cfg: GatewayConfig, path: string[], name: string, text: string): Promise<GatewayFile> {
@@ -118,7 +175,7 @@ export function createGatewayDrive(cfg: GatewayConfig): DriveApi {
     fake: false,
     async ensureFolder(name, parentId) { return parentId ? `${parentId}/${name}` : name; },
     async uploadFile(name, blob, parentId) {
-      const r = await gatewayUpload(cfg, pathOf(parentId), name, blob);
+      const r = await gatewaySend(cfg, pathOf(parentId), name, blob);
       keep(parentId, r.folderUrl);
       return { id: r.id, name, url: r.url };
     },

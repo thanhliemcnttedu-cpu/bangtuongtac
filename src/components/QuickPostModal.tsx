@@ -1,3 +1,4 @@
+import { DRIVE_MAX_BYTES, gatewayOf } from '../lib/drive';
 import { useState } from 'react';
 import type { ClipboardEvent, FormEvent } from 'react';
 import { Send } from 'lucide-react';
@@ -35,7 +36,7 @@ export function QuickPostModal({ board, initialName = '', initialUnit = '', init
   const { draft, set, addFiles, addLinks, removeFile, removeLink, ingest, attachError } = usePostDraft({
     authorName: initialName, unit: initialUnit, title: '', body: '', files: [], links: [], location: null, poll: null,
     taskId: initialTaskId ?? board.tasks.find((t) => checkSubmit(t, '', Date.now()).ok || (t.targetUnits ?? []).length > 0)?.id ?? board.tasks[0]?.id ?? '',
-  });
+  }, gatewayOf(board.settings) ? { maxFile: DRIVE_MAX_BYTES, maxTotal: DRIVE_MAX_BYTES } : undefined); // có cổng Drive: tệp tới 1 GB
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
 

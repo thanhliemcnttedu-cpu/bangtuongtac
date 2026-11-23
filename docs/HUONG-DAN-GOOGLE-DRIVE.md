@@ -23,7 +23,8 @@ Sau khi kết nối:
 Mặc định cổng áp dụng cho mọi bảng của bạn (và các bảng tạo sau).
 
 ## Cần biết
-- **Tệp tối đa khoảng 30 MB** mỗi tệp qua cổng. Tệp lớn hơn tự quay về kho hệ thống (tối đa 50 MB); lớn nữa thì dán liên kết Drive hoặc YouTube.
+- **Tệp lớn tới 1 GB** (mã cổng phiên bản 2 trở lên): tệp trên 30 MB được tải theo từng phần 8 MB thẳng lên Drive, có thể mất vài phút tùy mạng. Tài liệu giáo viên chỉ chuyển sang Drive khi tệp lớn hơn 50 MB; bài nộp của học sinh luôn vào Drive.
+- **Đã dùng bản cũ của cổng?** Dán mã mới đè lên mã cũ trong Apps Script, rồi **Triển khai → Quản lý lượt triển khai →** bút chì **→ Phiên bản mới → Triển khai** (địa chỉ giữ nguyên). Chưa cập nhật thì tệp lớn trên 30 MB báo lỗi rõ ràng, tệp nhỏ vẫn chạy bình thường.
 - **Mật khẩu cổng** do trang tự tạo và nằm trong mã bạn dán. Học sinh mở bảng cần mật khẩu này để gửi tệp nên nó nằm trong cài đặt công khai của bảng. Nó chỉ ngăn người lạ không có link bảng gửi tệp rác. Nếu bị lạm dụng: vào Apps Script bấm **Triển khai → Quản lý lượt triển khai** để vô hiệu hóa, rồi kết nối lại cổng mới.
 - **Xem tệp:** cổng đặt quyền "ai có liên kết đều xem". Mã tệp là chuỗi dài khó đoán, nhưng ai có liên kết thì xem được. Có thể đổi quyền từng tệp trong Drive.
 - Cổng **chỉ làm việc trong thư mục "Bảng tương tác lớp học"**: không đọc, không xóa gì ngoài thư mục đó.

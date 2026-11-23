@@ -35,7 +35,8 @@ const sameFile = (a: File, b: File): boolean => a.name === b.name && a.size === 
  * Trạng thái form nộp bài + toàn bộ logic thêm/bớt đính kèm, dán từ clipboard, kiểm tra giới hạn.
  * Mọi đường vào (nút chọn tệp, kéo thả, Ctrl+V, nút Dán, máy ảnh, ghi hình, bảng vẽ) đều đi qua addFiles/addLinks.
  */
-export function usePostDraft(initial: PostDraft) {
+/** `limits` có khi bảng đã kết nối cổng Drive: nới giới hạn mỗi tệp và tổng dung lượng một bài. */
+export function usePostDraft(initial: PostDraft, limits?: { maxFile: number; maxTotal: number }) {
   const [draft, setDraftState] = useState<PostDraft>(initial);
   const [attachError, setAttachError] = useState('');
   const ref = useRef<PostDraft>(initial);
@@ -55,11 +56,12 @@ export function usePostDraft(initial: PostDraft) {
     const files = [...cur.files];
     let total = files.reduce((n, f) => n + f.size, 0);
     incoming.map(uniqueName).forEach((f) => {
-      const problem = validateFile(f);
+      const problem = validateFile(f, false, limits?.maxFile);
       if (problem) { problems.push(`${f.name}: ${problem}`); return; }
       if (files.some((x) => sameFile(x, f))) return;
       if (files.length + cur.links.length >= MAX_ATTACHMENTS) { problems.push(`Mỗi bài tối đa ${MAX_ATTACHMENTS} đính kèm.`); return; }
-      if (total + f.size > MAX_TOTAL_BYTES) { problems.push(`${f.name}: tổng dung lượng một bài tối đa ${formatSize(MAX_TOTAL_BYTES)}.`); return; }
+      const maxTotal = limits?.maxTotal ?? MAX_TOTAL_BYTES;
+      if (total + f.size > maxTotal) { problems.push(`${f.name}: tổng dung lượng một bài tối đa ${formatSize(maxTotal)}.`); return; }
       files.push(f);
       total += f.size;
     });

@@ -6,6 +6,7 @@ import { MindMapEditor } from './mindmap/MindMapEditor';
 import type { Attachment, BoardData, PinnedResource, ResourceKind } from '../types/board';
 import type { MaterialInput } from '../hooks/useBoardStore';
 import { ACCEPT_ATTR_TEACHER, formatSize, validateFile } from '../lib/media';
+import { DRIVE_MAX_BYTES, gatewayOf } from '../lib/drive';
 import { linkToAttachment, normalizeLink } from '../lib/embeds';
 import { ModalShell } from './ModalShell';
 
@@ -56,7 +57,7 @@ export function MaterialModal({ board, defaultLessonId, startMindMap = false, re
     const problems: string[] = [];
     const next = [...files];
     for (const f of list) {
-      const p = validateFile(f, true);
+      const p = validateFile(f, true, gatewayOf(board.settings) ? DRIVE_MAX_BYTES : undefined);
       if (p) { problems.push(`${f.name}: ${p}`); continue; }
       if (next.some((x) => x.name === f.name && x.size === f.size)) continue;
       if (next.length + links.length + keep.length >= MAX_ITEMS) { problems.push(`Tối đa ${MAX_ITEMS} tệp / liên kết cho mỗi tài liệu.`); break; }
@@ -160,7 +161,7 @@ export function MaterialModal({ board, defaultLessonId, startMindMap = false, re
           <input ref={input} type="file" multiple accept={ACCEPT_ATTR_TEACHER} onChange={onPick} className="sr-only" aria-label="Chọn tệp tài liệu" />
           <button type="button" onClick={() => setMm(true)} className="btn-primary mb-2 w-full"><Network className="h-4 w-4" aria-hidden /> Tạo sơ đồ tư duy ngay trên bảng</button>
           <button type="button" onClick={() => input.current?.click()} className="btn-ghost w-full"><Upload className="h-4 w-4" aria-hidden /> {editing ? 'Thêm tệp mới' : 'Tải nhiều tệp'} (hoặc kéo thả vào đây)</button>
-          <p className="mt-1 text-center text-xs text-ink-2">Word, Excel, PowerPoint, PDF, ảnh, âm thanh, video, tệp nén (.zip, .rar, .7z) · tối đa 50 MB mỗi tệp; tệp lớn hơn hãy dán liên kết Google Drive / YouTube</p>
+          <p className="mt-1 text-center text-xs text-ink-2">Word, Excel, PowerPoint, PDF, ảnh, âm thanh, video, tệp nén (.zip, .rar, .7z) · tối đa 50 MB mỗi tệp{gatewayOf(board.settings) ? ' (cổng Drive đang bật: tệp lớn tới 1 GB sẽ được gửi thẳng lên Drive của bạn, có thể mất vài phút)' : '; tệp lớn hơn: kết nối cổng Google Drive hoặc dán liên kết Drive / YouTube'}</p>
           {files.length > 0 && (
             <ul className="mt-2 space-y-1">
               {files.map((f, i) => (

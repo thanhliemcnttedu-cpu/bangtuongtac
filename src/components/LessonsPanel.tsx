@@ -102,11 +102,12 @@ function MaterialCard({ r, canManage, onOpen, onDelete, onEdit }: { r: PinnedRes
       </div>
       <div className="mt-auto flex flex-col gap-1.5 px-3 pb-3">
         {actions.map((a, i) => {
-          const isLink = a.type === 'link' || a.type === 'embed';
+          // Tệp đã nằm trên Drive (có driveId) vẫn là một tệp để tải về, dù được nhúng xem trước.
+          const isLink = (a.type === 'link' || a.type === 'embed') && !a.driveId;
           const main = i === 0;
           const cls = main ? (col ? 'btn btn-sm w-full !justify-between' : 'btn-primary btn-sm w-full !justify-between') : 'btn-ghost btn-sm w-full !justify-between';
           return (
-            <a key={`${a.url}-${i}`} href={isLink ? a.url : downloadHref(a.url as string, a.name)} {...(isLink ? {} : { download: a.name })} target="_blank" rel="noopener noreferrer" className={cls} style={main ? mainStyle : undefined}>
+            <a key={`${a.url}-${i}`} href={isLink ? a.url : a.driveId ? `https://drive.google.com/uc?export=download&id=${a.driveId}` : downloadHref(a.url as string, a.name)} {...(isLink ? {} : { download: a.name })} target="_blank" rel="noopener noreferrer" className={cls} style={main ? mainStyle : undefined}>
               <span className="flex min-w-0 items-center gap-1.5">{isLink ? <ExternalLink className="h-4 w-4 shrink-0" aria-hidden /> : <Download className="h-4 w-4 shrink-0" aria-hidden />}<span className="truncate">{a.label || (isLink ? 'Mở liên kết' : 'Tải về')}</span></span>
               <span className={`max-w-[50%] shrink-0 truncate text-[11px] font-bold ${main ? 'opacity-90' : 'text-ink-2'}`}>{note(a)}</span>
             </a>

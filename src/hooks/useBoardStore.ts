@@ -8,9 +8,9 @@ import type { BoardTemplate } from '../data/boardTemplates';
 import { isSupabaseConfigured } from '../lib/supabase';
 import * as api from '../lib/boardApi';
 import { linkToAttachment } from '../lib/embeds';
-import { attachmentTypeOf, baseMime, compressImage, docKindOf, formatSize, validateFile } from '../lib/media';
+import { MAX_FILE_BYTES, attachmentTypeOf, baseMime, compressImage, docKindOf, formatSize, validateFile } from '../lib/media';
 import { removeStoredFiles, uploadAttachment } from '../lib/storage';
-import { driveAttachment, gatewayDelete, gatewayOf, gatewayUpload, getDrive, loadDefaultGateway } from '../lib/drive';
+import { DRIVE_MAX_BYTES, driveAttachment, gatewayDelete, gatewayOf, gatewaySend, getDrive, loadDefaultGateway } from '../lib/drive';
 import type { GatewayConfig } from '../lib/drive';
 import { ROOT_FOLDER, boardFolderName, safe } from '../lib/driveBackup';
 import { checkComment, textFlagged } from '../lib/moderation';
@@ -151,18 +151,21 @@ export interface BoardStore {
 async function prepareAttachments(
   input: { boardId: string; files: File[]; links: string[] }, real: boolean, allowArchive = false,
   /** Có cổng Drive thì tệp đi thẳng vào Drive của giáo viên (lỗi cổng thì quay về kho Supabase để học sinh vẫn nộp được). */
-  drive?: { cfg: GatewayConfig; folder: string[]; author: string },
+  drive?: { cfg: GatewayConfig; folder: string[]; author: string; /** all = mọi tệp vào Drive (bài nộp); big = chỉ tệp lớn hơn giới hạn của kho (tài liệu giáo viên) */ mode: 'all' | 'big' },
 ): Promise<Attachment[]> {
   const files = await Promise.all(input.files.map(async (raw): Promise<Attachment> => {
     const file = await compressImage(raw);
-    const problem = validateFile(file, allowArchive);
+    const problem = validateFile(file, allowArchive, drive ? DRIVE_MAX_BYTES : undefined);
     if (problem) throw new Error(`${raw.name}: ${problem}`);
     const base = { type: attachmentTypeOf(file), name: file.name, mime: baseMime(file), size: file.size };
-    if (drive) {
+    if (drive && (drive.mode === 'all' || file.size > MAX_FILE_BYTES)) {
       try {
-        const up = await gatewayUpload(drive.cfg, drive.folder, `${safe(drive.author, 30)} - ${safe(file.name, 60)}`, file);
+        const up = await gatewaySend(drive.cfg, drive.folder, `${safe(drive.author, 30)} - ${safe(file.name, 60)}`, file);
         return driveAttachment({ ...base }, up.id);
-      } catch { /* cổng không nhận được: dùng kho Supabase bên dưới */ }
+      } catch (e) {
+        // Tệp lớn không có chỗ dự phòng: báo lỗi rõ. Tệp vừa thì quay về kho Supabase bên dưới để vẫn nộp được.
+        if (file.size > MAX_FILE_BYTES) throw new Error(`${raw.name}: ${e instanceof Error ? e.message : 'không tải được lên Drive'}`);
+      }
     }
     if (real) {
       const up = await uploadAttachment(input.boardId, file);
@@ -177,6 +180,15 @@ async function prepareAttachments(
 function inferKind(list: Attachment[]): ResourceKind {
   const a = list[0];
   if (!a) return 'link';
+  // Tệp đã nằm trên Drive (nhúng xem trước) vẫn phân loại theo loại tệp, không coi là liên kết.
+  if (a.driveId) {
+    if (a.type === 'image') return 'image';
+    const m = a.mime ?? '';
+    if (m.startsWith('video/')) return 'video';
+    if (m.startsWith('audio/')) return 'audio';
+    const k = docKindOf(a);
+    return k === 'pdf' ? 'pdf' : k === 'powerpoint' ? 'slide' : 'file';
+  }
   if (a.type === 'video' || a.type === 'embed') return a.type === 'video' || /youtube|vimeo/.test(a.embed?.provider ?? '') ? 'video' : 'link';
   if (a.type === 'audio') return 'audio';
   if (a.type === 'image') return 'image';
@@ -308,7 +320,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     }
     const gb = boards.find((b) => b.id === input.boardId);
     const cfg = gatewayOf(gb?.settings);
-    const attachments = await prepareAttachments(input, isReal, false, gb && cfg ? { cfg, folder: [ROOT_FOLDER, boardFolderName(gb), 'Bài nộp'], author: input.authorName } : undefined);
+    const attachments = await prepareAttachments(input, isReal, false, gb && cfg ? { cfg, folder: [ROOT_FOLDER, boardFolderName(gb), 'Bài nộp'], author: input.authorName, mode: 'all' } : undefined);
     // off: hiện ngay · manual: chờ giáo viên · auto: hệ thống đọc chữ, sạch thì duyệt luôn, nghi ngờ thì giữ lại.
     const status: CardStatus = asManager || moderation === 'off' ? 'approved'
       : moderation === 'manual' ? 'pending'
@@ -500,7 +512,10 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
   const addResource = useCallback(async (boardId: string, input: MaterialInput): Promise<void> => {
     if (!input.title.trim()) throw new Error('Hãy nhập tên tài liệu.');
     if (input.files.length + input.links.length === 0) throw new Error('Hãy tải lên tệp hoặc dán ít nhất một liên kết.');
-    const prepared = await prepareAttachments({ boardId, files: input.files, links: input.links }, isReal, true);
+    const rb = boards.find((b) => b.id === boardId);
+    const rcfg = gatewayOf(rb?.settings);
+    const drive = rb && rcfg ? { cfg: rcfg, folder: [ROOT_FOLDER, boardFolderName(rb), 'Tài liệu'], author: 'Giáo viên', mode: 'big' as const } : undefined;
+    const prepared = await prepareAttachments({ boardId, files: input.files, links: input.links }, isReal, true, drive);
     const attachments = withLabels(prepared, input.fileLabels, input.linkLabels, input.files.length);
     const kind: ResourceKind = input.kind === 'auto' ? inferKind(attachments) : input.kind;
     const first = attachments.find((a) => a.type === 'link' || a.type === 'embed');
@@ -511,13 +526,16 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
       : { id: `r-${Date.now()}`, kind, title: payload.title, description: payload.description, url: payload.url || attachments[0]?.url || '#', lessonId: input.lessonId ?? undefined, attachments, sizeLabel: sizeLabelOf(attachments), ...look, steps: look.steps.length > 0 ? look.steps : undefined };
     patch(boardId, (b) => ({ ...b, pinned: [...b.pinned, { ...res, sizeLabel: res.sizeLabel ?? sizeLabelOf(attachments) }] }));
     await note(boardId, 'ghim_tai_lieu', input.title, true);
-  }, [isReal, patch, note]);
+  }, [isReal, boards, patch, note]);
 
   const updateResource = useCallback(async (boardId: string, resourceId: string, input: MaterialInput): Promise<void> => {
     if (!input.title.trim()) throw new Error('Hãy nhập tên tài liệu.');
     const kept = input.keep ?? [];
     if (kept.length + input.files.length + input.links.length === 0) throw new Error('Tài liệu cần ít nhất một tệp hoặc một liên kết.');
-    const added = withLabels(await prepareAttachments({ boardId, files: input.files, links: input.links }, isReal, true), input.fileLabels, input.linkLabels, input.files.length);
+    const ub = boards.find((b) => b.id === boardId);
+    const ucfg = gatewayOf(ub?.settings);
+    const udrive = ub && ucfg ? { cfg: ucfg, folder: [ROOT_FOLDER, boardFolderName(ub), 'Tài liệu'], author: 'Giáo viên', mode: 'big' as const } : undefined;
+    const added = withLabels(await prepareAttachments({ boardId, files: input.files, links: input.links }, isReal, true, udrive), input.fileLabels, input.linkLabels, input.files.length);
     const attachments = [...kept, ...added];
     const kind: ResourceKind = input.kind === 'auto' ? inferKind(attachments) : input.kind;
     const first = attachments.find((a) => a.type === 'link' || a.type === 'embed');
@@ -528,7 +546,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
       : { id: resourceId, kind, title: payload.title, description: payload.description, url: payload.url || attachments[0]?.url || '#', lessonId: input.lessonId ?? undefined, attachments, ...look, steps: look.steps.length > 0 ? look.steps : undefined };
     patch(boardId, (b) => ({ ...b, pinned: b.pinned.map((r) => (r.id === resourceId ? { ...res, sizeLabel: sizeLabelOf(attachments) } : r)) }));
     await note(boardId, 'sua_tai_lieu', input.title, true);
-  }, [isReal, patch, note]);
+  }, [isReal, boards, patch, note]);
 
   const removeResource = useCallback(async (boardId: string, resourceId: string): Promise<void> => {
     if (isReal) await api.deleteResource(resourceId);
