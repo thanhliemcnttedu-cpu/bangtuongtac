@@ -27,7 +27,7 @@ export function ModerationPicker({ value, onChange, disabled = false, name }: Pr
             <input type="radio" name={name} className="mt-1 h-4 w-4 accent-brand-600" checked={on} onChange={() => onChange(m)} />
             <Icon className="mt-0.5 h-5 w-5 shrink-0 text-brand-700" aria-hidden />
             <span>
-              <span className="block text-sm font-extrabold">{MODERATION_META[m].label}{m === 'manual' && <span className="ml-2 chip bg-white text-ink-2 ring-brand-200">Mặc định</span>}</span>
+              <span className="block text-sm font-extrabold">{MODERATION_META[m].label}{m === 'off' && <span className="ml-2 chip bg-white text-ink-2 ring-brand-200">Mặc định</span>}</span>
               <span className="block text-xs text-ink-2">{MODERATION_META[m].desc}</span>
             </span>
           </label>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { Check, Copy, Eye, Lock, Maximize2, PlusCircle } from 'lucide-react';
+import { Check, Copy, Download, Eye, Lock, Maximize2, PlusCircle } from 'lucide-react';
 import type { BoardAccess, BoardData, CollabRole, LinkMode, ModerationMode } from '../types/board';
 import { ModalShell } from './ModalShell';
 import { TeacherSharePanel } from './TeacherSharePanel';
@@ -53,6 +53,37 @@ export function ShareBoardModal({ board, canManage, onChangeLinkMode, onChangeMo
     }
   };
 
+  /** Tải mã QR về máy: ảnh PNG 1200×1400 có tên bảng ở trên và link ở dưới, in ra dán lớp được ngay. */
+  const downloadQr = async (): Promise<void> => {
+    const data = await QRCode.toDataURL(url, { width: 1000, margin: 1, color: { dark: '#0a1730', light: '#ffffff' } });
+    const img = new Image();
+    await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = () => rej(new Error('qr')); img.src = data; });
+    try { await document.fonts.load('700 56px "Be Vietnam Pro"'); } catch { /* dùng phông dự phòng */ }
+    const W = 1200; const H = 1450;
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    if (!g) return;
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#0a1730'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = '800 58px "Be Vietnam Pro", system-ui, sans-serif';
+    const words = board.title.split(' '); const lines: string[] = []; let cur = '';
+    for (const w of words) { const t = cur ? `${cur} ${w}` : w; if (g.measureText(t).width > W - 160 && cur) { lines.push(cur); cur = w; } else cur = t; }
+    lines.push(cur);
+    lines.slice(0, 3).forEach((l, i) => g.fillText(l, W / 2, 110 + i * 72));
+    g.drawImage(img, 100, 290, 1000, 1000);
+    g.fillStyle = '#1668f2'; g.font = '700 40px "Be Vietnam Pro", system-ui, sans-serif';
+    g.fillText('Quét mã để mở bảng và nộp bài', W / 2, 1345);
+    g.fillStyle = '#46556e'; g.font = '500 30px "Be Vietnam Pro", system-ui, sans-serif';
+    g.fillText(url, W / 2, 1395, W - 120);
+    const blob = await new Promise<Blob | null>((res) => c.toBlob(res, 'image/png'));
+    if (!blob) return;
+    const slug = board.title.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'bang';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = `ma-qr-${slug}.png`;
+    document.body.appendChild(a); a.click(); a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+
   if (big) {
     return (
       <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-6 bg-white p-6" role="dialog" aria-modal="true" aria-label="Mã QR toàn màn hình" onClick={() => setBig(false)}>
@@ -76,11 +107,16 @@ export function ShareBoardModal({ board, canManage, onChangeLinkMode, onChangeMo
       {tab === 'students' && (
       <div className="grid gap-5 sm:grid-cols-[200px_1fr]">
         <div className="flex flex-col items-center gap-2">
-          <div className="flex aspect-square w-full max-w-[200px] items-center justify-center overflow-hidden rounded-2xl border-[1.5px] border-brand-200 bg-white p-2">
-            {qr ? <img src={qr} alt="Mã QR vào bảng" className="h-full w-full" /> : <span className="text-xs text-ink-3">Đang tạo mã QR…</span>}
-          </div>
+          {/* Rê chuột vào mã QR thì phóng to ngay tại chỗ; bấm vào thì chiếu toàn màn hình. */}
+          <button type="button" onClick={() => setBig(true)} aria-label="Phóng to mã QR" title="Rê chuột để phóng to · bấm để chiếu toàn màn hình"
+            className="group relative flex aspect-square w-full max-w-[200px] items-center justify-center rounded-2xl border-[1.5px] border-brand-200 bg-white p-2 hover:z-20 focus-visible:z-20">
+            {qr ? <img src={qr} alt="Mã QR vào bảng" className="h-full w-full origin-top-left rounded-lg bg-white transition duration-200 ease-out group-hover:scale-[1.9] group-hover:shadow-lift group-hover:ring-4 group-hover:ring-brand-200 group-focus-visible:scale-[1.9]" /> : <span className="text-xs text-ink-3">Đang tạo mã QR…</span>}
+          </button>
           <button type="button" onClick={() => setBig(true)} className="btn-ghost btn-sm w-full max-w-[200px]">
             <Maximize2 className="h-3.5 w-3.5" aria-hidden /> Chiếu mã QR lớn
+          </button>
+          <button type="button" onClick={() => void downloadQr()} disabled={!qr} className="btn-primary btn-sm w-full max-w-[200px]">
+            <Download className="h-3.5 w-3.5" aria-hidden /> Tải mã QR về máy
           </button>
         </div>
 

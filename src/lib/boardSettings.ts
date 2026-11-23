@@ -16,7 +16,8 @@ export const DEFAULT_SETTINGS: BoardSettings = {
   showAuthor: true,
   showTime: true,
   vennLabels: ['Nhóm A', 'Nhóm B'],
-  moderation: 'manual',
+  // Mặc định cho bảng MỚI: tắt kiểm duyệt, học sinh nộp là hiện ngay (giáo viên bật kiểm duyệt khi cần).
+  moderation: 'off',
   peerStars: true,
   peerComments: true,
   showGrades: false,
@@ -96,7 +97,8 @@ export function parseSettings(raw: unknown): BoardSettings {
     showAuthor: r.showAuthor !== false,
     showTime: r.showTime !== false,
     vennLabels: parseVennLabels(r.vennLabels),
-    moderation: pick(r.moderation, ['off', 'manual', 'auto'], DEFAULT_SETTINGS.moderation),
+    // Bảng cũ chưa lưu mục này thì máy chủ đang áp 'manual', giữ nguyên để giao diện khớp máy chủ.
+    moderation: pick(r.moderation, ['off', 'manual', 'auto'], 'manual'),
     peerStars: r.peerStars !== false,
     peerComments: r.peerComments !== false,
     showGrades: r.showGrades === true,
