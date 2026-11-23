@@ -10,43 +10,45 @@ import type { BoardMetaPatch } from '../lib/boardApi';
 import { DataBoardSummary } from './DataBoardSummary';
 import { MultiFilterBar } from './MultiFilterBar';
 import { LessonsPanel } from './LessonsPanel';
-import { LessonModal } from './LessonModal';
-import { TaskModal } from './TaskModal';
-import { MaterialModal } from './MaterialModal';
 import { isAssigned } from '../lib/lessons';
 import { GridAndColumnsView } from './GridAndColumnsView';
-import { SubmissionTableView } from './SubmissionTableView';
-import { GroupSummaryView } from './GroupSummaryView';
-import { TimelineView } from './views/TimelineView';
-import { SlidesView } from './views/SlidesView';
-import { CanvasView } from './views/CanvasView';
-import { MindMapView } from './views/MindMapView';
-import { VennView } from './views/VennView';
 
 // Bản đồ (Leaflet) chỉ nạp khi mở kiểu xem Bản đồ.
 const MapView = lazy(() => import('./views/MapView'));
-import { QuickPostModal } from './QuickPostModal';
 import type { PostDraft } from '../hooks/usePostDraft';
-import { ShareBoardModal } from './ShareBoardModal';
-import { SlidePresentationModal } from './SlidePresentationModal';
-import { RosterImportModal } from './RosterImportModal';
-import { BoardSettingsModal } from './BoardSettingsModal';
 import type { FeedbackActions } from './FeedbackPanel';
 import { getMyCardIds } from '../lib/peer';
 import { BoardMenu } from './BoardMenu';
 import { ConfirmModal } from './ConfirmModal';
-import { DriveBackupModal } from './DriveBackupModal';
-import { EditCodeModal } from './EditCodeModal';
-import { EditSubmissionModal } from './EditSubmissionModal';
 import { myCodes, rememberCode } from '../lib/editCode';
 import { DRIVE_MAX_BYTES, gatewayOf } from '../lib/drive';
 import type { CleanupReport } from '../hooks/useBoardStore';
-import { GradebookModal } from './GradebookModal';
-import { ActivityModal } from './ActivityModal';
-import { DuplicateBoardModal } from './DuplicateBoardModal';
-import { BoardDetailsModal } from './BoardDetailsModal';
 import { buildReport, reportFilename } from '../lib/report';
 import { downloadCsv } from '../lib/csv';
+
+// Nạp khi cần (chia nhỏ gói mã để trang mở nhanh).
+const LessonModal = lazy(() => import('./LessonModal').then((m) => ({ default: m.LessonModal })));
+const TaskModal = lazy(() => import('./TaskModal').then((m) => ({ default: m.TaskModal })));
+const MaterialModal = lazy(() => import('./MaterialModal').then((m) => ({ default: m.MaterialModal })));
+const SubmissionTableView = lazy(() => import('./SubmissionTableView').then((m) => ({ default: m.SubmissionTableView })));
+const GroupSummaryView = lazy(() => import('./GroupSummaryView').then((m) => ({ default: m.GroupSummaryView })));
+const TimelineView = lazy(() => import('./views/TimelineView').then((m) => ({ default: m.TimelineView })));
+const SlidesView = lazy(() => import('./views/SlidesView').then((m) => ({ default: m.SlidesView })));
+const CanvasView = lazy(() => import('./views/CanvasView').then((m) => ({ default: m.CanvasView })));
+const MindMapView = lazy(() => import('./views/MindMapView').then((m) => ({ default: m.MindMapView })));
+const VennView = lazy(() => import('./views/VennView').then((m) => ({ default: m.VennView })));
+const QuickPostModal = lazy(() => import('./QuickPostModal').then((m) => ({ default: m.QuickPostModal })));
+const ShareBoardModal = lazy(() => import('./ShareBoardModal').then((m) => ({ default: m.ShareBoardModal })));
+const SlidePresentationModal = lazy(() => import('./SlidePresentationModal').then((m) => ({ default: m.SlidePresentationModal })));
+const RosterImportModal = lazy(() => import('./RosterImportModal').then((m) => ({ default: m.RosterImportModal })));
+const BoardSettingsModal = lazy(() => import('./BoardSettingsModal').then((m) => ({ default: m.BoardSettingsModal })));
+const DriveBackupModal = lazy(() => import('./DriveBackupModal').then((m) => ({ default: m.DriveBackupModal })));
+const EditCodeModal = lazy(() => import('./EditCodeModal').then((m) => ({ default: m.EditCodeModal })));
+const EditSubmissionModal = lazy(() => import('./EditSubmissionModal').then((m) => ({ default: m.EditSubmissionModal })));
+const GradebookModal = lazy(() => import('./GradebookModal').then((m) => ({ default: m.GradebookModal })));
+const ActivityModal = lazy(() => import('./ActivityModal').then((m) => ({ default: m.ActivityModal })));
+const DuplicateBoardModal = lazy(() => import('./DuplicateBoardModal').then((m) => ({ default: m.DuplicateBoardModal })));
+const BoardDetailsModal = lazy(() => import('./BoardDetailsModal').then((m) => ({ default: m.BoardDetailsModal })));
 
 const EDIT_WINDOW_MS = 15 * 60_000; // khách được xóa bài của mình trong 15 phút đầu
 const PROFILE_KEY = 'bt.lastProfile';
@@ -115,6 +117,14 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
   const [codeShown, setCodeShown] = useState<{ code: string; name: string; title: string; note?: string } | null>(null);
 
   const access = savedBoard.access ?? 'owner';
+  // Rảnh thì nạp trước các hộp thoại hay dùng để bấm vào là mở ngay (nộp bài cho học sinh; giao bài, tài liệu cho giáo viên).
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      if (role === 'guest') { void import('./QuickPostModal'); void import('./EditSubmissionModal'); void import('./EditCodeModal'); }
+      else if (role === 'owner') { void import('./TaskModal'); void import('./LessonModal'); void import('./MaterialModal'); void import('./ShareBoardModal'); void import('./SlidePresentationModal'); }
+    }, 1500);
+    return () => window.clearTimeout(id);
+  }, [role]);
   useEffect(() => {
     if (role !== 'guest') { setRosterNames([]); return; }
     let alive = true;
@@ -430,6 +440,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
           </div>
         ))}
         <section aria-label="Bài nộp và sản phẩm" aria-live="polite">
+          <Suspense fallback={<p role="status" className="glass rounded-3xl p-10 text-center text-ink-2">Đang mở…</p>}>
           {(effectiveView === 'wall' || effectiveView === 'grid' || effectiveView === 'columns') && (
             <GridAndColumnsView rows={filtered} board={visibleBoard} mode={effectiveView} {...rowActions} />
           )}
@@ -445,6 +456,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
             </Suspense>
           )}
           {effectiveView === 'summary' && <GroupSummaryView rows={filtered} board={visibleBoard} onPickUnit={(u) => { patchFilters({ search: u }); setView('table'); }} />}
+          </Suspense>
         </section>
 
         <p className="pb-4 text-center text-xs text-ink-3">{store.isReal ? 'Dữ liệu lưu trên Supabase' : 'Bản giao diện mẫu · dữ liệu giả lập, chưa lưu lên máy chủ'}</p>
@@ -464,6 +476,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
         </button>
       )}
 
+      <Suspense fallback={null}>
       {modal === 'duplicate' && <DuplicateBoardModal board={savedBoard} onClose={() => setModal(null)}
         onDuplicate={async (opts) => { const copy = await store.duplicateBoard(savedBoard, opts); setModal(null); onSelectBoard(copy.id); }} />}
       {modal === 'activity' && <ActivityModal load={() => store.loadActivity(savedBoard.id)} onClose={() => setModal(null)} />}
@@ -579,6 +592,8 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
       {slideStart && slideItems.length > 0 && (
         <SlidePresentationModal items={slideItems} startCardId={slideStart} board={visibleBoard} canManage={canManage} onSetStatus={setStatus} onVote={onVote} feedback={feedback} onClose={() => setSlideStart(null)} />
       )}
+
+      </Suspense>
 
       {toast && <div role="status" className="pop-in fixed bottom-24 left-1/2 z-[70] max-w-[92vw] -translate-x-1/2 rounded-full bg-ink px-5 py-3 text-sm font-bold text-white shadow-lift">{toast}</div>}
     </div>

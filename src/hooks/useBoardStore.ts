@@ -21,6 +21,8 @@ import { newEditCode, normalizeEditCode, normalizeName } from '../lib/editCode';
 
 /** Cứ mỗi chừng này mili giây trang hỏi "dấu vân tay" của bảng; có đổi thì tải lại êm, không cần bấm F5. */
 const POLL_MS = 5000;
+/** Học sinh không đăng nhập đông hơn nhiều giáo viên: hỏi thưa hơn một chút để máy chủ nhẹ khi cả trường vào cùng lúc. */
+const POLL_GUEST_MS = 8000;
 /** Chưa chạy lệnh SQL cập nhật thì không có dấu vân tay: tải lại cả bảng thưa hơn để đỡ tốn dữ liệu. */
 const POLL_FALLBACK_MS = 20000;
 
@@ -348,8 +350,10 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
         if (changed) await refresh();
       } catch { /* mất mạng một lúc: lần sau thử lại */ } finally { busy = false; }
     };
-    const timer = window.setInterval(() => { void tick(); }, POLL_MS);
+    const timer = window.setInterval(() => { void tick(); }, userId ? POLL_MS : POLL_GUEST_MS);
     const onShow = (): void => { if (!document.hidden) void tick(); };
+    window.addEventListener('focus', onShow);
+    window.addEventListener('online', onShow);
     const onDown = (): void => { down = true; };
     const onUp = (): void => { down = false; };
     document.addEventListener('visibilitychange', onShow);
@@ -360,6 +364,8 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
       stop = true;
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', onShow);
+      window.removeEventListener('focus', onShow);
+      window.removeEventListener('online', onShow);
       document.removeEventListener('pointerdown', onDown, true);
       document.removeEventListener('pointerup', onUp, true);
       document.removeEventListener('pointercancel', onUp, true);

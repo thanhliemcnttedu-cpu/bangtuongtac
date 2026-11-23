@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { Archive, LayoutDashboard, Plus } from 'lucide-react';
 import { Logo } from './components/Logo';
 import { BoardSwitcher } from './components/BoardSwitcher';
@@ -9,9 +9,11 @@ import { useAccounts } from './hooks/useAccounts';
 import { useBoardStore } from './hooks/useBoardStore';
 import { AccountMenu } from './components/AccountMenu';
 import { BoardWorkspace } from './components/BoardWorkspace';
-import { CreateBoardModal } from './components/CreateBoardModal';
 import { LoginScreen } from './components/LoginScreen';
-import { ArchiveManagerModal } from './components/ArchiveManagerModal';
+
+// Nạp khi cần (chia nhỏ gói mã để trang mở nhanh).
+const CreateBoardModal = lazy(() => import('./components/CreateBoardModal').then((m) => ({ default: m.CreateBoardModal })));
+const ArchiveManagerModal = lazy(() => import('./components/ArchiveManagerModal').then((m) => ({ default: m.ArchiveManagerModal })));
 
 export default function App() {
   const accounts = useAccounts();
@@ -83,7 +85,7 @@ export default function App() {
         <div className="mx-auto flex w-full max-w-[min(100%,2800px)] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 sm:px-6 2xl:px-10">
           <div className="flex items-center gap-2">
             <Logo className="h-11 w-11" />
-            <span className="text-base font-extrabold tracking-tight">Bảng tương tác</span>
+            <span className="text-base font-extrabold uppercase tracking-tight">Bảng tương tác</span>
           </div>
 
           {teacherNav && navBoards.length > 1 && (
@@ -109,11 +111,13 @@ export default function App() {
 
       {renderBody()}
 
+      <Suspense fallback={null}>
       {creating && <CreateBoardModal extraTemplates={myTemplates} onCreate={createBoard} onClose={() => setCreating(false)} />}
       {archiveOpen && (
         <ArchiveManagerModal boards={owned} onClose={() => setArchiveOpen(false)} onOpen={pick}
           onReopen={(id) => store.setArchived(id, false)} onRestore={(id) => store.setTrashed(id, false)} onDeleteForever={store.deleteForever} />
       )}
+      </Suspense>
     </div>
   );
 }

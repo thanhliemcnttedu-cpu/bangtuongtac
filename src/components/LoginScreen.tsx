@@ -12,7 +12,7 @@ export function LoginScreen({ error, onLogin }: Props) {
       <span className="flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-b from-brand-500 to-brand-600 text-white shadow-glow">
         <GraduationCap className="h-8 w-8" aria-hidden />
       </span>
-      <h1 className="text-3xl font-extrabold tracking-tight">Bảng tương tác lớp học</h1>
+      <h1 className="text-3xl font-extrabold uppercase tracking-tight">Bảng tương tác lớp học</h1>
       <p className="text-ink-2">Giáo viên và báo cáo viên đăng nhập bằng Gmail. Học sinh, học viên chỉ cần mở link hoặc quét mã QR của bảng.</p>
       <button type="button" onClick={onLogin} className="btn-primary !min-h-[52px] w-full text-base">
         <svg viewBox="0 0 48 48" className="h-5 w-5" aria-hidden>
