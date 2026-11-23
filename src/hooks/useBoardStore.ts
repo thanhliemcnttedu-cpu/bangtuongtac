@@ -126,6 +126,8 @@ export interface BoardStore {
   deleteCard: (boardId: string, cardId: string, asManager: boolean) => Promise<CleanupReport | void>;
   /** Học sinh (không cần đăng nhập) mở lại bài của mình bằng mã sửa bài; null nếu mã không đúng. */
   findCardByCode: (boardId: string, code: string) => Promise<SubmissionCard | null>;
+  /** Giáo viên chuyển các bài đã chọn sang một nhiệm vụ khác. */
+  moveCards: (boardId: string, cardIds: string[], taskId: string) => Promise<void>;
   /** Danh sách tên để học sinh chọn khi nộp bài (không cần đăng nhập). */
   loadRosterNames: (boardId: string) => Promise<{ name: string; unit: string }[]>;
   /** Giáo viên gán bài nộp cho một thành viên trong danh sách (sửa tên và tổ cho khớp). */
@@ -506,6 +508,15 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     return api.getCardByCode(b.shareToken, clean);
   }, [isReal, boards]);
 
+  const moveCards = useCallback(async (boardId: string, cardIds: string[], taskId: string): Promise<void> => {
+    if (cardIds.length === 0) return;
+    if (isReal) await api.moveCardsToTask(cardIds, taskId);
+    const ids = new Set(cardIds);
+    patch(boardId, (b) => ({ ...b, cards: b.cards.map((c) => (ids.has(c.id) ? { ...c, taskId } : c)) }));
+    const label = boards.find((b) => b.id === boardId)?.tasks.find((t) => t.id === taskId)?.label ?? 'không thuộc nhiệm vụ nào';
+    await note(boardId, 'chuyen_bai', `${cardIds.length} bài → ${label}`, false);
+  }, [isReal, boards, patch, note]);
+
   const loadRosterNames = useCallback(async (boardId: string): Promise<{ name: string; unit: string }[]> => {
     const b = boards.find((x) => x.id === boardId);
     if (!b) return [];
@@ -866,7 +877,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     boards: visibleBoards, loading, error, isReal, linkToken,
     rateCard, addComment, deleteOwnComment, setCommentStatus, deleteComment, setTeacherStars,
     inviteCollaborator, changeCollaboratorRole, removeCollaborator, leaveBoard,
-    createBoard, duplicateBoard, updateMeta, addCard, setCardLayout, setStatus, setGrade, vote, deleteCard, loadRosterNames, reassignCard, findCardByCode, findCardsByName, saveCardByCode, clearSubmissions, updateCardAttachments, removeStoredAttachments,
+    createBoard, duplicateBoard, updateMeta, addCard, setCardLayout, setStatus, setGrade, vote, deleteCard, moveCards, loadRosterNames, reassignCard, findCardByCode, findCardsByName, saveCardByCode, clearSubmissions, updateCardAttachments, removeStoredAttachments,
     setRoster, setSettings, saveLesson, removeLesson, saveTask, removeTask, addResource, removeResource, updateResource, assignToBoards, setProgram, setArchived, setTrashed, deleteForever, setTemplate, loadActivity,
   };
 }

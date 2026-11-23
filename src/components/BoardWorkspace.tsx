@@ -100,7 +100,9 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
   const [materialLesson, setMaterialLesson] = useState<string | null>(null);
   const [materialMM, setMaterialMM] = useState(false);
   const [editMaterial, setEditMaterial] = useState<PinnedResource | undefined>(undefined);
-  const [toDelete, setToDelete] = useState<{ lesson?: Lesson; task?: TaskItem; resource?: PinnedResource; card?: SubmissionCard; cardIds?: string[] }>({});
+  const [toDelete, setToDelete] = useState<{ lesson?: Lesson; task?: TaskItem; resource?: PinnedResource; card?: SubmissionCard; cardIds?: string[]; scope?: 'shown' | 'picked' }>({});
+  /** Các bài giáo viên đã tích chọn để xóa hoặc chuyển. */
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   const [postTask, setPostTask] = useState<string | undefined>();
   const [myPosts, setMyPosts] = useState<Record<string, number>>({});
   const [toast, setToast] = useState('');
@@ -240,8 +242,17 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
     onReassign: (cardId, member) => store.reassignCard(savedBoard.id, cardId, member),
   };
 
+  const existingIds = useMemo(() => new Set(savedBoard.cards.map((c) => c.id)), [savedBoard.cards]);
+  const pickedIds = useMemo(() => [...picked].filter((id) => existingIds.has(id)), [picked, existingIds]);
+  const selection = canManage ? {
+    ids: picked,
+    toggle: (id: string) => setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; }),
+    setMany: (ids: string[], on: boolean) => setPicked((s) => { const n = new Set(s); ids.forEach((id) => { if (on) n.add(id); else n.delete(id); }); return n; }),
+  } : undefined;
+
   const rowActions = {
     canManage,
+    selection,
     onVote,
     feedback,
     onOpen: (id: string) => setSlideStart(id),
@@ -363,7 +374,19 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
         <MultiFilterBar board={visibleBoard} filters={filters} view={effectiveView} resultCount={filtered.length}
           onChange={patchFilters} onViewChange={setView} onClear={clearFilters} isFiltered={isFiltered(filters)} allowedViews={allowedViews}
           deletableCount={canManage ? filtered.filter((r) => r.card).length : 0}
-          onDeleteShown={canManage ? () => { setToDelete({ cardIds: filtered.flatMap((r) => (r.card ? [r.card.id] : [])) }); setModal('confirm-cards'); } : undefined} />
+          onDeleteShown={canManage ? () => { setToDelete({ cardIds: filtered.flatMap((r) => (r.card ? [r.card.id] : [])), scope: 'shown' }); setModal('confirm-cards'); } : undefined}
+          bulk={canManage ? (() => {
+            const shown = filtered.flatMap((r) => (r.card ? [r.card.id] : []));
+            return {
+              count: pickedIds.length, shownCount: shown.length, allShownSelected: shown.length > 0 && shown.every((id) => picked.has(id)),
+              tasks: savedBoard.tasks.map((t) => ({ id: t.id, label: t.label })),
+              onToggleAll: () => selection?.setMany(shown, !(shown.length > 0 && shown.every((id) => picked.has(id)))),
+              onClear: () => setPicked(new Set()),
+              onDelete: () => { setToDelete({ cardIds: pickedIds, scope: 'picked' }); setModal('confirm-cards'); },
+              onMove: (taskId: string) => { void run(async () => { await store.moveCards(savedBoard.id, pickedIds, taskId); setPicked(new Set()); }, `Đã chuyển ${pickedIds.length} bài.`); },
+              onStatus: (status: CardStatus) => { void run(async () => { for (const id of pickedIds) await store.setStatus(savedBoard.id, id, status); setPicked(new Set()); }, `Đã đổi trạng thái ${pickedIds.length} bài.`); },
+            };
+          })() : undefined} />
 
         {!canView && (
           <p className="rounded-2xl bg-brand-50 px-4 py-2 text-sm text-brand-800">
@@ -501,9 +524,12 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
               const rep = await store.deleteCard(savedBoard.id, id, true);
               if (rep) { total.storageRemoved += rep.storageRemoved; total.driveDeleted += rep.driveDeleted; total.driveFailed += rep.driveFailed; }
             }
+            setPicked(new Set());
             setModal(null); showToast(cleanupText(`Đã xóa ${toDelete.cardIds!.length} bài nộp`, total));
           }}>
-          <p>Mọi bài đang hiển thị theo bộ lọc hiện tại (<b className="text-ink">{toDelete.cardIds.length} bài</b>) sẽ bị xóa vĩnh viễn, kể cả tệp, điểm và nhận xét. <b className="text-ink">Không thể hoàn tác.</b> Hãy kiểm tra kỹ bộ lọc trước khi xóa.</p>
+          {toDelete.scope === 'picked'
+            ? <p><b className="text-ink">{toDelete.cardIds.length} bài</b> bạn đã tích chọn sẽ bị xóa vĩnh viễn, kể cả tệp, điểm và nhận xét. Các bài không chọn được giữ nguyên. <b className="text-ink">Không thể hoàn tác.</b></p>
+            : <p>Mọi bài đang hiển thị theo bộ lọc hiện tại (<b className="text-ink">{toDelete.cardIds.length} bài</b>) sẽ bị xóa vĩnh viễn, kể cả tệp, điểm và nhận xét. <b className="text-ink">Không thể hoàn tác.</b> Hãy kiểm tra kỹ bộ lọc trước khi xóa.</p>}
         </ConfirmModal>
       )}
       {modal === 'confirm-lesson' && toDelete.lesson && (

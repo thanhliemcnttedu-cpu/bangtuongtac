@@ -75,7 +75,9 @@ function MaterialCard({ r, canManage, onOpen, onDelete, onEdit }: { r: PinnedRes
   const legacyLink = atts.length === 0 && r.url && r.url !== '#' ? r.url : '';
   const canView = atts.some(viewable) || (atts.length === 0 && !legacyLink);
   const mainStyle = col ? { background: col.btn, color: '#fff', boxShadow: `0 10px 22px -10px ${col.text}` } : undefined;
-  const note = (a: Attachment): string => (a.type === 'link' || a.type === 'embed' ? a.name : `${extOf(a.name) || 'tệp'}${a.size ? ` · ${formatSize(a.size)}` : ''}`);
+  // Nút tải ghi tên tệp (để phân biệt ảnh, sơ đồ, slide) kèm dung lượng.
+  const note = (a: Attachment): string => (a.type === 'link' || a.type === 'embed' ? a.name : `${a.name || extOf(a.name) || 'tệp'}${a.size ? ` · ${formatSize(a.size)}` : ''}`);
+  const photos = atts.filter((a) => a.type === 'image' && a.url && !a.driveId).slice(0, 3);
   return (
     <li className="relative flex flex-col overflow-hidden rounded-2xl border border-teal2-100 bg-white shadow-soft transition duration-200 hover:-translate-y-0.5 hover:shadow-lift">
       <span className="h-1.5 w-full" style={{ background: col?.bar ?? KIND_BAR[r.kind] }} aria-hidden />
@@ -98,6 +100,11 @@ function MaterialCard({ r, canManage, onOpen, onDelete, onEdit }: { r: PinnedRes
               </li>
             ))}
           </ol>
+        )}
+        {photos.length > 0 && (
+          <button type="button" onClick={onOpen} aria-label={`Xem ảnh của ${r.title}`} className={`grid gap-1.5 ${photos.length === 1 ? 'grid-cols-1' : photos.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+            {photos.map((a, i) => <img key={`${a.url}-${i}`} src={a.url} alt={a.name} loading="lazy" className={`w-full rounded-xl object-cover ring-1 ring-brand-100 ${photos.length === 1 ? 'h-36' : 'h-20'}`} />)}
+          </button>
         )}
       </div>
       <div className="mt-auto flex flex-col gap-1.5 px-3 pb-3">
@@ -259,7 +266,7 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
   };
 
   const materialList = (list: PinnedResource[]) => (
-    <ul className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-2 xl:grid-cols-3 min-[1800px]:grid-cols-4">
+    <ul className="grid grid-cols-1 items-stretch gap-x-4 gap-y-7 sm:grid-cols-2 xl:grid-cols-3 min-[1800px]:grid-cols-4">
       {list.map((r) => <MaterialCard key={r.id} r={r} canManage={canManage} onOpen={() => setViewing(r)} onDelete={() => actions.onDeleteMaterial(r)} onEdit={() => actions.onEditMaterial(r)} />)}
     </ul>
   );

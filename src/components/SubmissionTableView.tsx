@@ -13,7 +13,10 @@ interface Props extends RowActions {
 }
 
 /** Bảng đối chiếu sĩ số: ai đã nộp, ai chưa, tiến trình, thời gian nộp, thao tác nhanh. */
-export function SubmissionTableView({ rows, board, canManage, onOpen, onSetStatus }: Props) {
+export function SubmissionTableView({ rows, board, canManage, onOpen, onSetStatus, selection }: Props) {
+  const pickable = canManage && !!selection;
+  const cardIds = rows.flatMap((r) => (r.card ? [r.card.id] : []));
+  const allOn = cardIds.length > 0 && !!selection && cardIds.every((id) => selection.ids.has(id));
   const [copied, setCopied] = useState(false);
   const unitLabel = board.mode === 'classroom' ? 'Tổ / Lớp' : 'Trường / Đơn vị';
   const missing = rows.filter((r) => r.progress === 'not_submitted' || r.progress === 'in_progress');
@@ -53,6 +56,7 @@ export function SubmissionTableView({ rows, board, canManage, onOpen, onSetStatu
         <table className="w-full min-w-[760px] text-left text-sm">
           <thead className="bg-brand-50 text-xs uppercase tracking-wide text-ink-2">
             <tr>
+              {pickable && <th scope="col" className="w-10 px-3 py-3"><input type="checkbox" className="h-4 w-4 cursor-pointer accent-amber-600" checked={allOn} onChange={() => selection?.setMany(cardIds, !allOn)} aria-label="Chọn tất cả bài đang hiển thị" /></th>}
               <th scope="col" className="w-12 px-3 py-3">STT</th>
               <th scope="col" className="px-3 py-3">Họ tên</th>
               <th scope="col" className="px-3 py-3">{unitLabel}</th>
@@ -64,10 +68,11 @@ export function SubmissionTableView({ rows, board, canManage, onOpen, onSetStatu
           </thead>
           <tbody className="divide-y divide-brand-100">
             {rows.length === 0 && (
-              <tr><td colSpan={canManage ? 7 : 6} className="px-3 py-10 text-center text-ink-2">Không có dòng nào phù hợp bộ lọc.</td></tr>
+              <tr><td colSpan={(canManage ? 7 : 6) + (pickable ? 1 : 0)} className="px-3 py-10 text-center text-ink-2">Không có dòng nào phù hợp bộ lọc.</td></tr>
             )}
             {rows.map((r, i) => (
-              <tr key={r.member.id} className="transition-colors duration-150 hover:bg-brand-50/70">
+              <tr key={r.member.id} className={`transition-colors duration-150 hover:bg-brand-50/70 ${r.card && selection?.ids.has(r.card.id) ? 'bg-amber-50' : ''}`}>
+                {pickable && <td className="px-3 py-2.5">{r.card && <input type="checkbox" className="h-4 w-4 cursor-pointer accent-amber-600" checked={selection?.ids.has(r.card.id) ?? false} onChange={() => selection?.toggle(r.card!.id)} aria-label={`Chọn bài của ${r.member.name}`} />}</td>}
                 <td className="px-3 py-2.5 font-semibold text-ink-2">{i + 1}</td>
                 <td className="px-3 py-2.5">
                   <span className="font-bold">{r.member.name}</span>

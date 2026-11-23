@@ -433,6 +433,12 @@ export async function reassignCard(cardId: string, name: string, unit: string): 
   if (error) fail('Không gán được bài', error.message);
 }
 
+/** Giáo viên chuyển nhiều bài sang một nhiệm vụ khác trong cùng bảng ('' = không thuộc nhiệm vụ nào). */
+export async function moveCardsToTask(cardIds: string[], taskId: string): Promise<void> {
+  const { error } = await db().from('cards').update({ task_id: taskId || null }).in('id', cardIds);
+  if (error) fail('Không chuyển được bài', error.message);
+}
+
 /** Các bài của người nộp có tên này (tối đa 10, mới nhất trước). */
 export async function getCardsByName(token: string, name: string): Promise<SubmissionCard[]> {
   const { data, error } = await db().rpc('get_cards_by_name', { p_token: token, p_name: normalizeName(name) });

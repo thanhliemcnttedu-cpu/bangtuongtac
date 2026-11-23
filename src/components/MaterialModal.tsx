@@ -92,8 +92,10 @@ export function MaterialModal({ board, defaultLessonId, startMindMap = false, re
   };
 
   return (
-    <ModalShell title={editing ? 'Sửa tài liệu' : 'Thêm tài liệu'} onClose={onClose} maxWidth="max-w-3xl" large>
-      <form onSubmit={(e) => void submit(e)} noValidate className="space-y-3">
+    <ModalShell title={editing ? 'Sửa tài liệu' : 'Thêm tài liệu'} onClose={onClose} maxWidth="max-w-6xl">
+      <form onSubmit={(e) => void submit(e)} noValidate className="grid grid-cols-1 gap-x-7 gap-y-3 lg:grid-cols-2">
+        {/* Cột trái: thông tin thẻ. Cột phải: tệp và liên kết. Máy tính vừa một màn hình, không phải cuộn. */}
+        <div className="space-y-3">
         <div>
           <label htmlFor="mt-title" className="field-label">Tên tài liệu *</label>
           <input id="mt-title" className="input" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
@@ -138,7 +140,9 @@ export function MaterialModal({ board, defaultLessonId, startMindMap = false, re
           <textarea id="mt-steps" rows={4} className="input min-h-[96px] py-2" value={steps} onChange={(e) => setSteps(e.target.value)}
             placeholder={'Tải **1 tệp .rar**, giải nén ra, đọc PDF\nKỹ năng → Tạo → Tải lên, chọn `SKILL.md`\nGõ `@tro-ly-giao-vien`'} />
         </div>
+        </div>
 
+        <div className="space-y-3">
         {editing && (
           <div>
             <p className="field-label">Tệp và liên kết đang có <span className="font-normal text-ink-2">({keep.length})</span></p>
@@ -191,8 +195,9 @@ export function MaterialModal({ board, defaultLessonId, startMindMap = false, re
         </div>
 
         <p className="text-xs text-ink-2">Nút đầu tiên của thẻ là nút chính. Người học xem trực tiếp trong trang hoặc tải về bằng nút.</p>
-        {error && <p role="alert" className="text-sm font-bold text-rose-700">{error}</p>}
-        <div className="flex justify-end gap-2">
+        </div>
+        {error && <p role="alert" className="text-sm font-bold text-rose-700 lg:col-span-2">{error}</p>}
+        <div className="flex justify-end gap-2 lg:col-span-2">
           <button type="button" onClick={onClose} className="btn-ghost">Hủy</button>
           <button type="submit" disabled={busy} className="btn-primary">{busy ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Thêm tài liệu'}</button>
         </div>

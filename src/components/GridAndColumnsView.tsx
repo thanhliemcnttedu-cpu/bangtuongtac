@@ -19,6 +19,8 @@ export interface RowActions {
   onVote?: (cardId: string, optionId: string) => void;
   /** Đánh giá & nhận xét (sao, lời phê, bình luận) cho thẻ đang xem. */
   feedback?: FeedbackActions;
+  /** Giáo viên: tích chọn từng bài để xóa hoặc chuyển nhiều bài cùng lúc. */
+  selection?: { ids: ReadonlySet<string>; toggle: (cardId: string) => void; setMany: (cardIds: string[], on: boolean) => void };
 }
 
 export interface TileProps extends RowActions {
@@ -58,7 +60,7 @@ export function CardQuickActions({ row, onSetStatus }: Pick<TileProps, 'row' | '
   );
 }
 
-export function Tile({ row, board, compact, wall, canManage, onOpen, onSetStatus, deletableIds, onDelete, onVote }: TileProps) {
+export function Tile({ row, board, compact, wall, canManage, onOpen, onSetStatus, deletableIds, onDelete, onVote, selection }: TileProps) {
   const { card, member } = row;
   const s = board.settings;
 
@@ -82,7 +84,12 @@ export function Tile({ row, board, compact, wall, canManage, onOpen, onSetStatus
   const cover = card.attachments.find((a) => a.type === 'image' || a.type === 'video' || a.type === 'embed') ?? card.attachments[0] ?? null;
 
   return (
-    <article className="pop-in group flex flex-col overflow-hidden rounded-3xl border-[1.5px] border-brand-200 bg-white shadow-soft transition duration-200 hover:-translate-y-1 hover:shadow-lift">
+    <article className={`pop-in group relative flex flex-col overflow-hidden rounded-3xl border-[1.5px] bg-white shadow-soft transition duration-200 hover:-translate-y-1 hover:shadow-lift ${selection?.ids.has(card.id) ? 'border-amber-400 ring-4 ring-amber-300' : 'border-brand-200'}`}>
+      {canManage && selection && (
+        <label className={`absolute left-2 top-2 z-10 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full shadow-lift ring-2 ${selection.ids.has(card.id) ? 'bg-amber-400 ring-white' : 'bg-white/95 ring-brand-200 hover:ring-brand-400'}`} title="Chọn bài này">
+          <input type="checkbox" className="h-5 w-5 cursor-pointer accent-amber-600" checked={selection.ids.has(card.id)} onChange={() => selection.toggle(card.id)} aria-label={`Chọn bài ${card.title} của ${card.authorName}`} />
+        </label>
+      )}
       <button type="button" onClick={() => onOpen(card.id)} className="block text-left" aria-label={`Xem bài ${card.title} của ${card.authorName}`}>
         <div className="relative">
           <AttachmentThumb attachment={cover} className={`w-full ${compact ? 'h-24' : wall ? 'aspect-[4/3]' : 'aspect-[16/9]'}`} />

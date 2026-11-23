@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { taskTitle } from '../lib/lessons';
 import { Rows3, Search, Trash2, X } from 'lucide-react';
-import type { BoardData, FilterState, ProgressFilter, TimeFilter, ViewMode } from '../types/board';
+import type { BoardData, CardStatus, FilterState, ProgressFilter, TimeFilter, ViewMode } from '../types/board';
 import { normalize } from '../lib/boardLogic';
 import { LayoutMenu } from './LayoutMenu';
 
@@ -19,6 +19,18 @@ interface Props {
   /** Giáo viên: xóa mọi bài đang hiển thị theo bộ lọc (số bài, hàm mở hộp xác nhận). */
   deletableCount?: number;
   onDeleteShown?: () => void;
+  /** Giáo viên: thao tác với các bài đã tích chọn. */
+  bulk?: {
+    count: number;
+    shownCount: number;
+    allShownSelected: boolean;
+    tasks: { id: string; label: string }[];
+    onToggleAll: () => void;
+    onClear: () => void;
+    onDelete: () => void;
+    onMove: (taskId: string) => void;
+    onStatus: (status: CardStatus) => void;
+  };
 }
 
 
@@ -42,7 +54,7 @@ const TIME_OPTIONS: { value: TimeFilter; label: string }[] = [
 ];
 
 export function MultiFilterBar({
-  board, filters, view, resultCount, onChange, onViewChange, onClear, isFiltered, allowedViews, deletableCount, onDeleteShown }: Props) {
+  board, filters, view, resultCount, onChange, onViewChange, onClear, isFiltered, allowedViews, deletableCount, onDeleteShown, bulk }: Props) {
   const [focused, setFocused] = useState(false);
 
   const titles = useMemo(() => [...new Set(board.cards.map((c) => c.title))], [board.cards]);
@@ -128,6 +140,33 @@ export function MultiFilterBar({
           )}
         </div>
 
+        {bulk && bulk.shownCount > 0 && (
+          <div className={`flex flex-wrap items-center gap-2 rounded-2xl px-3 py-2 text-sm ${bulk.count > 0 ? 'bg-amber-100 ring-1 ring-amber-300' : 'bg-slate-50'}`} role="toolbar" aria-label="Chọn bài để xóa hoặc chuyển">
+            <label className="flex cursor-pointer items-center gap-2 font-bold text-ink">
+              <input type="checkbox" className="h-5 w-5 cursor-pointer accent-amber-600" checked={bulk.allShownSelected} onChange={bulk.onToggleAll} />
+              Chọn tất cả {bulk.shownCount} bài đang hiển thị
+            </label>
+            {bulk.count > 0 ? (
+              <>
+                <span className="font-extrabold text-amber-900" aria-live="polite">Đã chọn {bulk.count} bài</span>
+                <select aria-label="Chuyển các bài đã chọn sang nhiệm vụ" className="input !min-h-[38px] !w-auto text-sm" value="" onChange={(e) => { if (e.target.value) bulk.onMove(e.target.value === '__none' ? '' : e.target.value); e.target.value = ''; }}>
+                  <option value="">Chuyển sang nhiệm vụ…</option>
+                  {bulk.tasks.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                  <option value="__none">(Không thuộc nhiệm vụ nào)</option>
+                </select>
+                <select aria-label="Đổi trạng thái các bài đã chọn" className="input !min-h-[38px] !w-auto text-sm" value="" onChange={(e) => { if (e.target.value) bulk.onStatus(e.target.value as CardStatus); e.target.value = ''; }}>
+                  <option value="">Đổi trạng thái…</option>
+                  <option value="approved">Duyệt</option>
+                  <option value="featured">Tiêu biểu</option>
+                  <option value="needs_edit">Cần sửa</option>
+                  <option value="pending">Chờ duyệt</option>
+                </select>
+                <button type="button" onClick={bulk.onDelete} className="btn btn-sm border-[1.5px] border-rose-300 bg-white text-rose-700 hover:bg-rose-50"><Trash2 className="h-3.5 w-3.5" aria-hidden /> Xóa {bulk.count} bài đã chọn</button>
+                <button type="button" onClick={bulk.onClear} className="btn-ghost btn-sm ml-auto"><X className="h-3.5 w-3.5" aria-hidden /> Bỏ chọn</button>
+              </>
+            ) : <span className="text-ink-2">Hoặc tích ô tròn ở góc mỗi thẻ để chọn từng bài.</span>}
+          </div>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-ink-2">
           <span aria-live="polite" className="inline-flex items-center gap-1.5">
             <Rows3 className="h-4 w-4" aria-hidden />

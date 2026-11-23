@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, CalendarClock, ClipboardCheck, GraduationCap, Inbox, Plus, School, Search, Share2, Users } from 'lucide-react';
+import { AlertTriangle, Archive, CalendarClock, CheckSquare, ClipboardCheck, GraduationCap, Inbox, Plus, School, Search, Share2, Trash2, Users, X } from 'lucide-react';
 import type { BoardData } from '../types/board';
 import { boardStats, overviewTotals } from '../lib/dashboard';
 import type { BoardStats } from '../lib/dashboard';
 import { countdown, formatDateTime } from '../lib/lessons';
+import { ConfirmModal } from './ConfirmModal';
 
 interface Props {
   boards: BoardData[];
@@ -11,6 +12,9 @@ interface Props {
   canCreate: boolean;
   onOpen: (id: string) => void;
   onCreate: () => void;
+  /** Đóng (lưu trữ) hoặc chuyển vào thùng rác nhiều bảng cùng lúc. */
+  onArchive?: (ids: string[]) => Promise<void>;
+  onTrash?: (ids: string[]) => Promise<void>;
 }
 
 type Filter = 'all' | 'todo' | 'due' | 'class' | 'training' | 'shared';
@@ -77,8 +81,16 @@ function BoardCard({ b, s, current, onOpen, now }: { b: BoardData; s: BoardStats
  * Trang Tổng quan cho giáo viên quản lý nhiều lớp và nhiều chương trình: số liệu chung, danh sách việc cần xử lý,
  * rồi các lớp và từng chương trình tập huấn dưới dạng thẻ có tiến độ. Bấm thẻ để vào bảng.
  */
-export function Dashboard({ boards, currentId, canCreate, onOpen, onCreate }: Props) {
+export function Dashboard({ boards, currentId, canCreate, onOpen, onCreate, onArchive, onTrash }: Props) {
   const [q, setQ] = useState('');
+  // Chế độ chọn bảng: tích nhiều bảng của mình để đóng hoặc chuyển vào thùng rác.
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+  const [confirm, setConfirm] = useState<'archive' | 'trash' | null>(null);
+  const [toast, setToast] = useState('');
+  const canBulk = !!(onArchive || onTrash);
+  const toggle = (id: string): void => setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const leave = (): void => { setSelecting(false); setPicked(new Set()); };
   const [filter, setFilter] = useState<Filter>('all');
   const now = Date.now();
   const rows = useMemo(() => boards.map((b) => ({ b, s: boardStats(b, now) })), [boards, now]);
@@ -103,7 +115,27 @@ export function Dashboard({ boards, currentId, canCreate, onOpen, onCreate }: Pr
   const urgent = [...rows].filter(({ b, s }) => (b.access ?? 'owner') !== 'viewer' && s.pending + s.needsEdit > 0).sort((x, y) => y.s.pending - x.s.pending).slice(0, 5);
 
   const grid = 'grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 min-[1700px]:grid-cols-4 min-[2300px]:grid-cols-5';
-  const cards = (list: typeof own) => <div className={grid}>{list.map(({ b, s }) => <BoardCard key={b.id} b={b} s={s} now={now} current={b.id === currentId} onOpen={() => onOpen(b.id)} />)}</div>;
+  const ownIds = own.map(({ b }) => b.id);
+  const pickedIds = ownIds.length > 0 ? [...picked].filter((id) => boards.some((b) => b.id === id)) : [];
+  const allOn = ownIds.length > 0 && ownIds.every((id) => picked.has(id));
+  const cards = (list: typeof own) => (
+    <div className={grid}>
+      {list.map(({ b, s }) => {
+        const mine = (b.access ?? 'owner') === 'owner';
+        const on = picked.has(b.id);
+        return (
+          <div key={b.id} className={`relative h-full rounded-3xl transition ${selecting && on ? 'ring-4 ring-amber-300' : ''} ${selecting && !mine ? 'opacity-50' : ''}`}>
+            <BoardCard b={b} s={s} now={now} current={b.id === currentId} onOpen={() => (selecting ? (mine ? toggle(b.id) : undefined) : onOpen(b.id))} />
+            {selecting && mine && (
+              <label className={`absolute right-3 top-4 z-10 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full shadow-lift ring-2 ${on ? 'bg-amber-400 ring-white' : 'bg-white/95 ring-brand-200 hover:ring-brand-400'}`} title="Chọn bảng này">
+                <input type="checkbox" className="h-5 w-5 cursor-pointer accent-amber-600" checked={on} onChange={() => toggle(b.id)} aria-label={`Chọn bảng ${b.title}`} />
+              </label>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 
   return (
     <main className="mx-auto w-full max-w-[min(100%,2800px)] space-y-6 px-4 py-5 pb-28 sm:px-6 2xl:px-10">
@@ -112,7 +144,10 @@ export function Dashboard({ boards, currentId, canCreate, onOpen, onCreate }: Pr
           <h1 className="text-[clamp(1.5rem,3vw,2.2rem)] font-extrabold leading-tight tracking-tight">Tổng quan</h1>
           <p className="text-sm text-ink-2">{totals.classes} lớp · {totals.programs} chương trình tập huấn ({totals.trainings} lớp tập huấn){totals.shared > 0 ? ` · ${totals.shared} bảng được chia sẻ` : ''}</p>
         </div>
-        {canCreate && <button type="button" onClick={onCreate} className="btn-primary"><Plus className="h-4 w-4" aria-hidden /> Tạo bảng mới</button>}
+        <div className="flex flex-wrap items-center gap-2">
+          {canBulk && own.length > 0 && <button type="button" aria-pressed={selecting} onClick={() => (selecting ? leave() : setSelecting(true))} className={`btn-ghost ${selecting ? '!border-amber-400 !bg-amber-50' : ''}`}><CheckSquare className="h-4 w-4" aria-hidden /> {selecting ? 'Thoát chọn bảng' : 'Chọn bảng'}</button>}
+          {canCreate && <button type="button" onClick={onCreate} className="btn-primary"><Plus className="h-4 w-4" aria-hidden /> Tạo bảng mới</button>}
+        </div>
       </header>
 
       <section aria-label="Số liệu chung" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -179,6 +214,36 @@ export function Dashboard({ boards, currentId, canCreate, onOpen, onCreate }: Pr
           <h2 className="mb-3 flex items-center gap-2 text-lg font-extrabold"><Share2 className="h-5 w-5 text-ink-2" aria-hidden /> Được chia sẻ với tôi <span className="chip bg-slate-100 text-slate-700 ring-slate-200">{shared.length}</span></h2>
           {cards(shared)}
         </section>
+      )}
+
+      {selecting && (
+        <div className="fixed inset-x-3 bottom-4 z-30 mx-auto flex max-w-3xl flex-wrap items-center gap-2 rounded-3xl border-[1.5px] border-amber-300 bg-amber-50/95 px-4 py-3 shadow-lift backdrop-blur" role="toolbar" aria-label="Thao tác với các bảng đã chọn">
+          <label className="flex cursor-pointer items-center gap-2 text-sm font-bold text-ink">
+            <input type="checkbox" className="h-5 w-5 cursor-pointer accent-amber-600" checked={allOn} onChange={() => setPicked(allOn ? new Set() : new Set(ownIds))} />
+            Chọn tất cả ({ownIds.length})
+          </label>
+          <span className="text-sm font-extrabold text-amber-900" aria-live="polite">{pickedIds.length > 0 ? `Đã chọn ${pickedIds.length} bảng` : 'Bấm vào thẻ hoặc ô tích để chọn bảng'}</span>
+          <span className="ml-auto flex flex-wrap items-center gap-2">
+            {onArchive && <button type="button" disabled={pickedIds.length === 0} onClick={() => setConfirm('archive')} className="btn-ghost btn-sm"><Archive className="h-3.5 w-3.5" aria-hidden /> Đóng bảng</button>}
+            {onTrash && <button type="button" disabled={pickedIds.length === 0} onClick={() => setConfirm('trash')} className="btn btn-sm border-[1.5px] border-rose-300 bg-white text-rose-700 hover:bg-rose-50 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" aria-hidden /> Chuyển vào thùng rác</button>}
+            <button type="button" onClick={leave} className="btn-ghost btn-sm"><X className="h-3.5 w-3.5" aria-hidden /> Thoát</button>
+          </span>
+        </div>
+      )}
+      {toast && <p role="status" className="fixed bottom-24 left-1/2 z-40 -translate-x-1/2 rounded-full bg-ink px-5 py-2.5 text-sm font-bold text-white shadow-lift">{toast}</p>}
+
+      {confirm === 'trash' && onTrash && (
+        <ConfirmModal title={`Chuyển ${pickedIds.length} bảng vào thùng rác?`} confirmLabel={`Chuyển ${pickedIds.length} bảng`} danger onClose={() => setConfirm(null)}
+          onConfirm={async () => { await onTrash(pickedIds); setConfirm(null); setToast(`Đã chuyển ${pickedIds.length} bảng vào thùng rác.`); window.setTimeout(() => setToast(''), 3500); leave(); }}>
+          <p>Các bảng được chọn sẽ ẩn khỏi danh sách và <b className="text-ink">link chia sẻ ngừng hoạt động</b>. Bạn có thể khôi phục trong 30 ngày ở nút “Bảng đã đóng & thùng rác”; sau đó bảng tự xóa vĩnh viễn.</p>
+          <ul className="mt-2 list-disc pl-5 text-sm">{pickedIds.slice(0, 6).map((id) => <li key={id}>{boards.find((b) => b.id === id)?.title}</li>)}{pickedIds.length > 6 && <li>… và {pickedIds.length - 6} bảng khác</li>}</ul>
+        </ConfirmModal>
+      )}
+      {confirm === 'archive' && onArchive && (
+        <ConfirmModal title={`Đóng ${pickedIds.length} bảng?`} confirmLabel={`Đóng ${pickedIds.length} bảng`} onClose={() => setConfirm(null)}
+          onConfirm={async () => { await onArchive(pickedIds); setConfirm(null); setToast(`Đã đóng ${pickedIds.length} bảng.`); window.setTimeout(() => setToast(''), 3500); leave(); }}>
+          <p>Các bảng được chọn ngừng nhận bài mới và bình chọn. Mọi bài, điểm và báo cáo vẫn giữ nguyên; mở lại được ở “Bảng đã đóng & thùng rác”.</p>
+        </ConfirmModal>
       )}
     </main>
   );
