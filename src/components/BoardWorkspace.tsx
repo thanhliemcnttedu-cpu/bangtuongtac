@@ -566,6 +566,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
         onLeave={async () => { await store.leaveBoard(savedBoard.id); setModal(null); }}
         onChangeLinkMode={(m) => void run(() => store.setSettings(board.id, { linkMode: m }))}
         onRegenerateLink={() => store.regenerateLink(savedBoard.id)}
+        onChangeJoinCode={() => store.changeJoinCode(savedBoard.id)} onToggleJoin={(on) => store.setJoinEnabled(savedBoard.id, on)}
         onChangeModeration={(m) => void run(() => store.setSettings(board.id, { moderation: m }), 'Đã đổi chế độ kiểm duyệt.')} onClose={() => setModal(null)} />}
       {modal === 'task-report' && shareTaskItem && <TaskReportModal board={savedBoard} task={savedBoard.tasks.find((t) => t.id === shareTaskItem.id) ?? shareTaskItem} onClose={() => setModal(null)} />}
       {modal === 'training' && <TrainingToolsModal board={savedBoard} store={store} initialTab={trainingTab} onClose={() => setModal(null)} />}

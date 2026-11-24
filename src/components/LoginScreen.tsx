@@ -1,24 +1,36 @@
 import { GraduationCap } from 'lucide-react';
+import { JoinByCode } from './JoinByCode';
 
 interface Props {
   error: string;
   onLogin: () => void;
+  /** Học sinh nhập mã 6 số của thầy cô. */
+  onJoinCode: (code: string) => Promise<void>;
+  /** Học sinh dán cả link bảng vào ô mã. */
+  onOpenLink: (token: string) => void;
 }
 
-/** Màn hình đầu khi dùng Supabase thật mà chưa đăng nhập và không mở bằng link chia sẻ. */
-export function LoginScreen({ error, onLogin }: Props) {
+/** Trang chủ khi chưa đăng nhập và không mở bằng link chia sẻ: học sinh vào bằng mã, giáo viên đăng nhập bằng Gmail. */
+export function LoginScreen({ error, onLogin, onJoinCode, onOpenLink }: Props) {
   return (
     <main className="mx-auto flex min-h-[80vh] max-w-md flex-col items-center justify-center gap-5 px-6 text-center">
       <span className="flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-b from-brand-500 to-brand-600 text-white shadow-glow">
         <GraduationCap className="h-8 w-8" aria-hidden />
       </span>
       <h1 className="text-3xl font-extrabold uppercase tracking-tight">Bảng tương tác lớp học</h1>
-      <p className="text-ink-2">Giáo viên và báo cáo viên đăng nhập bằng Gmail. Học sinh, học viên chỉ cần mở link hoặc quét mã QR của bảng.</p>
-      <button type="button" onClick={onLogin} className="btn-primary !min-h-[52px] w-full text-base">
+      <p className="text-ink-2">Học sinh, học viên nhập mã 6 số của thầy cô (hoặc mở link, quét mã QR) để vào lớp và nộp bài. Giáo viên đăng nhập bằng Gmail để quản lý.</p>
+      <JoinByCode onJoin={onJoinCode} onOpenLink={onOpenLink} />
+      <div className="flex w-full items-center gap-3 text-xs font-bold uppercase tracking-wide text-ink-3" aria-hidden>
+        <span className="h-px flex-1 bg-brand-200" /> Giáo viên <span className="h-px flex-1 bg-brand-200" />
+      </div>
+      <button type="button" onClick={onLogin} className="btn-ghost !min-h-[52px] w-full text-base">
         <svg viewBox="0 0 48 48" className="h-5 w-5" aria-hidden>
-          <path fill="#fff" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z" />
+          <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z" />
+          <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.4-4.1 7-10.1 7-17.6z" />
+          <path fill="#FBBC05" d="M10.5 28.7c-.5-1.4-.8-3-.8-4.7s.3-3.2.8-4.7l-7.9-6.1C.9 16.4 0 20.1 0 24s.9 7.6 2.6 10.8l7.9-6.1z" />
+          <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z" />
         </svg>
-        Tiếp tục với Google
+        Giáo viên: tiếp tục với Google
       </button>
       {error && <p role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">{error}</p>}
     </main>

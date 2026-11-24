@@ -16,6 +16,7 @@ interface BoardDb {
   id: string; title: string; mode: BoardMode; goals: string | null; share_token: string;
   link_mode: LinkMode; owner_email: string | null; settings: unknown;
   archived_at: string | null; deleted_at: string | null; is_template: boolean; created_at: string; program?: string | null;
+  join_code?: string | null; join_enabled?: boolean | null;
 }
 interface CardDb {
   id: string; board_id?: string; kind: 'resource' | 'submission'; author_name: string | null; group_name: string | null;
@@ -142,6 +143,7 @@ function toSubmission(c: CardDb, boardId: string, votes: VoteCount[], ratings: R
 function assemble(
   b: Pick<BoardDb, 'id' | 'title' | 'mode' | 'goals' | 'share_token' | 'link_mode' | 'settings'> & {
     owner_email?: string | null; archived_at?: string | null; deleted_at?: string | null; is_template?: boolean; created_at?: string; program?: string | null;
+    join_code?: string | null; join_enabled?: boolean | null;
   },
   cards: CardDb[], tasks: TaskItem[], lessons: Lesson[], roster: RosterMember[], access: BoardAccess, votes: VoteCount[] = [], collaborators: Collaborator[] = [],
   ratings: RatingAgg[] = [], comments: CommentDb[] = [],
@@ -153,6 +155,8 @@ function assemble(
     subtitle: b.owner_email ? `Chủ bảng: ${b.owner_email}` : '',
     goals: b.goals ?? '',
     shareToken: b.share_token,
+    joinCode: b.join_code ?? null,
+    joinEnabled: b.join_enabled ?? true,
     linkMode: b.link_mode,
     pinned: cards.filter((c) => c.kind === 'resource').map(toResource),
     lessons,
@@ -292,6 +296,37 @@ export async function regenerateShareToken(boardId: string): Promise<string> {
   const { error } = await db().from('boards').update({ share_token: token }).eq('id', boardId);
   if (error) fail('Không đổi được link', error.message);
   return token;
+}
+
+/** Học sinh nhập mã 6 số ở trang chủ: trả về mã link của bảng, hoặc null nếu mã không đúng / bảng không mở vào bằng mã. */
+export async function resolveJoinCode(code: string): Promise<string | null> {
+  const { data, error } = await db().rpc('board_token_by_code', { p_code: code });
+  if (error) {
+    if (/too_many_attempts/.test(error.message)) throw new Error('Em nhập sai nhiều lần. Chờ vài phút rồi thử lại, hoặc hỏi cô mã mới nhé.');
+    if (/board_token_by_code|schema cache|does not exist/i.test(error.message)) throw new Error('Máy chủ chưa bật tính năng vào lớp bằng mã. Em hãy dùng link hoặc mã QR của cô.');
+    fail('Không kiểm tra được mã', error.message);
+  }
+  return typeof data === 'string' && data ? data : null;
+}
+
+/** Giáo viên đổi sang mã vào lớp mới (mã cũ ngừng dùng ngay) hoặc bật / tắt việc vào bằng mã. */
+export async function updateJoin(boardId: string, patch: { newCode?: string; enabled?: boolean }): Promise<string | undefined> {
+  const row: Record<string, unknown> = {};
+  if (patch.enabled !== undefined) row.join_enabled = patch.enabled;
+  if (patch.newCode === undefined) {
+    const { error } = await db().from('boards').update(row).eq('id', boardId);
+    if (error) fail('Không lưu được cài đặt mã vào lớp', error.message);
+    return undefined;
+  }
+  // Trùng mã với bảng khác thì thử mã khác (hiếm: một triệu mã).
+  let code = patch.newCode;
+  for (let i = 0; i < 6; i += 1) {
+    const { error } = await db().from('boards').update({ ...row, join_code: code }).eq('id', boardId);
+    if (!error) return code;
+    if (error.code !== '23505') fail('Không đổi được mã vào lớp', error.message);
+    code = String(100000 + Math.floor(Math.random() * 900000));
+  }
+  fail('Không đổi được mã vào lớp', 'Nhiều mã bị trùng liên tiếp, hãy thử lại.');
 }
 
 export async function setCardStatus(cardId: string, status: CardStatus): Promise<void> {

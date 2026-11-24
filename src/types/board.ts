@@ -264,6 +264,10 @@ export interface BoardData {
   subtitle: string;
   goals: string;
   shareToken: string;
+  /** Mã 6 số để học sinh nhập ở trang chủ thay cho link; trống = bảng chưa có mã (CSDL chưa cập nhật hoặc bảng việc riêng). */
+  joinCode?: string | null;
+  /** Cho phép vào bằng mã (giáo viên bật / tắt); mặc định bật, riêng bảng tổ công tác tắt sẵn. */
+  joinEnabled?: boolean;
   linkMode: LinkMode;
   pinned: PinnedResource[];
   /** Bài học (lớp học) / buổi tập huấn, theo thứ tự. */

@@ -45,6 +45,8 @@ export default function App() {
   const [missingParts, setMissingParts] = useState(0);
   // Mở màn Google Drive của bảng đang xem từ hộp Hỗ trợ.
   const [driveRequest, setDriveRequest] = useState(false);
+  // Chạy thử không cần .env: thêm ?demo=login vào địa chỉ để xem trang chủ dành cho học sinh (nhập mã 6 số).
+  const [demoLogin, setDemoLogin] = useState(() => !store.isReal && /[?&]demo=login/.test(window.location.search));
 
   const { boards } = store;
   // Bảng trong thùng rác không hiện; bảng đã đóng chỉ hiện khi đang được mở xem.
@@ -73,7 +75,7 @@ export default function App() {
 
   const ownCount = owned.filter((b) => !b.deletedAt && !b.archivedAt).length;
   // Học sinh / khách chỉ thấy đúng bảng của mình: không hiện Tổng quan và danh sách bảng khác.
-  const teacherNav = canCreate && !store.linkToken && effectiveRole !== 'guest' && effectiveRole !== 'viewonly';
+  const teacherNav = canCreate && !store.linkToken && !demoLogin && effectiveRole !== 'guest' && effectiveRole !== 'viewonly';
   const showMy = teacherNav && myTasks;
   const showReports = teacherNav && !showMy && reports;
   const showHome = teacherNav && !showMy && !showReports && (home ?? ownCount >= 4);
@@ -99,7 +101,20 @@ export default function App() {
     void import('./lib/systemCheck').then((m) => m.runSystemCheck()).then((r) => setMissingParts(r.filter((x) => x.state === 'missing').length)).catch(() => undefined);
   }, [accounts.isReal, accounts.current?.id, store.linkToken]);
 
+  // Học sinh vào lớp theo mã 6 số của thầy cô: tra mã ra link của bảng rồi mở như khi bấm link.
+  const openToken = (token: string): void => {
+    if (store.isReal) { window.location.assign(`/b/${token}`); return; }
+    const target = boards.find((b) => b.shareToken === token);
+    if (target) { setActiveId(target.id); setRole('guest'); setHome(false); setDemoLogin(false); }
+  };
+  const joinByCode = async (code: string): Promise<void> => {
+    const token = await store.resolveJoinCode(code);
+    if (!token) throw new Error('Mã này chưa đúng hoặc cô đã tắt vào lớp bằng mã. Em kiểm tra lại mã 6 số của cô nhé.');
+    openToken(token);
+  };
+
   const renderBody = () => {
+    if (demoLogin) return <LoginScreen error="" onLogin={() => setDemoLogin(false)} onJoinCode={joinByCode} onOpenLink={openToken} />;
     if (showReports) return <Suspense fallback={<p className="p-10 text-center text-ink-2" role="status">Đang tải…</p>}><ReportsPage boards={owned} currentId={board?.id} /></Suspense>;
     if (showMy) return <Suspense fallback={<p className="p-10 text-center text-ink-2" role="status">Đang tải…</p>}><MyTasksPage store={store} myEmail={accounts.current?.email ?? ''} onOpenBoard={pick} /></Suspense>;
     if (showHome && !store.loading) return <Dashboard boards={navBoards} currentId={board?.id} canCreate={canCreate} onOpen={pick} onCreate={() => setCreating(true)}
@@ -107,7 +122,7 @@ export default function App() {
     if (board) return <BoardWorkspace key={board.id} board={board} store={store} role={effectiveRole} onSelectBoard={setActiveId} myEmail={accounts.current?.email ?? ''} openDrive={driveRequest} onOpenDriveHandled={() => setDriveRequest(false)} />;
     if (store.loading) return <p className="p-10 text-center text-ink-2" role="status">Đang tải dữ liệu…</p>;
     if (store.error) return <p className="p-10 text-center font-bold text-rose-700" role="alert">{store.error}</p>;
-    if (!accounts.current) return <LoginScreen error={accounts.error} onLogin={() => void accounts.addAnother()} />;
+    if (!accounts.current) return <LoginScreen error={accounts.error} onLogin={() => void accounts.addAnother()} onJoinCode={joinByCode} onOpenLink={openToken} />;
     return (
       <main className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
         <h1 className="text-2xl font-extrabold">Chưa có bảng nào</h1>
@@ -129,13 +144,13 @@ export default function App() {
           {teacherNav && <BoardSwitcher boards={navBoards} currentId={showHome || showMy || showReports ? undefined : board?.id} onSelect={pick} />}
 
           <div className="ml-auto flex items-center gap-2">
-            {canCreate && !store.linkToken && (
+            {canCreate && !store.linkToken && !demoLogin && (
               <button type="button" onClick={() => setArchiveOpen(true)} className="btn-ghost relative" aria-label="Bảng đã đóng và thùng rác">
                 <Archive className="h-4 w-4" aria-hidden />
                 {storedCount > 0 && <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-600 px-1 text-[11px] font-extrabold text-white">{storedCount}</span>}
               </button>
             )}
-            {canCreate && !store.linkToken && (
+            {canCreate && !store.linkToken && !demoLogin && (
               <button type="button" onClick={() => setCreating(true)} className="btn-ghost"><Plus className="h-4 w-4" aria-hidden /><span className="hidden sm:inline">Tạo bảng</span></button>
             )}
             <AccountMenu accounts={accounts.accounts} current={accounts.current} isReal={accounts.isReal} error={accounts.error} role={role}

@@ -41,6 +41,8 @@ export async function runSystemCheck(): Promise<CheckItem[]> {
     probe('attendance', 'Điểm danh lớp tập huấn', () => db.from('board_attendance').select('day').limit(0)),
     probe('my_tasks', 'Gom việc người khác giao cho tôi (hàm my_tasks)', () => db.rpc('my_tasks')),
     probe('fingerprint', 'Tự làm mới và sửa bài bằng tên', () => db.rpc('board_fingerprint', { p_token: 'kiem-tra', p_manage: false })),
+    probe('join_code', 'Mã vào lớp 6 số (cột join_code)', () => db.from('boards').select('join_code,join_enabled').limit(0)),
+    probe('join_rpc', 'Học sinh nhập mã ở trang chủ (hàm board_token_by_code)', () => db.rpc('board_token_by_code', { p_code: 'kiem-tra' })),
     probe('roster_public', 'Học sinh chọn tên trong danh sách (hàm get_roster_public)', () => db.rpc('get_roster_public', { p_token: 'kiem-tra' })),
   ]);
   // Cổng Google Drive (nếu đã kết nối trên máy này): phiên bản 4 mới gửi được email và gói ZIP từ Drive.

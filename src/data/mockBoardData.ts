@@ -141,6 +141,7 @@ export const CLASS_BOARD: BoardData = {
   goals:
     'Mục tiêu: học sinh vẽ được sơ đồ tư duy về mùa xuân và viết 5 câu về gia đình. Nộp bài bằng nút + ở góc phải, nhớ ghi họ tên và tổ.',
   shareToken: 'k7p2x9lq4m',
+  joinCode: '482915',
   linkMode: 'guest_post',
   lessons: classLessons,
   pinned: [
@@ -227,6 +228,7 @@ export const TRAIN_BOARD: BoardData = {
   goals:
     'Mục tiêu: mỗi giáo viên nộp 1 kế hoạch bài dạy và 1 đề kiểm tra giữa kỳ. Ghi rõ họ tên và trường/đơn vị khi nộp. Bài tiêu biểu sẽ được trình chiếu cuối buổi.',
   shareToken: 'th83ndh2ab',
+  joinCode: '730164',
   linkMode: 'guest_post',
   program: TRAIN_PROGRAM,
   lessons: trainLessons,
@@ -251,6 +253,7 @@ function cloneBoard(src: BoardData, id: string, patch: Partial<BoardData>, nCard
     ...src,
     id,
     shareToken: `${id.replace(/[^a-z0-9]/g, '')}x9`.slice(0, 10),
+    joinCode: String(100000 + ([...id].reduce((n, ch) => n * 31 + ch.charCodeAt(0), 7) % 900000)),
     cards: src.cards.slice(0, nCards).map((c) => ({ ...c, id: `${id}-${c.id}`, boardId: id })),
     roster: src.roster.map((m) => ({ ...m, id: `${id}-${m.id}` })),
     pinned: src.pinned.map((r) => ({ ...r, id: `${id}-${r.id}` })),

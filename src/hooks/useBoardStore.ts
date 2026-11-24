@@ -20,6 +20,7 @@ import { getMyCardIds, getMyRatings, rememberMyCard, rememberMyComment, remember
 import type { LessonInput, TaskInput } from '../lib/boardApi';
 import { checkSubmit } from '../lib/lessons';
 import { newEditCode, normalizeEditCode, normalizeName } from '../lib/editCode';
+import { cleanJoinCode, randomJoinCode } from '../lib/joinCode';
 
 /** Cứ mỗi chừng này mili giây trang hỏi "dấu vân tay" của bảng; có đổi thì tải lại êm, không cần bấm F5. */
 const POLL_MS = 5000;
@@ -164,6 +165,12 @@ export interface BoardStore {
   setAttendancePresent: (boardId: string, day: string, nameKey: string, present: boolean) => Promise<void>;
   /** Đổi link chia sẻ của bảng (link và QR cũ ngừng hoạt động). */
   regenerateLink: (boardId: string) => Promise<void>;
+  /** Đổi mã vào lớp (6 số) sang mã mới; mã cũ ngừng dùng. */
+  changeJoinCode: (boardId: string) => Promise<void>;
+  /** Bật / tắt việc học sinh vào bảng bằng mã. */
+  setJoinEnabled: (boardId: string, enabled: boolean) => Promise<void>;
+  /** Học sinh nhập mã ở trang chủ: trả về mã link của bảng, null nếu mã sai. */
+  resolveJoinCode: (code: string) => Promise<string | null>;
   setTaskProgress: (boardId: string, taskId: string, progress: 'todo' | 'doing' | 'done') => Promise<void>;
   /** Bảng việc riêng của tôi: có rồi thì trả về, chưa có thì tạo (ẩn khỏi danh sách bảng). */
   ensurePersonalBoard: () => Promise<BoardData>;
@@ -260,6 +267,7 @@ function tokenFromPath(): string | null {
 }
 
 const randomToken = (): string => Math.random().toString(36).slice(2, 12);
+const isTeamBoard = (s: { scope?: string } | undefined): boolean => s?.scope === 'team';
 
 /**
  * Một cổng duy nhất cho dữ liệu bảng: dữ liệu mẫu khi chưa có .env, Supabase khi đã cấu hình.
@@ -395,6 +403,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
       const lesson: Lesson | undefined = extras.lessonTitle ? { id: `bh-${Date.now()}`, title: extras.lessonTitle, description: '', startsAt: null, endsAt: null } : undefined;
       const b: BoardData = {
         id: `mau-${Date.now()}`, mode: template.mode, title, subtitle: 'Bảng mẫu mới', goals: template.goals, shareToken: randomToken(),
+        joinCode: randomJoinCode(), joinEnabled: !isTeamBoard(template.settings),
         linkMode: 'guest_post', pinned: [], lessons: lesson ? [lesson] : [], program: extras.program, sessions: [], roster: [], cards: [], settings: template.settings,
         tasks: [], createdAt: new Date().toISOString(), isTemplate: false,
         ownerEmail: actor, collaborators: [],
@@ -414,7 +423,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     let copy: BoardData;
     if (!isReal) {
       copy = {
-        ...source, id: `mau-${Date.now()}`, title: opts.title, shareToken: randomToken(), cards: [], isTemplate: false,
+        ...source, id: `mau-${Date.now()}`, title: opts.title, shareToken: randomToken(), joinCode: randomJoinCode(), cards: [], isTemplate: false,
         archivedAt: null, deletedAt: null, createdAt: new Date().toISOString(), ownerEmail: actor, collaborators: [],
         roster: opts.keepRoster ? source.roster : [],
         pinned: opts.keepPinned ? source.pinned.map((r) => ({ ...r, id: `r-${Math.random()}` })) : [],
@@ -744,6 +753,25 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     await note(boardId, 'cai_dat', 'Đổi link chia sẻ', true);
   }, [isReal, patch, note]);
 
+  const changeJoinCode = useCallback(async (boardId: string): Promise<void> => {
+    const code = (isReal ? await api.updateJoin(boardId, { newCode: randomJoinCode() }) : randomJoinCode()) ?? null;
+    patch(boardId, (b) => ({ ...b, joinCode: code }));
+    await note(boardId, 'cai_dat', 'Đổi mã vào lớp', true);
+  }, [isReal, patch, note]);
+
+  const setJoinEnabled = useCallback(async (boardId: string, enabled: boolean): Promise<void> => {
+    if (isReal) await api.updateJoin(boardId, { enabled });
+    patch(boardId, (b) => ({ ...b, joinEnabled: enabled }));
+    await note(boardId, 'cai_dat', enabled ? 'Bật vào lớp bằng mã' : 'Tắt vào lớp bằng mã', true);
+  }, [isReal, patch, note]);
+
+  const resolveJoinCode = useCallback(async (raw: string): Promise<string | null> => {
+    const code = cleanJoinCode(raw);
+    if (code.length !== 6) return null;
+    if (isReal) return api.resolveJoinCode(code);
+    return boardsRef.current.find((b) => b.joinCode === code && b.joinEnabled !== false && !b.deletedAt)?.shareToken ?? null;
+  }, [isReal]);
+
   const setTaskProgress = useCallback(async (boardId: string, taskId: string, progress: 'todo' | 'doing' | 'done'): Promise<void> => {
     if (isReal) await api.updateTaskProgress(taskId, progress);
     patch(boardId, (b) => ({ ...b, tasks: b.tasks.map((t) => (t.id === taskId ? { ...t, progress } : t)) }));
@@ -975,6 +1003,6 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     rateCard, addComment, deleteOwnComment, setCommentStatus, deleteComment, setTeacherStars,
     inviteCollaborator, changeCollaboratorRole, removeCollaborator, leaveBoard,
     createBoard, duplicateBoard, updateMeta, addCard, setCardLayout, setStatus, setGrade, vote, deleteCard, moveCards, loadRosterNames, reassignCard, findCardByCode, findCardsByName, saveCardByCode, clearSubmissions, updateCardAttachments, removeStoredAttachments,
-    setRoster, setSettings, saveLesson, removeLesson, saveTask, removeTask, regenerateLink, setTaskProgress, ensurePersonalBoard, rollRecurring, loadAttendance, addAttendanceSession, removeAttendanceSession, setAttendancePresent, addResource, removeResource, updateResource, assignToBoards, setProgram, setArchived, setTrashed, deleteForever, setTemplate, loadActivity,
+    setRoster, setSettings, saveLesson, removeLesson, saveTask, removeTask, regenerateLink, changeJoinCode, setJoinEnabled, resolveJoinCode, setTaskProgress, ensurePersonalBoard, rollRecurring, loadAttendance, addAttendanceSession, removeAttendanceSession, setAttendancePresent, addResource, removeResource, updateResource, assignToBoards, setProgram, setArchived, setTrashed, deleteForever, setTemplate, loadActivity,
   };
 }

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { Check, Copy, Download, Eye, Lock, Maximize2, PlusCircle } from 'lucide-react';
+import { Check, Copy, Download, Eye, KeyRound, Lock, Maximize2, PlusCircle, RefreshCw } from 'lucide-react';
 import type { BoardAccess, BoardData, CollabRole, LinkMode, ModerationMode } from '../types/board';
 import { ModalShell } from './ModalShell';
 import { TeacherSharePanel } from './TeacherSharePanel';
 import { ModerationPicker } from './ModerationPicker';
+import { formatJoinCode } from '../lib/joinCode';
 
 interface Props {
   board: BoardData;
@@ -12,6 +13,9 @@ interface Props {
   onChangeLinkMode: (mode: LinkMode) => void;
   /** Đổi link chia sẻ: link và QR cũ ngừng hoạt động. */
   onRegenerateLink?: () => Promise<void>;
+  /** Mã vào lớp 6 số: đổi sang mã mới, bật / tắt việc vào bằng mã. */
+  onChangeJoinCode?: () => Promise<void>;
+  onToggleJoin?: (enabled: boolean) => Promise<void>;
   onChangeModeration: (mode: ModerationMode) => void;
   onClose: () => void;
   /** Quyền của người đăng nhập với bảng và các thao tác chia sẻ với giáo viên khác. */
@@ -30,7 +34,7 @@ const MODES: { id: LinkMode; title: string; desc: string; icon: typeof Eye }[] =
   { id: 'locked', title: 'Khóa nộp bài', desc: 'Hết giờ: giữ nguyên bài đã nộp, không nhận thêm.', icon: Lock },
 ];
 
-export function ShareBoardModal({ board, canManage, onChangeLinkMode, onRegenerateLink, onChangeModeration, onClose, access, myEmail, initialTab = 'students', onInvite, onChangeRole, onRemove, onLeave }: Props) {
+export function ShareBoardModal({ board, canManage, onChangeLinkMode, onRegenerateLink, onChangeJoinCode, onToggleJoin, onChangeModeration, onClose, access, myEmail, initialTab = 'students', onInvite, onChangeRole, onRemove, onLeave }: Props) {
   const [tab, setTab] = useState<'students' | 'teachers'>(initialTab);
   const url = `${window.location.origin}/b/${board.shareToken}`;
   const [qr, setQr] = useState('');
@@ -38,6 +42,11 @@ export function ShareBoardModal({ board, canManage, onChangeLinkMode, onRegenera
   const [askNew, setAskNew] = useState(false);
   const [newMsg, setNewMsg] = useState('');
   const [big, setBig] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
+  const [askNewCode, setAskNewCode] = useState(false);
+  const [codeMsg, setCodeMsg] = useState('');
+  const joinOn = board.joinEnabled !== false;
+  const joinShown = board.joinCode && joinOn ? formatJoinCode(board.joinCode) : '';
 
   useEffect(() => {
     let alive = true;
@@ -46,6 +55,12 @@ export function ShareBoardModal({ board, canManage, onChangeLinkMode, onRegenera
       .catch(() => { if (alive) setQr(''); });
     return () => { alive = false; };
   }, [url]);
+
+  const copyCode = async (): Promise<void> => {
+    if (!board.joinCode) return;
+    try { await navigator.clipboard.writeText(board.joinCode); setCodeCopied(true); setTimeout(() => setCodeCopied(false), 2000); }
+    catch { window.prompt('Sao chép mã vào lớp:', board.joinCode ?? ''); }
+  };
 
   const copy = async (): Promise<void> => {
     try {
@@ -63,7 +78,7 @@ export function ShareBoardModal({ board, canManage, onChangeLinkMode, onRegenera
     const img = new Image();
     await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = () => rej(new Error('qr')); img.src = data; });
     try { await document.fonts.load('700 56px "Be Vietnam Pro"'); } catch { /* dùng phông dự phòng */ }
-    const W = 1200; const H = 1450;
+    const W = 1200; const H = joinShown ? 1545 : 1450;
     const c = document.createElement('canvas'); c.width = W; c.height = H;
     const g = c.getContext('2d');
     if (!g) return;
@@ -79,6 +94,7 @@ export function ShareBoardModal({ board, canManage, onChangeLinkMode, onRegenera
     g.fillText('Quét mã để mở bảng và nộp bài', W / 2, 1345);
     g.fillStyle = '#46556e'; g.font = '500 30px "Be Vietnam Pro", system-ui, sans-serif';
     g.fillText(url, W / 2, 1395, W - 120);
+    if (joinShown) { g.fillStyle = '#0a1730'; g.font = '800 46px "Be Vietnam Pro", system-ui, sans-serif'; g.fillText(`Hoặc nhập mã vào lớp: ${joinShown}`, W / 2, 1480, W - 120); }
     const blob = await new Promise<Blob | null>((res) => c.toBlob(res, 'image/png'));
     if (!blob) return;
     const slug = board.title.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'bang';
@@ -94,6 +110,7 @@ export function ShareBoardModal({ board, canManage, onChangeLinkMode, onRegenera
         <h2 className="text-center text-2xl font-extrabold sm:text-4xl">{board.title}</h2>
         {qr && <img src={qr} alt="Mã QR vào bảng" className="aspect-square w-[min(70vh,86vw)]" />}
         <p className="break-all text-center text-lg font-bold text-brand-700 sm:text-2xl">{url}</p>
+        {joinShown && <p className="text-center text-xl font-extrabold sm:text-3xl">Hoặc nhập mã vào lớp: <span className="rounded-2xl bg-brand-50 px-4 py-1 tracking-[0.12em] text-brand-700">{joinShown}</span></p>}
         <p className="text-sm text-ink-2">Bấm bất kỳ đâu để thu nhỏ</p>
       </div>
     );
@@ -173,6 +190,44 @@ export function ShareBoardModal({ board, canManage, onChangeLinkMode, onRegenera
           </fieldset>
         </div>
         <div className="min-w-0 space-y-4">
+          {board.joinCode && (
+            <div className="rounded-2xl border-[1.5px] border-brand-200 bg-brand-50/60 p-3" aria-label="Mã vào lớp">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="field-label !mb-0 inline-flex items-center gap-1.5"><KeyRound className="h-4 w-4 text-brand-700" aria-hidden /> Mã vào lớp (6 số)</span>
+                {canManage && onToggleJoin && (
+                  <label className="inline-flex min-h-[40px] cursor-pointer items-center gap-2 text-xs font-extrabold max-lg:min-h-[44px]">
+                    <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={joinOn} onChange={(e) => void onToggleJoin(e.target.checked).catch((er: unknown) => setCodeMsg(er instanceof Error ? er.message : 'Không lưu được.'))} />
+                    Cho vào bằng mã
+                  </label>
+                )}
+              </div>
+              <p className={`my-2 text-center text-4xl font-extrabold tracking-[0.18em] ${joinOn ? 'text-ink' : 'text-ink-3 line-through'}`} aria-label={`Mã vào lớp ${board.joinCode.split('').join(' ')}`}>{formatJoinCode(board.joinCode)}</p>
+              {joinOn ? (
+                <p className="text-xs text-ink-2">Học sinh mở trang chủ, bấm <b>“Học sinh vào lớp bằng mã”</b> rồi nhập mã này. Mã cũng hiện trên màn hình “Chiếu mã QR lớn”.</p>
+              ) : (
+                <p className="text-xs font-bold text-amber-800">Đang tắt: học sinh nhập mã sẽ không vào được. Link và mã QR vẫn dùng bình thường.</p>
+              )}
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button type="button" onClick={() => void copyCode()} className="btn-primary btn-sm">
+                  {codeCopied ? <Check className="h-4 w-4" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />} {codeCopied ? 'Đã chép mã' : 'Sao chép mã'}
+                </button>
+                {canManage && onChangeJoinCode && !askNewCode && (
+                  <button type="button" onClick={() => { setCodeMsg(''); setAskNewCode(true); }} className="btn-ghost btn-sm"><RefreshCw className="h-3.5 w-3.5" aria-hidden /> Đổi mã khác</button>
+                )}
+              </div>
+              {askNewCode && onChangeJoinCode && (
+                <div role="alertdialog" aria-label="Đổi mã vào lớp" className="mt-2 rounded-2xl border-[1.5px] border-amber-300 bg-amber-50 p-3 text-sm">
+                  <p className="font-extrabold text-amber-900">Đổi sang mã mới?</p>
+                  <p className="mt-1 text-amber-900">Mã đang dùng ngừng hoạt động ngay. Học sinh đã vào lớp rồi thì không bị ảnh hưởng.</p>
+                  <div className="mt-2 flex gap-2">
+                    <button type="button" className="btn-primary btn-sm" onClick={() => { void onChangeJoinCode().then(() => { setAskNewCode(false); setCodeMsg('Đã đổi mã. Hãy báo mã mới cho học sinh.'); }).catch((e: unknown) => setCodeMsg(e instanceof Error ? e.message : 'Không đổi được mã.')); }}>Đổi mã</button>
+                    <button type="button" className="btn-ghost btn-sm" onClick={() => setAskNewCode(false)}>Hủy</button>
+                  </div>
+                </div>
+              )}
+              {codeMsg && <p role="status" className="mt-1 text-xs font-bold text-emerald-700">{codeMsg}</p>}
+            </div>
+          )}
           <ModerationPicker name="share-moderation" value={board.settings.moderation} disabled={!canManage} onChange={onChangeModeration} />
           <p className="text-xs text-ink-2">Giới hạn chống spam: tối đa 5 bài / 10 phút mỗi trình duyệt.</p>
           {!canManage && <p className="text-xs text-ink-2">Chỉ chủ bảng và đồng quản lý mới đổi được quyền của link.</p>}

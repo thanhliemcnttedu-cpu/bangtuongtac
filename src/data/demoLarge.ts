@@ -15,6 +15,7 @@ function variant(src: BoardData, id: string, patch: Partial<BoardData>, i: numbe
     ...src,
     id,
     shareToken: `${id.replace(/[^a-z0-9]/g, '')}z9`.slice(0, 10),
+    joinCode: String(100000 + ([...id].reduce((n, ch) => n * 31 + ch.charCodeAt(0), 11) % 900000)),
     cards: src.cards.slice(0, n).map((c, k) => ({
       ...c, id: `${id}-c${k}`, boardId: id,
       status: STATUSES[(k + i) % STATUSES.length],
