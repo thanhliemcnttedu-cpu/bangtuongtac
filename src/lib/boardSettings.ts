@@ -16,6 +16,7 @@ import {
   Wifi,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import type { CSSProperties } from 'react';
 import type { BoardBackground, BoardFont, BoardIconId, BoardSettings, ModerationMode, SortBy, ViewMode } from '../types/board';
 
 export const DEFAULT_SETTINGS: BoardSettings = {
@@ -151,6 +152,26 @@ function parseVennLabels(v: unknown): [string, string] {
 
 /** Chỉ nhận ảnh nền dạng data URL ảnh, ký tự base64 thuần và không quá lớn: dùng trong CSS url() nên phải chắc chắn không chứa gì khác. */
 export const MAX_BG_CHARS = 420_000;
+export type TitleStyle = NonNullable<BoardSettings['titleStyle']>;
+const HEX6 = /^#[0-9a-fA-F]{6}$/;
+/** Lọc kiểu chữ tên bảng đọc từ CSDL: chỉ nhận cờ đúng/sai và màu #rrggbb. */
+export function parseTitleStyle(v: unknown): TitleStyle | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const r = v as Record<string, unknown>;
+  const out: TitleStyle = {};
+  if (r.b === true) out.b = true;
+  if (r.i === true) out.i = true;
+  if (r.u === true) out.u = true;
+  if (typeof r.color === 'string' && HEX6.test(r.color)) out.color = r.color.toLowerCase();
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+/** CSS cho tên bảng theo kiểu chữ đã chọn (không có thì để mặc định). */
+export const titleCss = (t?: TitleStyle): CSSProperties => ({
+  ...(t?.b ? { fontWeight: 900 } : {}), ...(t?.i ? { fontStyle: 'italic' } : {}), ...(t?.u ? { textDecoration: 'underline' } : {}),
+  // Tên bảng (h1) mặc định tô chữ gradient bằng text-fill trong suốt (index.css); chọn màu thì phải bỏ gradient và đặt cả text-fill.
+  ...(t?.color ? { color: t.color, WebkitTextFillColor: t.color, backgroundImage: 'none' } : {}),
+});
+
 export const isBgImage = (v: unknown): v is string =>
   typeof v === 'string' && v.length <= MAX_BG_CHARS && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v);
 
@@ -167,6 +188,7 @@ export function parseSettings(raw: unknown): BoardSettings {
     font: pick(r.font, Object.keys(FONTS), DEFAULT_SETTINGS.font),
     cardSize: r.cardSize === 'wide' ? 'wide' : r.cardSize === 'compact' ? 'compact' : 'standard',
     ...(isBgImage(r.bgImage) ? { bgImage: r.bgImage } : {}),
+    ...(parseTitleStyle(r.titleStyle) ? { titleStyle: parseTitleStyle(r.titleStyle) } : {}),
     showAuthor: r.showAuthor !== false,
     showTime: r.showTime !== false,
     vennLabels: parseVennLabels(r.vennLabels),

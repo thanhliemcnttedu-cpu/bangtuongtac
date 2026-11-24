@@ -75,18 +75,30 @@ const extOf = (name: string): string => { const m = /\.([a-z0-9]{1,6})$/i.exec(n
 /** Có xem trực tiếp trong trang được không (ảnh, video, âm thanh, nhúng, PDF, Word, Excel, PowerPoint, văn bản). */
 const viewable = (a: Attachment): boolean => a.type === 'image' || a.type === 'video' || a.type === 'audio' || a.type === 'embed' || (a.type === 'file' && !['archive', 'other'].includes(docKindOf(a)));
 
-/** Trang web mà thẻ trỏ tới (liên kết hoặc tài liệu nhúng, không tính tệp trên Drive); không có thì trả về null. */
+/** Gốc (https://tên-miền) của trang web mà thẻ trỏ tới (liên kết hoặc tài liệu nhúng, không tính tệp trên Drive); không có thì trả về null. */
 function siteHost(r: PinnedResource): string | null {
   const a = (r.attachments ?? []).find((x) => (x.type === 'link' || x.type === 'embed') && !x.driveId && x.url);
   const raw = a?.url ?? (!r.attachments?.length && r.url && r.url !== '#' ? r.url : '');
-  try { const u = new URL(raw); return u.protocol === 'http:' || u.protocol === 'https:' ? u.hostname.replace(/^www\./, '') : null; } catch { return null; }
+  try { const u = new URL(raw); return u.protocol === 'http:' || u.protocol === 'https:' ? u.origin : null; } catch { return null; }
 }
 
-/** Biểu tượng (favicon) của trang web để học sinh nhận ra phần mềm, trang web; không tải được thì dùng biểu tượng loại tài liệu. */
-function SiteIcon({ host, fallback: Fallback }: { host: string; fallback: LucideIcon }) {
-  const [failed, setFailed] = useState(false);
-  if (failed) return <Fallback className="h-6 w-6" aria-hidden />;
-  return <img src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} className="h-9 w-9 rounded-lg bg-white object-contain" />;
+/**
+ * Biểu tượng (favicon) của trang web để học sinh nhận ra phần mềm, trang web. Thử lần lượt: tệp favicon.svg / favicon.ico của chính trang
+ * (nhiều trang hiện đại chỉ có SVG, dịch vụ của Google không đọc được SVG và trả về hình quả địa cầu mặc định), rồi dịch vụ favicon của Google;
+ * không có cái nào thì dùng biểu tượng loại tài liệu. Ảnh nhỏ 16px từ Google bị coi là hình mặc định vì Google luôn trả cỡ đó khi không tìm thấy.
+ */
+function SiteIcon({ host: origin, fallback: Fallback }: { host: string; fallback: LucideIcon }) {
+  const [i, setI] = useState(0);
+  const domain = new URL(origin).hostname.replace(/^www\./, '');
+  const sources = [`${origin}/favicon.svg`, `${origin}/favicon.ico`, `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`];
+  if (i >= sources.length) return <Fallback className="h-6 w-6" aria-hidden />;
+  const google = i === sources.length - 1;
+  return (
+    <img key={i} src={sources[i]} alt="" loading="lazy" referrerPolicy="no-referrer"
+      onError={() => setI(i + 1)}
+      onLoad={(e) => { if (google && e.currentTarget.naturalWidth <= 16) setI(i + 1); }}
+      className="h-9 w-9 rounded-lg bg-white object-contain" />
+  );
 }
 
 interface DragProps {

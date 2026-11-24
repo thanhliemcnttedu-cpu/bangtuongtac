@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { ClipboardPaste, ImagePlus, Save, Trash2 } from 'lucide-react';
+import { Bold, ChevronDown, ClipboardPaste, ImagePlus, Italic, Save, Trash2, Underline } from 'lucide-react';
 import type { BoardSettings, ViewMode } from '../types/board';
-import { BACKGROUNDS, FONTS, ICONS, ICON_GROUPS, MAX_BG_CHARS, SORTS, VIEW_LABEL } from '../lib/boardSettings';
+import { BACKGROUNDS, FONTS, ICONS, ICON_GROUPS, MAX_BG_CHARS, SORTS, VIEW_LABEL, titleCss } from '../lib/boardSettings';
+import type { TitleStyle } from '../lib/boardSettings';
+import { INK, RICH_COLORS } from '../lib/richText';
 import { compressImage } from '../lib/media';
 import type { BoardMetaPatch } from '../lib/boardApi';
 import { ModerationPicker } from './ModerationPicker';
@@ -69,6 +71,16 @@ export function BoardSettingsModal({ initial, onPreview, onSave, onCancel, showP
   const [bgBusy, setBgBusy] = useState(false);
   const [bgMsg, setBgMsg] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const [iconOpen, setIconOpen] = useState<string | null>(null);
+  const [fontOpen, setFontOpen] = useState(false);
+  const fontBox = useRef<HTMLDivElement>(null);
+  // Danh sách phông chữ đóng khi bấm ra ngoài.
+  useEffect(() => {
+    if (!fontOpen) return;
+    const off = (e: MouseEvent): void => { if (fontBox.current && !fontBox.current.contains(e.target as Node)) setFontOpen(false); };
+    document.addEventListener('mousedown', off);
+    return () => document.removeEventListener('mousedown', off);
+  }, [fontOpen]);
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
   const requestClose = (): void => { if (dirty) setAskDiscard(true); else onCancel(); };
   useEffect(() => {
@@ -82,6 +94,12 @@ export function BoardSettingsModal({ initial, onPreview, onSave, onCancel, showP
   const set = <K extends keyof BoardSettings>(key: K, value: BoardSettings[K]): void =>
     update({ ...draft, settings: { ...draft.settings, [key]: value } });
   const s = draft.settings;
+  const ts: TitleStyle = s.titleStyle ?? {};
+  const setTitleStyle = (patch: Partial<TitleStyle>): void => {
+    const next: TitleStyle = { ...ts, ...patch };
+    (Object.keys(next) as (keyof TitleStyle)[]).forEach((k) => { if (!next[k]) delete next[k]; });
+    set('titleStyle', Object.keys(next).length > 0 ? next : undefined);
+  };
 
   const applyBgFile = async (file: File | undefined | null): Promise<void> => {
     if (!file) return;
@@ -137,7 +155,24 @@ export function BoardSettingsModal({ initial, onPreview, onSave, onCancel, showP
           <Section title="Thông tin">
             <div>
               <label htmlFor="bs-title" className="field-label">Tên bảng</label>
-              <input id="bs-title" className="input" value={draft.title} onChange={(e) => update({ ...draft, title: e.target.value })} />
+              <input id="bs-title" className="input" style={titleCss(s.titleStyle)} value={draft.title} onChange={(e) => update({ ...draft, title: e.target.value })} />
+              <div role="toolbar" aria-label="Kiểu chữ của tên bảng" className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                {([['b', 'Chữ đậm', Bold], ['i', 'Chữ nghiêng', Italic], ['u', 'Gạch chân', Underline]] as const).map(([k, label, Ic]) => (
+                  <button key={k} type="button" aria-pressed={!!ts[k]} aria-label={label} title={label} onClick={() => setTitleStyle({ [k]: !ts[k] })}
+                    className={`flex h-9 w-9 items-center justify-center rounded-lg border-2 transition max-lg:h-11 max-lg:w-11 ${ts[k] ? 'border-brand-600 bg-brand-100 text-brand-700' : 'border-brand-100 bg-white text-ink-2 hover:border-brand-300'}`}><Ic className="h-4 w-4" aria-hidden /></button>
+                ))}
+                <span className="mx-1 h-5 w-px bg-brand-100" aria-hidden />
+                <button type="button" aria-label="Màu mặc định" title="Màu mặc định" aria-pressed={!ts.color} onClick={() => setTitleStyle({ color: undefined })}
+                  className={`h-7 w-7 rounded-full border-2 border-white shadow ring-2 max-lg:h-9 max-lg:w-9 ${!ts.color ? 'ring-brand-600' : 'ring-brand-100'}`} style={{ background: INK }} />
+                {RICH_COLORS.map((c) => (
+                  <button key={c.hex} type="button" aria-label={`Màu ${c.name}`} title={c.name} aria-pressed={ts.color === c.hex} onClick={() => setTitleStyle({ color: c.hex })}
+                    className={`h-7 w-7 rounded-full border-2 border-white shadow ring-2 max-lg:h-9 max-lg:w-9 ${ts.color === c.hex ? 'ring-brand-600' : 'ring-brand-100'}`} style={{ background: c.hex }} />
+                ))}
+                <label title="Chọn màu bất kỳ" className="flex h-7 cursor-pointer items-center gap-1 rounded-full bg-white px-2 text-xs font-extrabold text-brand-700 ring-2 ring-brand-100 hover:ring-brand-300 max-lg:h-9">
+                  <input type="color" aria-label="Màu tự chọn" value={ts.color ?? '#1668f2'} onChange={(e) => setTitleStyle({ color: e.target.value })} className="h-5 w-5 cursor-pointer rounded border-0 bg-transparent p-0" />
+                  Màu khác
+                </label>
+              </div>
             </div>
             {showProgram && (
               <div>
@@ -151,25 +186,38 @@ export function BoardSettingsModal({ initial, onPreview, onSave, onCancel, showP
             </div>
             <div>
               <span className="field-label">Biểu tượng</span>
-              <div className="space-y-2.5">
-                {ICON_GROUPS.map((g) => (
-                  <div key={g.title} role="group" aria-label={`Biểu tượng ${g.title}`}>
-                    <p className="mb-1 text-[11px] font-extrabold uppercase tracking-wide text-ink-3">{g.title}</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {g.items.map(([id, label, Icon]) => {
-                        const on = s.icon === id;
-                        return (
-                          <button key={id} type="button" aria-pressed={on} aria-label={label} title={label} onClick={() => set('icon', id)}
-                            className={`flex h-11 w-11 items-center justify-center rounded-xl border-2 transition duration-150 ${on ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-brand-100 bg-white text-ink-2 hover:border-brand-300'}`}>
-                            <Icon className="h-5 w-5" aria-hidden />
-                          </button>
-                        );
-                      })}
+              <p className="mb-1.5 flex items-center gap-2 text-sm font-bold">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-700 ring-2 ring-brand-200">{(() => { const I = (ICONS[s.icon] ?? ICONS.book).Icon; return <I className="h-5 w-5" aria-hidden />; })()}</span>
+                Đang chọn: {ICONS[s.icon]?.label ?? 'Sách'}
+              </p>
+              <div className="divide-y divide-brand-100 overflow-hidden rounded-xl border-2 border-brand-100 bg-white">
+                {ICON_GROUPS.map((g) => {
+                  const open = iconOpen === g.title;
+                  const chosen = g.items.some(([id]) => id === s.icon);
+                  return (
+                    <div key={g.title}>
+                      <button type="button" aria-expanded={open} onClick={() => setIconOpen(open ? null : g.title)}
+                        className="flex min-h-[44px] w-full items-center justify-between gap-2 px-3 text-left text-sm font-extrabold hover:bg-brand-50">
+                        <span className="flex items-center gap-2">{g.title}{chosen && <span className="rounded-full bg-brand-600 px-1.5 text-[10px] text-white">đang chọn</span>}</span>
+                        <span className="flex items-center gap-2 text-xs font-bold text-ink-3">{g.items.length}<ChevronDown className={`h-4 w-4 transition ${open ? 'rotate-180' : ''}`} aria-hidden /></span>
+                      </button>
+                      {open && (
+                        <div role="group" aria-label={`Biểu tượng ${g.title}`} className="flex flex-wrap gap-1.5 bg-brand-50/50 p-2">
+                          {g.items.map(([id, label, Icon]) => {
+                            const on = s.icon === id;
+                            return (
+                              <button key={id} type="button" aria-pressed={on} aria-label={label} title={label} onClick={() => set('icon', id)}
+                                className={`flex h-11 w-11 items-center justify-center rounded-xl border-2 transition duration-150 ${on ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-brand-100 bg-white text-ink-2 hover:border-brand-300'}`}>
+                                <Icon className="h-5 w-5" aria-hidden />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
-              <p className="mt-1 text-xs text-ink-2">Đang chọn: {ICONS[s.icon]?.label ?? 'Sách'}</p>
             </div>
           </Section>
 
@@ -206,24 +254,29 @@ export function BoardSettingsModal({ initial, onPreview, onSave, onCancel, showP
                 {bgMsg && !bgBusy && <p role="status" className="mt-1 text-xs font-bold text-brand-700">{bgMsg}</p>}
               </div>
             </div>
-            <div>
-              <span className="field-label">Phông chữ</span>
-              <div className="space-y-2">
-                {FONT_GROUPS.map((grp) => (
-                  <div key={grp} role="group" aria-label={`Phông chữ ${grp}`}>
-                    <p className="mb-1 text-[11px] font-extrabold uppercase tracking-wide text-ink-3">{grp}</p>
-                    <div className="grid grid-cols-2 gap-2">
+            <div ref={fontBox} className="relative">
+              <span id="bs-font-label" className="field-label">Phông chữ</span>
+              <button type="button" aria-haspopup="listbox" aria-expanded={fontOpen} aria-labelledby="bs-font-label" onClick={() => setFontOpen(!fontOpen)}
+                onKeyDown={(e) => { if (e.key === 'Escape' && fontOpen) { e.stopPropagation(); setFontOpen(false); } }}
+                style={{ fontFamily: FONTS[s.font]?.family }}
+                className="flex min-h-[44px] w-full items-center justify-between gap-2 rounded-xl border-2 border-brand-200 bg-white px-3 text-left text-base font-bold hover:border-brand-400 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100">
+                <span>{FONTS[s.font]?.label ?? FONTS.sans.label}</span>
+                <ChevronDown className={`h-4 w-4 shrink-0 transition ${fontOpen ? 'rotate-180' : ''}`} aria-hidden />
+              </button>
+              {fontOpen && (
+                <ul role="listbox" aria-label="Danh sách phông chữ" className="absolute left-0 right-0 z-30 mt-1 max-h-64 overflow-y-auto rounded-2xl border-[1.5px] border-brand-200 bg-white p-1.5 shadow-lift">
+                  {FONT_GROUPS.map((grp) => (
+                    <li key={grp} role="presentation">
+                      <p className="px-3 pb-0.5 pt-1.5 text-[10px] font-extrabold uppercase tracking-wide text-ink-3">{grp}</p>
                       {Object.keys(FONTS).filter((id) => FONTS[id].group === grp).map((id) => (
-                        <button key={id} type="button" aria-pressed={s.font === id} onClick={() => set('font', id)}
+                        <button key={id} type="button" role="option" aria-selected={s.font === id} onClick={() => { set('font', id); setFontOpen(false); }}
                           style={{ fontFamily: FONTS[id].family }}
-                          className={`min-h-[44px] rounded-xl border-2 px-2 text-sm font-bold transition duration-150 ${s.font === id ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-brand-100 bg-white hover:border-brand-300'}`}>
-                          {FONTS[id].label}
-                        </button>
+                          className={`flex min-h-[40px] w-full items-center rounded-lg px-3 text-left text-base max-lg:min-h-[44px] ${s.font === id ? 'bg-brand-50 font-extrabold text-brand-700' : 'hover:bg-brand-50'}`}>{FONTS[id].label}</button>
                       ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
               <p className="mt-1 text-xs text-ink-2" style={{ fontFamily: FONTS[s.font]?.family }}>Xem thử: Em yêu trường lớp của em – 0123456789</p>
             </div>
             <div>

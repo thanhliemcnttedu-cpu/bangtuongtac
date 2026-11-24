@@ -5,7 +5,7 @@ import type {
 } from '../types/board';
 import type { BoardStore } from '../hooks/useBoardStore';
 import { EMPTY_FILTERS, applyFilters, buildRows, computeKpis, isFiltered, normalize, sortRows } from '../lib/boardLogic';
-import { BACKGROUNDS, FONTS, ICONS } from '../lib/boardSettings';
+import { BACKGROUNDS, FONTS, ICONS, titleCss } from '../lib/boardSettings';
 import type { BoardMetaPatch } from '../lib/boardApi';
 import { DataBoardSummary } from './DataBoardSummary';
 import { MultiFilterBar } from './MultiFilterBar';
@@ -372,7 +372,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
               </span>
               <div className="min-w-0">
                 {board.program && <p className="mb-0.5 text-xs font-extrabold uppercase tracking-wide text-violet-700">{board.program}</p>}
-                <h1 className="text-[clamp(1.35rem,2.8vw,2.1rem)] font-extrabold leading-tight tracking-tight">{board.title}</h1>
+                <h1 className="text-[clamp(1.35rem,2.8vw,2.1rem)] font-extrabold leading-tight tracking-tight" style={titleCss(board.settings.titleStyle)}>{board.title}</h1>
                 {board.subtitle && <p className="mt-1 text-sm text-ink-2">{board.subtitle}</p>}
                 <div className="mt-2 flex flex-wrap gap-2">
                   <span className="chip bg-brand-100 text-brand-800 ring-brand-200">{board.mode === 'classroom' ? 'Chế độ Lớp học' : 'Chế độ Tập huấn'}</span>

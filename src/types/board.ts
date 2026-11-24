@@ -235,6 +235,8 @@ export interface BoardSettings {
   background: BoardBackground;
   font: BoardFont;
   cardSize: 'compact' | 'standard' | 'wide';
+  /** Kiểu chữ của tên bảng (cả tên): đậm, nghiêng, gạch chân, màu (#rrggbb). Không có = chữ mặc định. */
+  titleStyle?: { b?: boolean; i?: boolean; u?: boolean; color?: string };
   /** Ảnh nền do giáo viên tải lên (data URL JPEG đã thu nhỏ); chỉ dùng khi background = 'custom'. */
   bgImage?: string;
   showAuthor: boolean;
