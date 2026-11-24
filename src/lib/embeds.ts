@@ -6,6 +6,9 @@ import type { Attachment } from '../types/board';
 
 const ID = /^[A-Za-z0-9_-]{6,64}$/;
 
+/** Ảnh trang đầu của tệp trên Drive (PDF, Word, slide…): Drive tự dựng khi tệp để chế độ "ai có liên kết đều xem". */
+const driveThumb = (id: string): string => `https://drive.google.com/thumbnail?id=${id}&sz=w640`;
+
 function safeUrl(raw: string): URL | null {
   try {
     const u = new URL(raw.trim());
@@ -47,13 +50,13 @@ export function parseEmbed(raw: string): Attachment | null {
     const id = di >= 0 ? parts[di + 1] ?? '' : u.searchParams.get('id') ?? '';
     if (ID.test(id)) {
       if (host === 'docs.google.com' && parts[0] === 'presentation') {
-        return { type: 'embed', name: 'Google Slides', url: u.toString(), embed: { provider: 'drive', src: `https://docs.google.com/presentation/d/${id}/embed` } };
+        return { type: 'embed', name: 'Google Slides', url: u.toString(), embed: { provider: 'drive', src: `https://docs.google.com/presentation/d/${id}/embed`, thumb: driveThumb(id) } };
       }
       if (host === 'docs.google.com' && (parts[0] === 'document' || parts[0] === 'spreadsheets')) {
-        return { type: 'embed', name: parts[0] === 'document' ? 'Google Docs' : 'Google Sheets', url: u.toString(), embed: { provider: 'drive', src: `https://docs.google.com/${parts[0]}/d/${id}/preview` } };
+        return { type: 'embed', name: parts[0] === 'document' ? 'Google Docs' : 'Google Sheets', url: u.toString(), embed: { provider: 'drive', src: `https://docs.google.com/${parts[0]}/d/${id}/preview`, thumb: driveThumb(id) } };
       }
       if (host === 'drive.google.com') {
-        return { type: 'embed', name: 'Tệp Google Drive', url: u.toString(), embed: { provider: 'drive', src: `https://drive.google.com/file/d/${id}/preview` } };
+        return { type: 'embed', name: 'Tệp Google Drive', url: u.toString(), embed: { provider: 'drive', src: `https://drive.google.com/file/d/${id}/preview`, thumb: driveThumb(id) } };
       }
     }
   }

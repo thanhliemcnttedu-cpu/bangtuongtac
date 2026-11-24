@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { AlignLeft, Cloud, FileText, Image as ImageIcon, Link2, Mic, Play } from 'lucide-react';
 import type { Attachment } from '../types/board';
 import { parseEmbed } from '../lib/embeds';
@@ -16,6 +17,34 @@ function Block({ hue, className, large, children, name }: { hue: number; classNa
       style={{ background: `linear-gradient(135deg, hsl(${hue} 80% 55%), hsl(${(hue + 40) % 360} 75% 45%))` }}>
       {children}
       <span className={`max-w-[90%] truncate font-semibold ${large ? 'text-base' : 'text-[11px]'}`}>{name}</span>
+    </div>
+  );
+}
+
+/** Tệp trên Drive: hiện ảnh trang đầu (Drive tự dựng); chưa có ảnh hoặc không tải được thì giữ khối màu theo loại tệp. */
+function DriveDocThumb({ attachment, thumb, className, large }: { attachment: Attachment; thumb: string; className: string; large: boolean }) {
+  const [state, setState] = useState<'loading' | 'ok' | 'fail'>('loading');
+  const kind = docKindOf(attachment);
+  const icon = large ? 'h-12 w-12' : 'h-7 w-7';
+  const fallback = (
+    <Block hue={attachment.hue ?? DOC_HUE[kind]} className="absolute inset-0" large={large} name={attachment.name}>
+      <FileText className={icon} aria-hidden />
+      <span className={`rounded-full bg-white/25 px-2 font-extrabold ${large ? 'text-sm' : 'text-[10px]'}`}>{DOC_LABEL[kind]}</span>
+    </Block>
+  );
+  return (
+    <div className={`relative overflow-hidden bg-brand-50 ${className}`}>
+      {state !== 'ok' && fallback}
+      {state !== 'fail' && (
+        <img src={thumb} alt={`Trang đầu của ${attachment.name}`} loading="lazy" referrerPolicy="no-referrer"
+          onLoad={() => setState('ok')} onError={() => setState('fail')}
+          className={`absolute inset-0 h-full w-full bg-white object-cover object-top transition-opacity duration-300 ${state === 'ok' ? 'opacity-100' : 'opacity-0'}`} />
+      )}
+      {state === 'ok' && kind !== 'other' && (
+        <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-full bg-ink/75 px-2 py-0.5 text-[11px] font-extrabold text-white shadow">
+          <FileText className="h-3 w-3" aria-hidden /> {DOC_LABEL[kind]}
+        </span>
+      )}
     </div>
   );
 }
@@ -55,6 +84,7 @@ export function AttachmentThumb({ attachment, className = '', large = false }: P
     // Địa chỉ nhúng luôn dựng lại từ liên kết gốc (không tin trường embed lưu trong CSDL).
     const e = attachment.url ? parseEmbed(attachment.url) : null;
     const thumb = safeHref(e?.embed?.thumb);
+    if (thumb && e?.embed?.provider === 'drive') return <DriveDocThumb attachment={attachment} thumb={thumb} className={className} large={large} />;
     if (thumb) {
       return (
         <div className={`relative overflow-hidden bg-ink ${className}`}>
@@ -62,6 +92,10 @@ export function AttachmentThumb({ attachment, className = '', large = false }: P
           <span className="absolute inset-0 flex items-center justify-center bg-ink/20"><Play className="h-10 w-10 fill-white text-white drop-shadow" aria-hidden /></span>
         </div>
       );
+    }
+    if (e?.embed?.provider === 'drive') {
+      const kind = docKindOf(attachment);
+      return <Block hue={attachment.hue ?? DOC_HUE[kind]} className={className} large={large} name={attachment.name}><FileText className={icon} aria-hidden /></Block>;
     }
     return <Block hue={hue === 210 ? 20 : hue} className={className} large={large} name={attachment.name}><Play className={icon} aria-hidden /></Block>;
   }
