@@ -53,6 +53,7 @@ export function SystemHelpModal({ isReal, initialTab = 'check', onResult, onClos
   }, []);
 
   const missing = items?.filter((x) => x.state === 'missing') ?? [];
+  const upgrade = items?.filter((x) => x.state === 'upgrade') ?? [];
   return (
     <ModalShell title="Hỗ trợ sử dụng" onClose={onClose} maxWidth="max-w-3xl">
       <div className="space-y-3">
@@ -68,14 +69,14 @@ export function SystemHelpModal({ isReal, initialTab = 'check', onResult, onClos
             {isReal && busy && !items && <p role="status" className="flex items-center gap-2 text-sm text-ink-2"><Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Đang kiểm tra…</p>}
             {items && (
               <>
-                <p role="status" className={`rounded-xl px-3 py-2 text-sm font-bold ${missing.length === 0 ? 'bg-emerald-50 text-emerald-900' : 'bg-rose-50 text-rose-800'}`}>
-                  {missing.length === 0 ? 'Hệ thống đã đủ các phần cập nhật.' : `Còn thiếu ${missing.length} phần: các tính năng liên quan chưa hoạt động đúng cho đến khi bổ sung.`}
+                <p role="status" className={`rounded-xl px-3 py-2 text-sm font-bold ${missing.length > 0 ? 'bg-rose-50 text-rose-800' : upgrade.length > 0 ? 'bg-amber-50 text-amber-900' : 'bg-emerald-50 text-emerald-900'}`}>
+                  {missing.length === 0 ? (upgrade.length === 0 ? 'Hệ thống đã đủ các phần cập nhật.' : 'Các phần bắt buộc đã đủ. Có 1 mục nên nâng cấp (không bắt buộc), xem bên dưới.') : `Còn thiếu ${missing.length} phần: các tính năng liên quan chưa hoạt động đúng cho đến khi bổ sung.`}
                 </p>
                 <ul className="space-y-1.5">
                   {items.map((it) => (
                     <li key={it.key} className="flex items-start gap-2 rounded-xl border border-brand-100 bg-white px-3 py-2 text-sm">
-                      {it.state === 'ok' ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-label="Đạt" /> : <AlertTriangle className={`mt-0.5 h-4 w-4 shrink-0 ${it.state === 'missing' ? 'text-rose-600' : 'text-amber-600'}`} aria-label={it.state === 'missing' ? 'Thiếu' : 'Chưa kiểm được'} />}
-                      <span className="min-w-0"><b className="block font-semibold">{it.label}</b>{it.state !== 'ok' && <span className="block text-xs text-ink-2">{it.state === 'missing' ? it.fix : 'Chưa kiểm được (mất mạng hoặc chưa đăng nhập). Thử lại sau.'}</span>}</span>
+                      {it.state === 'ok' ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-label="Đạt" /> : <AlertTriangle className={`mt-0.5 h-4 w-4 shrink-0 ${it.state === 'missing' ? 'text-rose-600' : 'text-amber-600'}`} aria-label={it.state === 'missing' ? 'Thiếu' : it.state === 'upgrade' ? 'Nên nâng cấp' : 'Chưa kiểm được'} />}
+                      <span className="min-w-0"><b className="block font-semibold">{it.label}</b>{it.state !== 'ok' && <span className="block text-xs text-ink-2">{it.state === 'missing' || it.state === 'upgrade' ? it.fix : 'Chưa kiểm được (mất mạng hoặc chưa đăng nhập). Thử lại sau.'}</span>}</span>
                     </li>
                   ))}
                 </ul>

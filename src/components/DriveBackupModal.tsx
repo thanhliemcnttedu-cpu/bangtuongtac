@@ -108,7 +108,7 @@ export function DriveBackupModal({ board, real, onSaveGateway, onUpdateAttachmen
                 <li>Google hỏi quyền: bấm <b>Cho phép truy cập</b> → chọn Gmail của bạn → nếu thấy "Google chưa xác minh ứng dụng" thì bấm <b>Nâng cao</b> → <b>Chuyển tới … (không an toàn)</b> → <b>Cho phép</b>. (Đây là mã của chính bạn.)</li>
                 <li>Bấm <b>Sao chép</b> ở dòng <b>URL ứng dụng web</b>.</li>
               </ol>
-              <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900"><b>Đã có cổng cũ?</b> Dán mã mới đè lên mã cũ trong Apps Script, bấm <b>Triển khai → Quản lý lượt triển khai</b> → biểu tượng bút chì → mục <b>Phiên bản</b> chọn <b>Phiên bản mới</b> → <b>Triển khai</b> (Google hỏi cấp thêm quyền thì bấm Cho phép). Địa chỉ giữ nguyên, không cần dán lại. Cần làm vậy để nhận tệp lớn trên 30 MB.</p>
+              <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900"><b>Đã có cổng cũ?</b> Dán mã mới đè lên mã cũ trong Apps Script, bấm <b>Triển khai → Quản lý lượt triển khai</b> → biểu tượng bút chì → mục <b>Phiên bản</b> chọn <b>Phiên bản mới</b> → <b>Triển khai</b> (Google hỏi cấp thêm quyền thì bấm Cho phép). Địa chỉ giữ nguyên, không cần dán lại. Cần làm vậy để nhận tệp lớn trên 30 MB, gửi email nhắc việc và tải ZIP minh chứng lưu trên Drive (mã cổng phiên bản 4).</p>
             </div>
 
             <div className="rounded-2xl border-2 border-brand-100 p-3">

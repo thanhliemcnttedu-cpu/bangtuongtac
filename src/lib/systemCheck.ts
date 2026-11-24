@@ -4,12 +4,14 @@ import { gatewayVersion, loadDefaultGateway } from './drive';
 export interface CheckItem {
   key: string;
   label: string;
-  /** ok = có; missing = thiếu phần cập nhật; unknown = chưa kiểm được (mất mạng, chưa đăng nhập…). */
-  state: 'ok' | 'missing' | 'unknown';
+  /** ok = có; missing = thiếu phần cập nhật bắt buộc; upgrade = nên nâng cấp nhưng không bắt buộc; unknown = chưa kiểm được. */
+  state: 'ok' | 'missing' | 'upgrade' | 'unknown';
   /** Việc cần làm khi thiếu. */
   fix: string;
 }
 
+/** Không bắt buộc: cổng cũ vẫn nhận tệp học sinh nộp; chỉ gửi email nhắc việc và gói ZIP từ Drive cần phiên bản 4. */
+const GATEWAY_FIX = 'Không bắt buộc, chỉ cần để gửi email nhắc việc và tải ZIP minh chứng lưu trên Drive. Cách làm: mở một bảng của bạn → nút “Thêm” → “Lưu lên Google Drive của tôi…” → chép mã cổng mới, dán đè vào Apps Script rồi làm theo mục “Đã có cổng cũ?”.';
 const SQL_FIX = 'Chạy docs/cap-nhat-tong-hop.sql trong Supabase → SQL Editor.';
 
 /** Thiếu cột / bảng / hàm thì Supabase trả các mã này. */
@@ -46,7 +48,7 @@ export async function runSystemCheck(): Promise<CheckItem[]> {
   if (gw) {
     try {
       const v = await gatewayVersion(gw);
-      items.push({ key: 'gateway', label: `Cổng Google Drive (phiên bản ${v})`, state: v >= 4 ? 'ok' : 'missing', fix: 'Dán lại mã cổng mới ở Cài đặt bảng → Google Drive, triển khai lại và cho phép quyền gửi email.' });
+      items.push({ key: 'gateway', label: `Cổng Google Drive (phiên bản ${v})`, state: v >= 4 ? 'ok' : 'upgrade', fix: GATEWAY_FIX });
     } catch { items.push({ key: 'gateway', label: 'Cổng Google Drive', state: 'unknown', fix: 'Không gọi được cổng. Kiểm tra địa chỉ và mật khẩu cổng.' }); }
   }
   return items;
