@@ -45,7 +45,7 @@ export function certificatesHtml(people: string[], o: CertOptions, when: Date): 
 <p class="t">đã hoàn thành các nội dung và yêu cầu của lớp tập huấn</p><p class="c">“${esc(o.course)}”</p>
 <div class="f"><p>${esc(date)}</p><p><b>${esc(o.signerTitle)}</b></p><p class="sg">${esc(o.signerName)}</p></div></div></section>`).join('');
   return `<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Giấy chứng nhận</title><style>
-@page{size:A4 landscape;margin:0}body{margin:0;font-family:'Be Vietnam Pro',Georgia,serif;color:#0a1730}
+@page{size:A4 landscape;margin:0}body{margin:0;font-family:'Times New Roman','Be Vietnam Pro','Segoe UI',Arial,serif;color:#0a1730}
 .p{width:297mm;height:210mm;box-sizing:border-box;padding:12mm;page-break-after:always;display:flex}.p:last-child{page-break-after:auto}
 .b{flex:1;border:3px double #1668f2;padding:14mm 18mm;text-align:center;display:flex;flex-direction:column;justify-content:center}
 .is{margin:0 0 6mm;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#46556e}h1{margin:0;font-size:40pt;letter-spacing:.08em;color:#0b4fd0}

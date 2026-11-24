@@ -147,7 +147,7 @@ export function TeamSubmitModal({ board, roster, initialName = '', initialTaskId
           </>
         )}
         {dup && (
-          <div className="rounded-2xl border-[1.5px] border-amber-300 bg-amber-50 p-3 text-sm lg:col-span-2" role="alertdialog" aria-label="Đã nộp việc này rồi">
+          <div className={`rounded-2xl border-[1.5px] border-amber-300 bg-amber-50 p-3 text-sm ${ack ? '' : 'lg:col-span-2'}`} role="alertdialog" aria-label="Đã nộp việc này rồi">
             <p className="font-extrabold text-amber-900">{ack ? 'Bạn đã xác nhận đã đọc việc này rồi.' : `Bạn đã nộp việc này lúc ${formatDateTime(dup.submittedAt)}.`}</p>
             <p className="mt-1 text-amber-900">{ack ? 'Không cần bấm lại.' : 'Muốn gửi bản mới thì bản cũ sẽ được thay thế (không nộp thêm bản thứ hai).'}</p>
             <div className="mt-2 flex gap-2">
@@ -160,7 +160,7 @@ export function TeamSubmitModal({ board, roster, initialName = '', initialTaskId
         <p className="text-xs text-ink-2">Giờ nộp do hệ thống tự ghi. Sau khi nộp bạn nhận cách sửa lại bài (không cần tài khoản).</p>
         </div>
 
-        <div className="sticky bottom-0 z-10 -mx-5 -mb-5 flex justify-end gap-2 border-t border-brand-100 bg-white/95 px-5 py-3 backdrop-blur max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:static lg:col-span-2 lg:m-0 lg:border-0 lg:bg-transparent lg:p-0 lg:pt-1">
+        <div className={`sticky bottom-0 z-10 -mx-5 -mb-5 flex justify-end gap-2 border-t border-brand-100 bg-white/95 px-5 py-3 backdrop-blur max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:static ${ack ? '' : 'lg:col-span-2'} lg:m-0 lg:border-0 lg:bg-transparent lg:p-0 lg:pt-1`}>
           <button type="button" onClick={onClose} className="btn-ghost">Hủy</button>
           <button type="submit" disabled={busy} className="btn-primary">
             {ack ? <CheckCircle2 className="h-4 w-4" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />} {busy ? 'Đang gửi…' : ack ? 'Tôi đã đọc' : 'Nộp minh chứng'}
