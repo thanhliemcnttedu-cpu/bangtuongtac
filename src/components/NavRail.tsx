@@ -1,7 +1,7 @@
-import { Archive, BarChart3, ClipboardList, LayoutDashboard, LayoutGrid } from 'lucide-react';
+import { Archive, BarChart3, CalendarDays, ClipboardList, LayoutDashboard, LayoutGrid } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-export type NavPage = 'home' | 'board' | 'my' | 'reports';
+export type NavPage = 'home' | 'board' | 'my' | 'schedule' | 'reports';
 
 interface Props {
   active: NavPage;
@@ -18,6 +18,7 @@ const ITEMS: { id: NavPage; label: string; Icon: LucideIcon }[] = [
   { id: 'home', label: 'Tổng quan', Icon: LayoutDashboard },
   { id: 'board', label: 'Bảng', Icon: LayoutGrid },
   { id: 'my', label: 'Việc của tôi', Icon: ClipboardList },
+  { id: 'schedule', label: 'Lịch', Icon: CalendarDays },
   { id: 'reports', label: 'Báo cáo', Icon: BarChart3 },
 ];
 

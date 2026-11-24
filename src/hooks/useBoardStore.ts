@@ -197,6 +197,8 @@ export interface BoardStore {
   addTaskNote: (boardId: string, taskId: string, itemId: string | null, note: string) => Promise<void>;
   /** Bảng việc riêng của tôi: có rồi thì trả về, chưa có thì tạo (ẩn khỏi danh sách bảng). */
   ensurePersonalBoard: () => Promise<BoardData>;
+  /** Chuẩn bị tệp và liên kết đính kèm (giáo án, minh chứng…) của bảng: tải lên Drive của giáo viên nếu có cổng, không thì kho hệ thống. */
+  prepareFiles: (boardId: string, files: File[], links: string[], folder: string) => Promise<Attachment[]>;
   addResource: (boardId: string, input: MaterialInput) => Promise<void>;
   removeResource: (boardId: string, resourceId: string) => Promise<void>;
   updateResource: (boardId: string, resourceId: string, input: MaterialInput) => Promise<void>;
@@ -896,6 +898,13 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     }
   }, [isReal, patch, writeLog]);
 
+  const prepareFiles = useCallback(async (boardId: string, files: File[], links: string[], folder: string): Promise<Attachment[]> => {
+    if (files.length + links.length === 0) return [];
+    const board = boardsRef.current.find((b) => b.id === boardId);
+    const gw = board ? gatewayOf(board.settings) : null;
+    return prepareAttachments({ boardId, files, links }, isReal, true, gw && board ? { cfg: gw, folder: [ROOT_FOLDER, boardFolderName(board), folder], author: folder, mode: 'big' as const } : undefined);
+  }, [isReal]);
+
   const ensurePersonalBoard = useCallback(async (): Promise<BoardData> => {
     const have = boards.find((b) => b.settings.personal && !b.deletedAt && (b.access ?? 'owner') === 'owner');
     if (have) return have;
@@ -1141,6 +1150,6 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     rateCard, addComment, deleteOwnComment, setCommentStatus, deleteComment, setTeacherStars,
     inviteCollaborator, changeCollaboratorRole, removeCollaborator, leaveBoard,
     createBoard, duplicateBoard, updateMeta, addCard, setCardLayout, setStatus, setGrade, vote, deleteCard, moveCards, loadRosterNames, reassignCard, findCardByCode, findCardsByName, saveCardByCode, clearSubmissions, updateCardAttachments, removeStoredAttachments,
-    setRoster, setSettings, saveLesson, removeLesson, saveTask, removeTask, regenerateLink, changeJoinCode, setJoinEnabled, resolveJoinCode, setTaskProgress, loadTaskItems, loadItemSummaries, saveTaskItem, addTaskItems, setTaskItemDeleted, reorderTaskItems, addTaskNote, ensurePersonalBoard, rollRecurring, loadAttendance, addAttendanceSession, removeAttendanceSession, setAttendancePresent, addResource, removeResource, updateResource, reorderResources, assignToBoards, setProgram, setArchived, setTrashed, deleteForever, setTemplate, loadActivity,
+    setRoster, setSettings, saveLesson, removeLesson, saveTask, removeTask, regenerateLink, changeJoinCode, setJoinEnabled, resolveJoinCode, setTaskProgress, loadTaskItems, loadItemSummaries, saveTaskItem, addTaskItems, setTaskItemDeleted, reorderTaskItems, addTaskNote, ensurePersonalBoard, prepareFiles, rollRecurring, loadAttendance, addAttendanceSession, removeAttendanceSession, setAttendancePresent, addResource, removeResource, updateResource, reorderResources, assignToBoards, setProgram, setArchived, setTrashed, deleteForever, setTemplate, loadActivity,
   };
 }
