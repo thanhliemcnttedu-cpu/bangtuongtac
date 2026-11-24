@@ -153,3 +153,11 @@ export function pickRecorderMime(candidates: string[]): string | undefined {
   if (typeof MediaRecorder === 'undefined') return undefined;
   return candidates.find((m) => MediaRecorder.isTypeSupported(m));
 }
+
+/** Ảnh dán từ bộ nhớ tạm thường có tên chung "image.png": đặt tên theo giờ để phân biệt các ảnh. */
+export function nameClipboardFile(f: File): File {
+  if (f.name && !/^image\.[a-z0-9]+$/i.test(f.name)) return f;
+  const ext = (f.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  return new File([f], `anh-dan-${stamp}.${ext}`, { type: f.type });
+}

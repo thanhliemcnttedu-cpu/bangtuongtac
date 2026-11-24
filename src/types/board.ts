@@ -287,6 +287,8 @@ export interface BoardSettings {
   cardSize: 'compact' | 'standard' | 'wide';
   /** Kiểu chữ của tên bảng (cả tên): đậm, nghiêng, gạch chân, màu (#rrggbb). Không có = chữ mặc định. */
   titleStyle?: { b?: boolean; i?: boolean; u?: boolean; color?: string };
+  /** Chỉ bảng việc riêng: chia sẻ "Công việc của tôi" bằng link. mode view = chỉ xem; edit = xem, và chủ sửa được khi đăng nhập đúng Gmail. key là mã riêng của link. */
+  taskShare?: { mode: 'view' | 'edit'; key: string };
   /** Ảnh nền do giáo viên tải lên (data URL JPEG đã thu nhỏ); chỉ dùng khi background = 'custom'. */
   bgImage?: string;
   showAuthor: boolean;

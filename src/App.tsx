@@ -38,7 +38,7 @@ export default function App() {
   // Trang Tổng quan: bật sẵn khi giáo viên có nhiều bảng (từ 4 bảng của mình trở lên) để không phải chọn từng bảng.
   const [home, setHome] = useState<boolean | null>(null);
   // Trang "Công việc của tôi" (gom việc từ mọi bảng).
-  const [myTasks, setMyTasks] = useState(false);
+  const [myTasks, setMyTasks] = useState(() => new URLSearchParams(window.location.search).get('p') === 'my');
   const [reports, setReports] = useState(false);
   // Hỗ trợ: kiểm tra hệ thống + hướng dẫn nhanh; biểu ngữ hiện khi máy chủ còn thiếu phần cập nhật.
   const [help, setHelp] = useState<null | 'check' | 'guide' | 'drive'>(null);

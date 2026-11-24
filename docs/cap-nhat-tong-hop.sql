@@ -505,3 +505,33 @@ create policy task_logs_insert on public.task_logs for insert with check (public
 --     drop column if exists report_due_at, drop column if exists completed_at, drop column if exists repeat_until;
 --   (nếu đã có việc ở trạng thái mới, đưa về 'todo' trước khi trả ràng buộc về bộ giá trị cũ)
 -- ---------------------------------------------------------------------
+
+
+-- ############ cap-nhat-chia-se-cong-viec.sql ############
+-- Chia sẻ "Công việc của tôi" bằng link (xem tệp riêng để biết cách hoạt động và quay lại).
+create index if not exists boards_task_share_idx on public.boards ((settings->'taskShare'->>'key'))
+  where settings->'taskShare' is not null;
+
+create or replace function public.get_shared_tasks(p_token text) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare b boards; mode text;
+begin
+  if p_token is null or length(p_token) < 16 then return null; end if;
+  select * into b from boards
+   where settings->'taskShare'->>'key' = p_token and deleted_at is null
+     and coalesce(settings->>'personal', 'false') = 'true';
+  if not found then return null; end if;
+  mode := b.settings->'taskShare'->>'mode';
+  if mode is null or mode not in ('view', 'edit') then return null; end if;
+  return jsonb_build_object(
+    'mode', mode,
+    'is_owner', public.is_board_owner(b.id),
+    'now', now(),
+    'tasks', coalesce((select jsonb_agg(to_jsonb(t) - 'board_id' - 'assignee_emails' order by t.sort)
+                         from board_tasks t where t.board_id = b.id), '[]'::jsonb),
+    'items', coalesce((select jsonb_agg(to_jsonb(i) - 'board_id' order by i.sort)
+                         from task_items i where i.board_id = b.id and i.deleted_at is null), '[]'::jsonb)
+  );
+end $$;
+
+grant execute on function public.get_shared_tasks(text) to anon, authenticated;

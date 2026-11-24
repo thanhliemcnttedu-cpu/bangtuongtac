@@ -5,10 +5,12 @@ import type {
   AttendanceSession, CardComment, ActivityEntry, Attachment, BoardAccess, BoardData, CollabRole, Collaborator, CardLayoutPatch, CardLocation, VennRegion, BoardMode, CardStatus, LinkMode, Lesson, PinnedResource, PollOption, ResourceKind, RosterMember, SubmissionCard, TaskItem, TaskKind,
 } from '../types/board';
 import { linkToAttachment } from './embeds';
-import type { BoardSettings, RepeatRule, TaskProgress } from '../types/board';
+import type { BoardSettings, RepeatRule, TaskProgress, TaskSubItem } from '../types/board';
 import type { BoardTemplate } from '../data/boardTemplates';
 import { parseSettings } from './boardSettings';
 import { supabase } from './supabase';
+import { toItem } from './taskItemsApi';
+import type { ItemDb } from './taskItemsApi';
 import { newEditCode, normalizeEditCode, normalizeName } from './editCode';
 
 /* ---------- Kiểu hàng trong CSDL (snake_case) ---------- */
@@ -859,4 +861,32 @@ export async function deleteComment(commentId: string): Promise<void> {
 export async function setTeacherStars(cardId: string, stars: number | null): Promise<void> {
   const { error } = await db().from('cards').update({ teacher_stars: stars }).eq('id', cardId);
   if (error) fail('Không lưu được số sao', error.message);
+}
+
+/** Công việc được chia sẻ bằng link (hàm get_shared_tasks): chỉ đọc; isOwner = người xem đang đăng nhập đúng Gmail chủ. */
+export interface SharedTasks { mode: 'view' | 'edit'; isOwner: boolean; now: string; tasks: TaskItem[]; items: TaskSubItem[] }
+export async function getSharedTasks(key: string): Promise<SharedTasks | null> {
+  // Bản mẫu (chưa cấu hình Supabase): chỉ mã minh họa DEMO… mở được, để xem trước giao diện trang chia sẻ.
+  if (!supabase) return /^DEMO[A-Za-z0-9_-]{12,}$/.test(key) ? demoShared() : null;
+  const { data, error } = await db().rpc('get_shared_tasks', { p_token: key });
+  if (error) {
+    if (/get_shared_tasks|schema cache|does not exist/i.test(error.message)) throw new Error('Máy chủ chưa có chức năng chia sẻ công việc. Chủ tài khoản cần chạy tệp docs/cap-nhat-chia-se-cong-viec.sql trong Supabase.');
+    fail('Không mở được công việc được chia sẻ', error.message);
+  }
+  if (!data) return null;
+  const d = data as { mode?: string; is_owner?: boolean; now?: string; tasks?: TaskDb[]; items?: ItemDb[] };
+  return { mode: d.mode === 'edit' ? 'edit' : 'view', isOwner: !!d.is_owner, now: d.now ?? new Date().toISOString(), tasks: (d.tasks ?? []).map(toTask), items: (d.items ?? []).map(toItem) };
+}
+
+function demoShared(): SharedTasks {
+  const d = (days: number, h = 8): string => { const x = new Date(); x.setDate(x.getDate() + days); x.setHours(h, 0, 0, 0); return x.toISOString(); };
+  const it = (id: string, subject: string, status: TaskSubItem['status'], days: number | null, result = ''): TaskSubItem => ({ id, taskId: 'demo-1', boardId: 'demo', title: subject, subject, plannedAt: days === null ? null : d(days), status, result, note: '', startedAt: null, doneAt: status === 'done' ? d(-1) : null, sort: 0, attachments: [], deletedAt: null, createdAt: d(-5) });
+  return {
+    mode: 'edit', isOwner: false, now: new Date().toISOString(),
+    tasks: [
+      { id: 'demo-1', label: 'Kế hoạch kiểm tra nội bộ (mẫu minh họa)', instructions: 'Kiểm tra theo kế hoạch năm học.' + String.fromCharCode(10) + '- [x] Lập danh sách' + String.fromCharCode(10) + '- [ ] Gửi lịch cho tổ', category: 'kiem_tra', progress: 'doing', priority: 'high', dueAt: d(7, 16), repeat: 'none', attachments: [] },
+      { id: 'demo-2', label: 'Điểm danh lớp và báo cáo sĩ số (mẫu minh họa)', instructions: '', category: 'bao_cao', progress: 'todo', priority: 'normal', dueAt: d(1, 7), repeat: 'weekdays', attachments: [] },
+    ] as TaskItem[],
+    items: [it('i1', 'Đồng chí A', 'done', -2, 'Đã kiểm tra hồ sơ và dự giờ.'), it('i2', 'Đồng chí B', 'doing', 1), it('i3', 'Đồng chí C', 'todo', 4)],
+  };
 }

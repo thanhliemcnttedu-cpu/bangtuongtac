@@ -15,13 +15,13 @@ function fail(action: string, message: string): never {
     : `${action}: ${message}`);
 }
 
-interface ItemDb {
+export interface ItemDb {
   id: string; task_id: string; board_id: string; title: string; subject: string | null; planned_at: string | null; status: string; result: string | null;
   note: string | null; started_at: string | null; done_at: string | null; sort: number | null; attachments: Attachment[] | null; deleted_at: string | null; created_at: string;
 }
 const STATUSES: ItemStatus[] = ['todo', 'scheduled', 'doing', 'waiting', 'done', 'postponed', 'cancelled'];
 
-const toItem = (r: ItemDb): TaskSubItem => ({
+export const toItem = (r: ItemDb): TaskSubItem => ({
   id: r.id, taskId: r.task_id, boardId: r.board_id, title: r.title, subject: r.subject ?? '', plannedAt: r.planned_at,
   status: STATUSES.find((s) => s === r.status) ?? 'todo', result: r.result ?? '', note: r.note ?? '', startedAt: r.started_at, doneAt: r.done_at,
   sort: r.sort ?? 0, attachments: r.attachments ?? [], deletedAt: r.deleted_at, createdAt: r.created_at,

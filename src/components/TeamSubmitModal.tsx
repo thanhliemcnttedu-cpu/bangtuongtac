@@ -11,6 +11,7 @@ import { ModalShell } from './ModalShell';
 import { AttachmentPicker } from './attach/AttachmentPicker';
 import { TaskDocs } from './TaskDocs';
 import { RichEditor } from './RichEditor';
+import { TaskNote } from './TaskNote';
 
 interface Props {
   board: BoardData;
@@ -115,7 +116,7 @@ export function TeamSubmitModal({ board, roster, initialName = '', initialTaskId
         {task && (
           <div className="space-y-1.5 rounded-2xl bg-brand-50/70 p-3 text-sm" aria-live="polite">
             <p className="text-base font-extrabold text-ink">{task.label}</p>
-            {task.instructions && <p className="whitespace-pre-line text-ink">{task.instructions}</p>}
+            {task.instructions && <TaskNote text={task.instructions} className="text-ink" />}
             <TaskDocs task={task} className="" />
             {task.dueAt && <p className="text-xs text-ink-2">Hạn: <b>{formatDateTime(task.dueAt)}</b> ({countdown(task.dueAt, now)})</p>}
             {timing && !timing.ok && <p className="text-xs font-bold text-rose-700">{timing.reason}</p>}

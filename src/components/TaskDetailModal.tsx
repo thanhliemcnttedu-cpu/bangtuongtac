@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { FormEvent } from 'react';
+import type { ClipboardEvent, FormEvent } from 'react';
 import { ArrowDown, ArrowUp, CalendarDays, CheckCircle2, Copy, FileText, History, ListChecks, Loader2, NotebookPen, Pencil, Plus, RotateCcw, Trash2, Undo2, X } from 'lucide-react';
 import type { Attachment, ItemStatus, TaskLog, TaskProgress, TaskSubItem } from '../types/board';
 import type { BoardStore, ItemInput } from '../hooks/useBoardStore';
 import { fromLocalInput, toLocalInput } from '../lib/lessons';
 import { splitChecklist, toggleChecklistItem } from '../lib/checklist';
 import { taskToInput } from '../lib/recurrence';
-import { formatSize } from '../lib/media';
+import { formatSize, nameClipboardFile } from '../lib/media';
 import {
   ACTION_LABEL, EVIDENCE_GROUPS, FIELD_LABEL, ITEM_STATUS, ITEM_STATUS_ORDER, PROGRESS_META, PROGRESS_ORDER, buildPlanReport, categoryOf, fmtDay, fmtTime, itemOverdue, itemStats,
 } from '../lib/taskPlan';
 import { ModalShell } from './ModalShell';
+import { renderRich } from '../lib/richText';
 import { TaskDocs } from './TaskDocs';
 
 type Tab = 'overview' | 'items' | 'progress' | 'docs' | 'log' | 'report';
@@ -116,7 +117,7 @@ export function TaskDetailModal({ store, boardId, taskId, canEdit, onClose, onCh
   );
 
   return (
-    <ModalShell title={task.label} onClose={onClose} maxWidth="max-w-5xl">
+    <ModalShell title={task.label} onClose={onClose} maxWidth="max-w-[min(96vw,1280px)]">
       <div className="-mt-2 mb-3 flex flex-wrap items-center gap-1.5 text-xs">
         {cat && <span className="chip" style={{ background: cat.soft, color: cat.text, boxShadow: 'none' }}><cat.Icon className="h-3 w-3" aria-hidden /> {cat.label}</span>}
         <span className={`chip ${PROGRESS_META[task.progress ?? 'todo'].chip}`}>{PROGRESS_META[task.progress ?? 'todo'].label}</span>
@@ -158,7 +159,7 @@ export function TaskDetailModal({ store, boardId, taskId, canEdit, onClose, onCh
             <p className="text-xs text-ink-2">Công việc tổng không tự hoàn thành dù các đầu việc con đã xong: bạn xác nhận hoàn thành ở đây.</p>
           </div>
           {task.repeat && task.repeat !== 'none' && <p className="text-sm text-ink-2">Việc lặp lại. Mỗi kỳ là một công việc riêng; kỳ trước giữ nguyên kết quả.{task.repeatUntil ? ` Lặp đến ${fmtDay(task.repeatUntil)}.` : ''}</p>}
-          {note && <div><p className="field-label">Ghi chú / hướng dẫn</p><p className="whitespace-pre-line text-sm leading-relaxed text-ink-2">{note}</p></div>}
+          {note && <div><p className="field-label">Ghi chú / hướng dẫn</p><div className="text-sm leading-relaxed text-ink-2">{renderRich(note)}</div></div>}
           {checks.length > 0 && (
             <div>
               <p className="field-label">Các việc nhỏ</p>
@@ -366,6 +367,13 @@ function ItemEditor({ initial, prev, onSave, onCancel }: { initial: ItemInput; p
   const set = <K extends keyof ItemInput>(k: K, v: ItemInput[K]): void => setF((x) => ({ ...x, [k]: v }));
   const rescheduled = !!prev && (fromLocalInput(planned) ?? null) !== (prev.plannedAt ?? null);
   const statusChanged = !!prev && f.status !== prev.status;
+  // Dán ảnh từ bộ nhớ tạm (Ctrl + V hoặc Windows + V) thẳng vào minh chứng.
+  const onPaste = (e: ClipboardEvent<HTMLFormElement>): void => {
+    const got = Array.from(e.clipboardData.files);
+    if (got.length === 0) return;
+    e.preventDefault();
+    set('files', [...f.files, ...got.map(nameClipboardFile)]);
+  };
 
   const submit = async (e: FormEvent): Promise<void> => {
     e.preventDefault();
@@ -374,7 +382,7 @@ function ItemEditor({ initial, prev, onSave, onCancel }: { initial: ItemInput; p
     catch (x) { setErr(x instanceof Error ? x.message : 'Không lưu được.'); setBusy(false); }
   };
   return (
-    <form onSubmit={(e) => void submit(e)} noValidate className="grid grid-cols-1 gap-3 rounded-2xl border border-brand-200 bg-brand-50/50 p-3 lg:grid-cols-2" aria-label={prev ? 'Cập nhật đầu việc' : 'Thêm đầu việc'}>
+    <form onSubmit={(e) => void submit(e)} onPaste={onPaste} noValidate className="grid grid-cols-1 gap-3 rounded-2xl border border-brand-200 bg-brand-50/50 p-3 lg:grid-cols-2" aria-label={prev ? 'Cập nhật đầu việc' : 'Thêm đầu việc'}>
       <div className="space-y-3">
         <div><label className="field-label" htmlFor="ie-subject">Người / đối tượng</label><input id="ie-subject" className="input" value={f.subject} onChange={(e) => set('subject', e.target.value)} placeholder="Ví dụ: Đồng chí A" autoFocus /></div>
         <div><label className="field-label" htmlFor="ie-title">Nội dung đầu việc</label><input id="ie-title" className="input" value={f.title} onChange={(e) => set('title', e.target.value)} placeholder="Ví dụ: Kiểm tra hồ sơ chuyên môn" /></div>
@@ -388,7 +396,7 @@ function ItemEditor({ initial, prev, onSave, onCancel }: { initial: ItemInput; p
         <div><label className="field-label" htmlFor="ie-note">Ghi chú</label><textarea id="ie-note" className="input min-h-[52px] py-2" value={f.note} onChange={(e) => set('note', e.target.value)} /></div>
       </div>
       <div className="space-y-3">
-        <fieldset className="space-y-2 rounded-2xl border border-brand-100 bg-white p-3">
+        <fieldset className="min-w-0 space-y-2 rounded-2xl border border-brand-100 bg-white p-3">
           <legend className="field-label px-1">Minh chứng</legend>
           {f.keep.length > 0 && <ul className="space-y-1">{f.keep.map((a, i) => (
             <li key={`${a.url ?? a.name}-${i}`} className="flex items-center gap-2 rounded-xl bg-brand-50/60 px-2 py-1.5 text-sm"><FileText className="h-4 w-4 shrink-0 text-brand-700" aria-hidden /><span className="min-w-0 flex-1 truncate">{a.label || a.name}{a.group ? <span className="text-xs text-ink-3"> · {a.group}</span> : null}</span>
@@ -405,6 +413,7 @@ function ItemEditor({ initial, prev, onSave, onCancel }: { initial: ItemInput; p
           <label className="btn-ghost btn-sm cursor-pointer max-lg:min-h-[44px]"><FileText className="h-3.5 w-3.5" aria-hidden /> Tải tệp / chụp ảnh
             <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,image/*" className="sr-only" onChange={(e) => { set('files', [...f.files, ...Array.from(e.target.files ?? [])]); e.target.value = ''; }} />
           </label>
+          <p className="text-xs text-ink-2">Có thể nhấn Ctrl + V (hoặc Windows + V) để dán ảnh từ bộ nhớ tạm.</p>
           <div><label htmlFor="ie-links" className="field-label">Liên kết (Google Drive, website…) <span className="font-normal text-ink-2">mỗi dòng một link</span></label><textarea id="ie-links" className="input min-h-[48px] py-2" value={linkText} onChange={(e) => setLinkText(e.target.value)} placeholder="https://drive.google.com/…" /></div>
         </fieldset>
         {prev && (prev.startedAt || prev.doneAt) && <p className="text-xs text-ink-2">{prev.startedAt ? `Bắt đầu thực tế: ${fmtDay(prev.startedAt)} ${fmtTime(prev.startedAt)}. ` : ''}{prev.doneAt ? `Hoàn thành thực tế: ${fmtDay(prev.doneAt)} ${fmtTime(prev.doneAt)}.` : ''}</p>}

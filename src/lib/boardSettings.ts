@@ -152,6 +152,14 @@ function parseVennLabels(v: unknown): [string, string] {
 
 /** Chỉ nhận ảnh nền dạng data URL ảnh, ký tự base64 thuần và không quá lớn: dùng trong CSS url() nên phải chắc chắn không chứa gì khác. */
 export const MAX_BG_CHARS = 420_000;
+/** Chia sẻ công việc: chỉ nhận chế độ hợp lệ và mã gồm chữ, số, gạch (16–64 ký tự). */
+export function parseTaskShare(v: unknown): BoardSettings['taskShare'] | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const r = v as Record<string, unknown>;
+  if ((r.mode !== 'view' && r.mode !== 'edit') || typeof r.key !== 'string' || !/^[A-Za-z0-9_-]{16,64}$/.test(r.key)) return undefined;
+  return { mode: r.mode, key: r.key };
+}
+
 export type TitleStyle = NonNullable<BoardSettings['titleStyle']>;
 const HEX6 = /^#[0-9a-fA-F]{6}$/;
 /** Lọc kiểu chữ tên bảng đọc từ CSDL: chỉ nhận cờ đúng/sai và màu #rrggbb. */
@@ -188,6 +196,7 @@ export function parseSettings(raw: unknown): BoardSettings {
     font: pick(r.font, Object.keys(FONTS), DEFAULT_SETTINGS.font),
     cardSize: r.cardSize === 'wide' ? 'wide' : r.cardSize === 'compact' ? 'compact' : 'standard',
     ...(isBgImage(r.bgImage) ? { bgImage: r.bgImage } : {}),
+    ...(parseTaskShare(r.taskShare) ? { taskShare: parseTaskShare(r.taskShare) } : {}),
     ...(parseTitleStyle(r.titleStyle) ? { titleStyle: parseTitleStyle(r.titleStyle) } : {}),
     showAuthor: r.showAuthor !== false,
     showTime: r.showTime !== false,

@@ -49,7 +49,7 @@ function statusOf(done: boolean, doing: boolean, due: string | null, now: number
 }
 
 /** Trạng thái của việc riêng: hoàn thành, hủy, hoãn giữ nguyên; việc còn dang dở mà quá hạn thì là quá hạn. */
-function personalStatus(p: TaskProgress, due: string | null, now: number): MyStatus {
+export function personalStatus(p: TaskProgress, due: string | null, now: number): MyStatus {
   if (p === 'done' || p === 'cancelled' || p === 'postponed') return p;
   const d = dueMs(due);
   if (d !== null && d < now) return 'overdue';

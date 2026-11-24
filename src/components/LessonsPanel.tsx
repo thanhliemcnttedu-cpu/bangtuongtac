@@ -10,6 +10,7 @@ import type { Attachment, BoardData, Lesson, PinnedResource, ResourceKind, TaskI
 import { KIND_LABEL, URGENCY_TEXT, countdown, formatDateTime, groupTasks, taskPhase, taskProgress, timeElapsed, urgencyOf, wordsFor } from '../lib/lessons';
 import { MaterialReader } from './MaterialReader';
 import { TaskDocs } from './TaskDocs';
+import { TaskNote } from './TaskNote';
 import { docKindOf, formatSize } from '../lib/media';
 import { colorOf } from '../lib/cardColors';
 import { renderMarkup } from '../lib/markup';
@@ -348,7 +349,7 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
               </span>
               <span className={`${kid ? 'text-lg' : 'text-sm'} font-extrabold ${pal.text}`}>{t.label}</span>
             </p>
-            {t.instructions && <p className={`mt-1 ${kid ? 'text-base text-ink' : 'text-sm text-ink-2'}`}>{t.instructions}</p>}
+            {t.instructions && <TaskNote text={t.instructions} className={`mt-1 ${kid ? 'text-base text-ink' : 'text-sm text-ink-2'}`} />}
             <TaskDocs task={t} />
           </div>
           <PhaseChip task={t} now={now} />

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DragEvent, FormEvent } from 'react';
 import {
-  AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle, Columns3, ExternalLink, ListChecks, Loader2, Paperclip, Pencil, Plus, Repeat, Search, Send, SquarePlus, Trash2,
+  AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle, Columns3, ExternalLink, ListChecks, Loader2, Paperclip, Pencil, Plus, Repeat, Search, Send, Share2, SquarePlus, Trash2,
 } from 'lucide-react';
 import type { RepeatRule, TaskItem, TaskProgress, TaskSubItem } from '../types/board';
 import type { BoardStore } from '../hooks/useBoardStore';
@@ -16,6 +16,8 @@ import { CATEGORIES, ITEM_STATUS, PROGRESS_META, PROGRESS_ORDER, categoryOf, fmt
 import { MyTaskForm } from './MyTaskForm';
 import { TaskDetailModal, itemInputOf } from './TaskDetailModal';
 import { TaskDocs } from './TaskDocs';
+import { ShareTasksModal } from './ShareTasksModal';
+import { renderRich } from '../lib/richText';
 
 interface Props {
   store: BoardStore;
@@ -61,6 +63,7 @@ export function MyTasksPage({ store, myEmail, onOpenBoard }: Props) {
   const [now, setNow] = useState(() => Date.now());
   const [error, setError] = useState('');
   const [formOpen, setFormOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [editRef, setEditRef] = useState<{ boardId: string; taskId: string } | null>(null);
   const [detail, setDetail] = useState<{ boardId: string; taskId: string; canEdit: boolean } | null>(null);
   const [openKey, setOpenKey] = useState<string | null>(null);
@@ -122,7 +125,6 @@ export function MyTasksPage({ store, myEmail, onOpenBoard }: Props) {
   const open = all.filter((t) => !closed(t.status) && t.status !== 'postponed').length;
   const overdueAll = all.filter((t) => t.status === 'overdue').length;
   const personal = base.filter((t) => t.kind === 'personal');
-  const teamBoards = store.boards.filter((b) => (b.access ?? 'owner') === 'owner' && b.settings.scope === 'team' && !b.settings.personal && !b.deletedAt && !b.archivedAt);
   const usedCats = useMemo(() => CATEGORIES.filter((c) => all.some((t) => t.category === c.id)), [all]);
 
   const weekEnd = weekStart.getTime() + 7 * DAY_MS;
@@ -158,6 +160,7 @@ export function MyTasksPage({ store, myEmail, onOpenBoard }: Props) {
     if (t.external || t.kind === 'assigned') window.open(`${window.location.origin}/b/${t.shareToken}?task=${encodeURIComponent(t.taskId)}`, '_blank', 'noopener');
     else onOpenBoard(t.boardId);
   };
+  const personalShare = store.boards.find((b) => b.settings.personal && !b.deletedAt && (b.access ?? 'owner') === 'owner')?.settings.taskShare;
   const editing: TaskItem | undefined = editRef ? store.boards.find((b) => b.id === editRef.boardId)?.tasks.find((x) => x.id === editRef.taskId) : undefined;
 
   const dueChip = (t: MyTask) => t.dueAt ? <span className={`chip ${t.status === 'overdue' ? 'bg-rose-50 text-rose-800 ring-rose-200' : 'bg-white text-ink-2 ring-brand-200'}`}>{formatDateTime(t.dueAt)}{closed(t.status) ? '' : ` · ${countdown(t.dueAt, now)}`}</span> : <span className="chip bg-white text-ink-3 ring-brand-100">Không hạn</span>;
@@ -212,7 +215,7 @@ export function MyTasksPage({ store, myEmail, onOpenBoard }: Props) {
         </div>
         {opened && (
           <div className="space-y-3 border-t border-brand-100 bg-brand-50/30 px-3 py-3">
-            {note && <p className="whitespace-pre-line text-sm leading-relaxed text-ink-2">{note}</p>}
+            {note && <div className="text-sm leading-relaxed text-ink-2">{renderRich(note)}</div>}
             {checks.length > 0 && (
               <ul className="space-y-1" aria-label="Các việc nhỏ">
                 {checks.map((it, i) => (
@@ -281,6 +284,7 @@ export function MyTasksPage({ store, myEmail, onOpenBoard }: Props) {
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => setFormOpen(true)} className="btn-primary max-lg:min-h-[44px]"><SquarePlus className="h-4 w-4" aria-hidden /> Thêm việc</button>
+          <button type="button" onClick={() => setShareOpen(true)} className="btn-ghost max-lg:min-h-[44px]" aria-label="Chia sẻ Công việc của tôi"><Share2 className="h-4 w-4" aria-hidden /> <span className="hidden sm:inline">Chia sẻ</span>{personalShare && <span className="ml-1 h-2 w-2 rounded-full bg-emerald-500" title="Đang chia sẻ" aria-hidden />}</button>
           <div className="flex rounded-full border-[1.5px] border-brand-200 bg-white p-0.5" role="group" aria-label="Cách xem">
             {([['list', 'Danh sách', ListChecks], ['kanban', 'Kanban', Columns3], ['week', 'Lịch tuần', CalendarDays]] as const).map(([id, label, Icon]) => (
               <button key={id} type="button" aria-pressed={view === id} onClick={() => setView(id)} className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold max-lg:min-h-[44px] max-lg:min-w-[44px] max-lg:justify-center ${view === id ? 'bg-brand-600 text-white' : 'text-ink-2 hover:bg-brand-50'}`}><Icon className="h-4 w-4" aria-hidden /> <span className="hidden sm:inline">{label}</span></button>
@@ -353,7 +357,7 @@ export function MyTasksPage({ store, myEmail, onOpenBoard }: Props) {
       {loadingAssigned && <p className="flex items-center gap-2 text-sm text-ink-2" role="status"><Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Đang lấy việc người khác giao…</p>}
 
       {view === 'list' && (shown.length === 0
-        ? <p className="rounded-2xl border border-dashed border-brand-200 bg-white/70 p-8 text-center text-ink-2">{all.length === 0 ? 'Chưa có việc nào. Bấm “Thêm việc” để tạo việc riêng hoặc giao việc cho đồng nghiệp.' : 'Không có việc nào phù hợp bộ lọc.'}</p>
+        ? <p className="rounded-2xl border border-dashed border-brand-200 bg-white/70 p-8 text-center text-ink-2">{all.length === 0 ? 'Chưa có việc nào. Bấm “Thêm việc” để ghi lại công việc của bạn.' : 'Không có việc nào phù hợp bộ lọc.'}</p>
         : <ul className="space-y-2">{shown.map((t) => <div key={t.key} id={`task-${t.key}`} className="contents">{row(t)}</div>)}</ul>)}
 
       {view === 'kanban' && (
@@ -397,10 +401,11 @@ export function MyTasksPage({ store, myEmail, onOpenBoard }: Props) {
       )}
 
       <button type="button" onClick={() => setFormOpen(true)} className="btn-primary fixed bottom-[92px] right-4 z-30 flex h-14 w-14 items-center justify-center !rounded-full !p-0 shadow-lift lg:hidden" aria-label="Thêm công việc" title="Thêm công việc"><SquarePlus className="h-6 w-6" aria-hidden /></button>
-      {formOpen && <MyTaskForm store={store} teamBoards={teamBoards} onClose={() => setFormOpen(false)} onSaved={saved} />}
-      {editRef && editing && <MyTaskForm store={store} teamBoards={teamBoards} editing={{ boardId: editRef.boardId, task: editing }} onClose={() => setEditRef(null)} onSaved={saved} />}
       {detail && <TaskDetailModal store={store} boardId={detail.boardId} taskId={detail.taskId} canEdit={detail.canEdit} onClose={() => { setDetail(null); void refreshItems(); }} onChanged={() => { setNow(Date.now()); void refreshItems(); }}
         onEdit={() => { setEditRef({ boardId: detail.boardId, taskId: detail.taskId }); }} />}
+      {shareOpen && <ShareTasksModal store={store} onClose={() => setShareOpen(false)} onChanged={saved} />}
+      {formOpen && <MyTaskForm store={store} onClose={() => setFormOpen(false)} onSaved={saved} />}
+      {editRef && editing && <MyTaskForm store={store} editing={{ boardId: editRef.boardId, task: editing }} onClose={() => setEditRef(null)} onSaved={saved} />}
     </main>
   );
 }

@@ -1,30 +1,25 @@
 import { useState } from 'react';
-import type { FormEvent } from 'react';
-import { FileText, Link2, ListChecks, Paperclip, Plus, Repeat, UserRound, Users, UsersRound, X } from 'lucide-react';
-import type { Attachment, BoardData, RepeatRule, TaskItem } from '../types/board';
+import type { ClipboardEvent, DragEvent, FormEvent } from 'react';
+import { ClipboardPaste, FileText, Link2, ListChecks, Paperclip, Plus, Repeat, X } from 'lucide-react';
+import type { Attachment, RepeatRule, TaskItem } from '../types/board';
 import type { BoardStore } from '../hooks/useBoardStore';
 import type { TaskInput } from '../lib/boardApi';
 import { buildChecklist, splitChecklist } from '../lib/checklist';
 import type { CheckItem } from '../lib/checklist';
 import { taskToInput } from '../lib/recurrence';
 import { CATEGORIES } from '../lib/taskPlan';
-import { formatSize } from '../lib/media';
+import { formatSize, nameClipboardFile } from '../lib/media';
 import { fromLocalInput, toLocalInput } from '../lib/lessons';
 import { ModalShell } from './ModalShell';
-
-type Target = 'me' | 'colleague' | 'team';
+import { RichEditor } from './RichEditor';
 
 interface Props {
   store: BoardStore;
-  /** Bảng tổ công tác do tôi làm chủ (để giao việc cho đồng nghiệp hoặc cả tổ). */
-  teamBoards: BoardData[];
   /** Có = đang sửa một việc riêng đã có (không đổi người nhận). */
   editing?: { boardId: string; task: TaskItem };
   onClose: () => void;
   onSaved: (message: string) => void;
 }
-
-const RE_MAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Mốc giờ kế tiếp trong ngày (hôm nay nếu chưa qua, không thì ngày mai) dạng ô nhập datetime-local. */
 const nextAt = (h: number, m: number): string => { const d = new Date(); d.setHours(h, m, 0, 0); if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1); return toLocalInput(d.toISOString()); };
@@ -47,15 +42,11 @@ const REPEAT_OPTIONS: [RepeatRule, string][] = [
 
 /**
  * Thêm hoặc sửa một công việc cho "Công việc của tôi": nhóm, ghi chú, danh sách việc nhỏ, tệp và liên kết kèm theo, các mốc thời gian
- * (bắt đầu, hạn hoàn thành, hạn báo cáo), ưu tiên, lặp lại, và giao cho ai (chỉ mình tôi, đồng nghiệp theo Gmail, hoặc cả tổ).
+ * (bắt đầu, hạn hoàn thành, hạn báo cáo), ưu tiên và lặp lại. Đây là việc CÁ NHÂN để tự theo dõi, không giao cho người khác.
  */
-export function MyTaskForm({ store, teamBoards, editing, onClose, onSaved }: Props) {
+export function MyTaskForm({ store, editing, onClose, onSaved }: Props) {
   const t0 = editing?.task;
   const split = splitChecklist(t0?.instructions ?? '');
-  const [target, setTarget] = useState<Target>('me');
-  const [boardId, setBoardId] = useState(teamBoards[0]?.id ?? '');
-  const [emails, setEmails] = useState('');
-  const [needsEvidence, setNeedsEvidence] = useState(true);
   const [title, setTitle] = useState(t0?.label ?? '');
   const [category, setCategory] = useState(t0?.category ?? '');
   const [note, setNote] = useState(split.note);
@@ -72,11 +63,30 @@ export function MyTaskForm({ store, teamBoards, editing, onClose, onSaved }: Pro
   const [until, setUntil] = useState(toLocalInput(t0?.repeatUntil));
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [pasteMsg, setPasteMsg] = useState('');
 
-  const mailList = [...new Set(emails.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter((e) => RE_MAIL.test(e)))];
-  const noTeams = teamBoards.length === 0;
   const isEdit = !!editing;
 
+  const addFiles = (list: File[]): void => { setFiles((cur) => [...cur, ...list.map(nameClipboardFile)]); setPasteMsg(`Đã thêm ${list.length} tệp.`); window.setTimeout(() => setPasteMsg(''), 3500); };
+  /** Dán ảnh từ bộ nhớ tạm bằng Ctrl + V hoặc Windows + V ở bất cứ đâu trong hộp thoại. */
+  const onPaste = (e: ClipboardEvent<HTMLElement>): void => {
+    const got = Array.from(e.clipboardData.files);
+    if (got.length === 0) return;
+    e.preventDefault();
+    addFiles(got);
+  };
+  const onDrop = (e: DragEvent<HTMLElement>): void => { e.preventDefault(); const got = Array.from(e.dataTransfer.files); if (got.length > 0) addFiles(got); };
+  const pasteButton = async (): Promise<void> => {
+    try {
+      const got: File[] = [];
+      for (const it of await navigator.clipboard.read()) {
+        const type = it.types.find((t) => t.startsWith('image/'));
+        if (type) got.push(new File([await it.getType(type)], 'image.png', { type }));
+      }
+      if (got.length > 0) addFiles(got);
+      else { setPasteMsg('Bộ nhớ tạm chưa có ảnh. Hãy sao chép ảnh rồi bấm lại, hoặc nhấn Ctrl + V.'); }
+    } catch { setPasteMsg('Trình duyệt không cho đọc bộ nhớ tạm. Hãy nhấn Ctrl + V (hoặc Windows + V) để dán ảnh.'); }
+  };
   const addItem = (): void => { const v = itemText.trim(); if (v) setItems([...items, { text: v, done: false }]); setItemText(''); };
   const preset = (p: (typeof PRESETS)[number]): void => { setTitle(p.title); setCategory(p.category); setItems(p.items.map((text) => ({ text, done: false }))); setRepeat(p.repeat); setDue(p.due()); };
 
@@ -85,8 +95,6 @@ export function MyTaskForm({ store, teamBoards, editing, onClose, onSaved }: Pro
     if (!title.trim()) { setError('Hãy nhập tên công việc.'); document.getElementById('mf-title')?.focus(); return; }
     const pending = itemText.trim();
     const allItems: CheckItem[] = pending ? [...items, { text: pending, done: false }] : items;
-    if (target !== 'me' && !boardId) { setError('Hãy chọn bảng tổ công tác.'); return; }
-    if (target === 'colleague' && mailList.length === 0) { setError('Hãy nhập ít nhất một Gmail hợp lệ của đồng nghiệp.'); document.getElementById('mf-mail')?.focus(); return; }
     const startIso = fromLocalInput(start);
     const dueIso = fromLocalInput(due);
     const repIso = fromLocalInput(reportDue);
@@ -104,76 +112,27 @@ export function MyTaskForm({ store, teamBoards, editing, onClose, onSaved }: Pro
       if (editing && t0) {
         await store.saveTask(editing.boardId, t0.id, { ...taskToInput(t0), ...base, assignedAt: t0.assignedAt ?? null, progress: t0.progress, completedAt: t0.completedAt ?? null, seriesId: t0.seriesId });
         onSaved('Đã lưu thay đổi.');
-      } else if (target === 'me') {
+      } else {
         const b = await store.ensurePersonalBoard();
         await store.saveTask(b.id, null, { ...base, progress: 'todo' });
-        onSaved('Đã thêm việc riêng.');
-      } else {
-        const b = teamBoards.find((x) => x.id === boardId);
-        if (!b) throw new Error('Không tìm thấy bảng tổ công tác.');
-        if (target === 'colleague') {
-          // Gmail chưa có trong danh sách tổ thì thêm vào để người đó nhận được việc khi đăng nhập.
-          const known = new Set(b.roster.map((m) => (m.email ?? '').toLowerCase()));
-          const fresh = mailList.filter((m) => !known.has(m));
-          if (fresh.length > 0) await store.setRoster(b.id, [...b.roster, ...fresh.map((m, i) => ({ id: `gm-${Date.now()}-${i}`, name: m.split('@')[0], unit: '', email: m }))]);
-        }
-        await store.saveTask(b.id, null, { ...base, assignedAt: new Date().toISOString(), needsEvidence, ackOnly: !needsEvidence, ...(target === 'colleague' ? { assigneeEmails: mailList } : {}) });
-        onSaved(target === 'colleague' ? `Đã giao việc cho ${mailList.length} người.` : 'Đã giao việc cho cả tổ.');
+        onSaved('Đã thêm việc.');
       }
       onClose();
     } catch (err) { setError(err instanceof Error ? err.message : 'Không lưu được công việc.'); setBusy(false); }
   };
 
-  const choice = (id: Target, Icon: typeof Users, label: string, hint: string, disabled = false) => (
-    <label key={id} className={`flex items-start gap-2 rounded-2xl border-2 p-3 transition ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} ${target === id ? 'border-brand-600 bg-brand-50' : 'border-brand-100 hover:border-brand-300'}`}>
-      <input type="radio" name="mf-target" className="mt-1 h-4 w-4 shrink-0 accent-brand-600" checked={target === id} disabled={disabled} onChange={() => setTarget(id)} />
-      <span className="min-w-0">
-        <span className="flex items-center gap-1.5 text-sm font-extrabold"><Icon className="h-4 w-4 shrink-0 text-brand-700" aria-hidden /> {label}</span>
-        <span className="block text-xs text-ink-2">{hint}</span>
-      </span>
-    </label>
-  );
-
   return (
-    <ModalShell title={isEdit ? 'Sửa công việc' : 'Thêm công việc'} onClose={onClose} maxWidth="max-w-4xl">
-      <form onSubmit={(e) => void submit(e)} noValidate className="grid grid-cols-1 gap-x-7 gap-y-4 lg:grid-cols-2">
+    <ModalShell title={isEdit ? 'Sửa công việc' : 'Thêm công việc'} onClose={onClose} maxWidth="max-w-[min(96vw,1500px)]" onPaste={onPaste}>
+      <form onSubmit={(e) => void submit(e)} noValidate className="grid grid-cols-1 gap-x-7 gap-y-4 lg:grid-cols-2 xl:grid-cols-3">
         <div className="space-y-4">
           {!isEdit && (
-            <>
-              <fieldset className="space-y-2">
-                <legend className="field-label">Giao cho ai?</legend>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-                  {choice('me', UserRound, 'Chỉ mình tôi', 'Việc riêng, chỉ tôi thấy')}
-                  {choice('colleague', UsersRound, 'Đồng nghiệp', 'Giao theo Gmail', noTeams)}
-                  {choice('team', Users, 'Cả tổ', 'Mọi người trong bảng tổ', noTeams)}
-                </div>
-                {noTeams && <p className="text-xs text-ink-2">Muốn giao cho người khác, hãy tạo một bảng “Tổ công tác” trước (nút Tạo bảng).</p>}
-                {target !== 'me' && (
-                  <div className="space-y-3 rounded-2xl border border-brand-100 bg-white p-3">
-                    <div>
-                      <label htmlFor="mf-board" className="field-label">Bảng tổ công tác</label>
-                      <select id="mf-board" className="input" value={boardId} onChange={(e) => setBoardId(e.target.value)}>{teamBoards.map((b) => <option key={b.id} value={b.id}>{b.title}</option>)}</select>
-                    </div>
-                    {target === 'colleague' && (
-                      <div>
-                        <label htmlFor="mf-mail" className="field-label">Gmail người nhận <span className="font-normal text-ink-2">(cách nhau bằng dấu phẩy hoặc xuống dòng)</span></label>
-                        <textarea id="mf-mail" className="input min-h-[72px] py-2" value={emails} onChange={(e) => setEmails(e.target.value)} placeholder="thaya@gmail.com, cob@gmail.com" />
-                        <p className="mt-1 text-xs text-ink-2">{mailList.length > 0 ? `${mailList.length} người nhận. ` : ''}Người nhận thấy việc này trong “Công việc của tôi” khi đăng nhập đúng Gmail đó.</p>
-                      </div>
-                    )}
-                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-brand-600" checked={needsEvidence} onChange={(e) => setNeedsEvidence(e.target.checked)} /> Người nhận phải nộp minh chứng (bỏ chọn = chỉ cần bấm “Tôi đã đọc”)</label>
-                  </div>
-                )}
-              </fieldset>
-
-              <div>
-                <p className="field-label">Mẫu việc thường gặp</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {PRESETS.map((p) => <button key={p.label} type="button" onClick={() => preset(p)} className="chip cursor-pointer bg-white text-brand-800 ring-brand-200 hover:bg-brand-50 max-lg:min-h-[44px] max-lg:px-3 max-lg:text-sm">{p.label}</button>)}
-                </div>
-                <p className="mt-1 text-xs text-ink-2">Bấm để điền sẵn tên, nhóm, các việc nhỏ, giờ và kiểu lặp; bạn sửa lại cho đúng với trường mình.</p>
+            <div>
+              <p className="field-label">Mẫu việc thường gặp</p>
+              <div className="flex flex-wrap gap-1.5">
+                {PRESETS.map((p) => <button key={p.label} type="button" onClick={() => preset(p)} className="chip cursor-pointer bg-white text-brand-800 ring-brand-200 hover:bg-brand-50 max-lg:min-h-[44px] max-lg:px-3 max-lg:text-sm">{p.label}</button>)}
               </div>
-            </>
+              <p className="mt-1 text-xs text-ink-2">Bấm để điền sẵn tên, nhóm, các việc nhỏ, giờ và kiểu lặp; bạn sửa lại cho đúng với trường mình.</p>
+            </div>
           )}
 
           <div>
@@ -187,20 +146,20 @@ export function MyTaskForm({ store, teamBoards, editing, onClose, onSaved }: Pro
             </select>
           </div>
           <div>
-            <label htmlFor="mf-note" className="field-label">Ghi chú / hướng dẫn <span className="font-normal text-ink-2">(không bắt buộc)</span></label>
-            <textarea id="mf-note" className="input min-h-[72px] py-2" value={note} onChange={(e) => setNote(e.target.value)} />
+            <span id="mf-note-label" className="field-label block">Ghi chú / hướng dẫn <span className="font-normal text-ink-2">(không bắt buộc; có thể nói bằng giọng nói và định dạng chữ)</span></span>
+            <RichEditor labelledBy="mf-note-label" value={note} onChange={setNote} minHeight={isEdit ? 220 : 130} maxHeight={460} placeholder="Viết hoặc nói nội dung, hướng dẫn thực hiện…" />
           </div>
         </div>
 
         <div className="space-y-4">
-          <fieldset className="space-y-2 rounded-2xl border border-brand-100 p-3">
+          <fieldset className="min-w-0 space-y-2 rounded-2xl border border-brand-100 p-3">
             <legend className="field-label flex items-center gap-1 px-1"><ListChecks className="h-4 w-4 text-brand-700" aria-hidden /> Các việc nhỏ cần làm <span className="font-normal text-ink-2">(checklist)</span></legend>
             {items.length > 0 && (
               <ul className="space-y-1">
                 {items.map((it, i) => (
                   <li key={`${it.text}-${i}`} className="flex items-center gap-2 rounded-xl bg-white px-2 py-1.5 text-sm ring-1 ring-brand-100">
                     <span className={`min-w-0 flex-1 break-words ${it.done ? 'text-ink-3 line-through' : ''}`}>{it.text}</span>
-                    <button type="button" onClick={() => setItems(items.filter((_, j) => j !== i))} aria-label={`Bỏ việc nhỏ ${it.text}`} className="rounded-full p-1.5 text-ink-2 hover:bg-rose-50 hover:text-rose-700 max-lg:p-2.5"><X className="h-4 w-4" aria-hidden /></button>
+                    <button type="button" onClick={() => setItems(items.filter((_, j) => j !== i))} aria-label={`Bỏ việc nhỏ ${it.text}`} className="rounded-full p-1.5 text-ink-2 hover:bg-rose-50 hover:text-rose-700 max-lg:p-3"><X className="h-4 w-4" aria-hidden /></button>
                   </li>
                 ))}
               </ul>
@@ -211,7 +170,7 @@ export function MyTaskForm({ store, teamBoards, editing, onClose, onSaved }: Pro
             </div>
           </fieldset>
 
-          <fieldset className="space-y-2 rounded-2xl border border-brand-100 p-3">
+          <fieldset className="min-w-0 space-y-2 rounded-2xl border border-brand-100 p-3" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
             <legend className="field-label flex items-center gap-1 px-1"><Paperclip className="h-4 w-4 text-brand-700" aria-hidden /> Tệp và liên kết kèm theo <span className="font-normal text-ink-2">(không bắt buộc)</span></legend>
             {(keep.length > 0 || files.length > 0) && (
               <ul className="space-y-1">
@@ -219,27 +178,35 @@ export function MyTaskForm({ store, teamBoards, editing, onClose, onSaved }: Pro
                   <li key={`${a.url ?? a.name}-${i}`} className="flex items-center gap-2 rounded-xl bg-white px-2 py-1.5 text-sm ring-1 ring-brand-100">
                     {a.type === 'link' || a.type === 'embed' ? <Link2 className="h-4 w-4 shrink-0 text-brand-700" aria-hidden /> : <FileText className="h-4 w-4 shrink-0 text-brand-700" aria-hidden />}
                     <span className="min-w-0 flex-1 truncate">{a.label || a.name}</span>
-                    <button type="button" onClick={() => setKeep(keep.filter((_, j) => j !== i))} aria-label={`Bỏ ${a.name}`} className="rounded-full p-1.5 text-ink-2 hover:bg-rose-50 hover:text-rose-700 max-lg:p-2.5"><X className="h-4 w-4" aria-hidden /></button>
+                    <button type="button" onClick={() => setKeep(keep.filter((_, j) => j !== i))} aria-label={`Bỏ ${a.name}`} className="rounded-full p-1.5 text-ink-2 hover:bg-rose-50 hover:text-rose-700 max-lg:p-3"><X className="h-4 w-4" aria-hidden /></button>
                   </li>
                 ))}
                 {files.map((f, i) => (
                   <li key={`${f.name}-${i}`} className="flex items-center gap-2 rounded-xl bg-white px-2 py-1.5 text-sm ring-1 ring-brand-100">
                     <FileText className="h-4 w-4 shrink-0 text-brand-700" aria-hidden />
                     <span className="min-w-0 flex-1 truncate">{f.name} <span className="text-xs text-ink-2">({formatSize(f.size)})</span></span>
-                    <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} aria-label={`Bỏ ${f.name}`} className="rounded-full p-1.5 text-ink-2 hover:bg-rose-50 hover:text-rose-700 max-lg:p-2.5"><X className="h-4 w-4" aria-hidden /></button>
+                    <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} aria-label={`Bỏ ${f.name}`} className="rounded-full p-1.5 text-ink-2 hover:bg-rose-50 hover:text-rose-700 max-lg:p-3"><X className="h-4 w-4" aria-hidden /></button>
                   </li>
                 ))}
               </ul>
             )}
-            <label className="btn-ghost btn-sm cursor-pointer max-lg:min-h-[44px]"><Paperclip className="h-3.5 w-3.5" aria-hidden /> Tải tệp (PDF, Word, Excel, ảnh…)
-              <input type="file" multiple className="sr-only" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,image/*" onChange={(e) => { setFiles([...files, ...Array.from(e.target.files ?? [])]); e.target.value = ''; }} />
-            </label>
+            <div className="flex flex-wrap gap-2">
+              <label className="btn-ghost btn-sm cursor-pointer max-lg:min-h-[44px]"><Paperclip className="h-3.5 w-3.5" aria-hidden /> Tải tệp (PDF, Word, Excel, ảnh…)
+                <input type="file" multiple className="sr-only" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,image/*" onChange={(e) => { addFiles(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
+              </label>
+              <button type="button" onClick={() => void pasteButton()} className="btn-ghost btn-sm max-lg:min-h-[44px]"><ClipboardPaste className="h-3.5 w-3.5" aria-hidden /> Dán ảnh</button>
+            </div>
+            <p className="text-xs text-ink-2">Hoặc nhấn Ctrl + V (Windows + V) để dán ảnh từ bộ nhớ tạm, kéo thả tệp vào khung này.</p>
+            {pasteMsg && <p role="status" className="text-xs font-bold text-brand-700">{pasteMsg}</p>}
             <div>
               <label htmlFor="mf-links" className="field-label flex items-center gap-1"><Link2 className="h-4 w-4 text-brand-700" aria-hidden /> Liên kết <span className="font-normal text-ink-2">(mỗi dòng một link)</span></label>
               <textarea id="mf-links" className="input min-h-[48px] py-2" value={linkText} onChange={(e) => setLinkText(e.target.value)} placeholder="https://docs.google.com/…" />
             </div>
           </fieldset>
 
+        </div>
+
+        <div className="space-y-4 lg:col-span-2 xl:col-span-1">
           <div className="space-y-3 rounded-2xl bg-brand-50/70 p-3">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
@@ -280,7 +247,7 @@ export function MyTaskForm({ store, teamBoards, editing, onClose, onSaved }: Pro
         {error && <p role="alert" className="text-sm font-bold text-rose-700 lg:col-span-2">{error}</p>}
         <div className="flex justify-end gap-2 lg:col-span-2">
           <button type="button" onClick={onClose} className="btn-ghost">Hủy</button>
-          <button type="submit" disabled={busy} className="btn-primary">{busy ? 'Đang lưu…' : isEdit ? 'Lưu thay đổi' : target === 'me' ? 'Thêm việc' : 'Giao việc'}</button>
+          <button type="submit" disabled={busy} className="btn-primary">{busy ? 'Đang lưu…' : isEdit ? 'Lưu thay đổi' : 'Thêm việc'}</button>
         </div>
       </form>
     </ModalShell>

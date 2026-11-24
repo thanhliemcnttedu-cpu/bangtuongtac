@@ -8,6 +8,7 @@ import type { PostDraft } from '../hooks/usePostDraft';
 import { ModalShell } from './ModalShell';
 import { AttachmentPicker } from './attach/AttachmentPicker';
 import { RichEditor } from './RichEditor';
+import { TaskNote } from './TaskNote';
 import { classPart, normalize } from '../lib/boardLogic';
 import { checkSubmit, countdown, formatDateTime, groupTasks, taskPhase } from '../lib/lessons';
 
@@ -188,7 +189,7 @@ export function QuickPostModal({ board, initialName = '', initialUnit = '', init
         </div>
         {task && (task.instructions || task.dueAt || timing) && (
           <div className="space-y-1 rounded-2xl bg-brand-50/70 p-3 text-xs text-ink-2" aria-live="polite">
-            {task.instructions && <p className="text-sm text-ink">{task.instructions}</p>}
+            {task.instructions && <TaskNote text={task.instructions} className="text-sm text-ink" />}
             {task.dueAt && <p>Hạn nộp: <b>{formatDateTime(task.dueAt)}</b> ({countdown(task.dueAt, now)})</p>}
             {timing && !timing.ok && <p className="font-bold text-rose-700">{timing.reason}</p>}
             {timing?.ok && timing.late && <p className="font-bold text-amber-800">Đã quá hạn: bài của bạn sẽ được đánh dấu “Nộp muộn”.</p>}
