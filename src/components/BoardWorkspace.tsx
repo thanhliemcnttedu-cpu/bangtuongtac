@@ -269,7 +269,12 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
   };
 
   const applyRoster = (roster: RosterMember[]): void => {
-    void run(async () => { await store.setRoster(board.id, roster); setModal(null); }, `Đã áp dụng danh sách ${roster.length} người.`);
+    void run(async () => {
+      await store.setRoster(board.id, roster);
+      // Bảng tổ không còn danh sách mà vẫn "chỉ người có tên mới nộp được" thì không ai nộp được: mở cho mọi người có link.
+      if (roster.length === 0 && board.settings.rosterOnly) await store.updateMeta(board.id, { title: board.title, goals: board.goals, settings: { ...board.settings, rosterOnly: false } });
+      setModal(null);
+    }, roster.length === 0 ? 'Đã bỏ danh sách: người nộp tự điền họ tên và tổ / lớp.' : `Đã áp dụng danh sách ${roster.length} người.`);
   };
 
   const onLayout = (cardId: string, patch: CardLayoutPatch): void => { void run(() => store.setCardLayout(savedBoard.id, cardId, patch)); };
