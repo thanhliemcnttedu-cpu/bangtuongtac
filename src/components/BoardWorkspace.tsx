@@ -89,10 +89,13 @@ interface Props {
   onSelectBoard: (id: string) => void;
   /** Gmail của người đang đăng nhập. */
   myEmail: string;
+  /** Yêu cầu mở màn Google Drive của bảng này (từ hộp Hỗ trợ); xử lý xong thì gọi onOpenDriveHandled. */
+  openDrive?: boolean;
+  onOpenDriveHandled?: () => void;
 }
 
 /** Toàn bộ không gian làm việc của MỘT bảng. App.tsx gắn key = id bảng nên bộ lọc tự đặt lại khi đổi bảng. */
-export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, myEmail }: Props) {
+export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, myEmail, openDrive = false, onOpenDriveHandled }: Props) {
   // Khi mở Cài đặt, bảng hiển thị bản nháp để người dùng thấy thay đổi ngay; Hủy thì quay về bản đã lưu.
   const [metaDraft, setMetaDraft] = useState<BoardMetaPatch | null>(null);
   const board = useMemo<BoardData>(() => (metaDraft ? { ...savedBoard, ...metaDraft } : savedBoard), [savedBoard, metaDraft]);
@@ -135,6 +138,11 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
     }, 1500);
     return () => window.clearTimeout(id);
   }, [role]);
+  useEffect(() => {
+    if (openDrive && role === 'owner') setModal('drive');
+    if (openDrive) onOpenDriveHandled?.();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openDrive]);
   // Việc định kỳ: chủ bảng mở bảng là kỳ mới của các việc đã hết hạn được sinh ra.
   useEffect(() => {
     if (role === 'owner' && savedBoard.settings.scope === 'team') void store.rollRecurring(savedBoard.id).catch(() => undefined);

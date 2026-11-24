@@ -41,8 +41,10 @@ export default function App() {
   const [myTasks, setMyTasks] = useState(false);
   const [reports, setReports] = useState(false);
   // Hỗ trợ: kiểm tra hệ thống + hướng dẫn nhanh; biểu ngữ hiện khi máy chủ còn thiếu phần cập nhật.
-  const [help, setHelp] = useState<null | 'check' | 'guide'>(null);
+  const [help, setHelp] = useState<null | 'check' | 'guide' | 'drive'>(null);
   const [missingParts, setMissingParts] = useState(0);
+  // Mở màn Google Drive của bảng đang xem từ hộp Hỗ trợ.
+  const [driveRequest, setDriveRequest] = useState(false);
 
   const { boards } = store;
   // Bảng trong thùng rác không hiện; bảng đã đóng chỉ hiện khi đang được mở xem.
@@ -102,7 +104,7 @@ export default function App() {
     if (showMy) return <Suspense fallback={<p className="p-10 text-center text-ink-2" role="status">Đang tải…</p>}><MyTasksPage store={store} myEmail={accounts.current?.email ?? ''} onOpenBoard={pick} /></Suspense>;
     if (showHome && !store.loading) return <Dashboard boards={navBoards} currentId={board?.id} canCreate={canCreate} onOpen={pick} onCreate={() => setCreating(true)}
       onArchive={async (ids) => { for (const id of ids) await store.setArchived(id, true); }} onTrash={async (ids) => { for (const id of ids) await store.setTrashed(id, true); }} />;
-    if (board) return <BoardWorkspace key={board.id} board={board} store={store} role={effectiveRole} onSelectBoard={setActiveId} myEmail={accounts.current?.email ?? ''} />;
+    if (board) return <BoardWorkspace key={board.id} board={board} store={store} role={effectiveRole} onSelectBoard={setActiveId} myEmail={accounts.current?.email ?? ''} openDrive={driveRequest} onOpenDriveHandled={() => setDriveRequest(false)} />;
     if (store.loading) return <p className="p-10 text-center text-ink-2" role="status">Đang tải dữ liệu…</p>;
     if (store.error) return <p className="p-10 text-center font-bold text-rose-700" role="alert">{store.error}</p>;
     if (!accounts.current) return <LoginScreen error={accounts.error} onLogin={() => void accounts.addAnother()} />;
@@ -171,7 +173,7 @@ export default function App() {
       {teacherNav && <NavRail variant="bar" active={activePage} onGo={go} onArchive={() => setArchiveOpen(true)} storedCount={storedCount} hasBoard={!!board} />}
 
       <Suspense fallback={null}>
-      {help && <SystemHelpModal isReal={accounts.isReal} initialTab={help} onResult={setMissingParts} onClose={() => setHelp(null)} />}
+      {help && <SystemHelpModal isReal={accounts.isReal} initialTab={help} hasBoard={!!board && (board.access ?? 'owner') !== 'guest'} onOpenDrive={() => { setHelp(null); setMyTasks(false); setReports(false); setHome(false); setDriveRequest(true); }} onResult={setMissingParts} onClose={() => setHelp(null)} />}
       {creating && <CreateBoardModal extraTemplates={myTemplates} onCreate={createBoard} onClose={() => setCreating(false)} />}
       {archiveOpen && (
         <ArchiveManagerModal boards={owned} onClose={() => setArchiveOpen(false)} onOpen={pick}
