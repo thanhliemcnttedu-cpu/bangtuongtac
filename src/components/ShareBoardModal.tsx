@@ -10,6 +10,8 @@ interface Props {
   board: BoardData;
   canManage: boolean;
   onChangeLinkMode: (mode: LinkMode) => void;
+  /** Đổi link chia sẻ: link và QR cũ ngừng hoạt động. */
+  onRegenerateLink?: () => Promise<void>;
   onChangeModeration: (mode: ModerationMode) => void;
   onClose: () => void;
   /** Quyền của người đăng nhập với bảng và các thao tác chia sẻ với giáo viên khác. */
@@ -28,11 +30,13 @@ const MODES: { id: LinkMode; title: string; desc: string; icon: typeof Eye }[] =
   { id: 'locked', title: 'Khóa nộp bài', desc: 'Hết giờ: giữ nguyên bài đã nộp, không nhận thêm.', icon: Lock },
 ];
 
-export function ShareBoardModal({ board, canManage, onChangeLinkMode, onChangeModeration, onClose, access, myEmail, initialTab = 'students', onInvite, onChangeRole, onRemove, onLeave }: Props) {
+export function ShareBoardModal({ board, canManage, onChangeLinkMode, onRegenerateLink, onChangeModeration, onClose, access, myEmail, initialTab = 'students', onInvite, onChangeRole, onRemove, onLeave }: Props) {
   const [tab, setTab] = useState<'students' | 'teachers'>(initialTab);
   const url = `${window.location.origin}/b/${board.shareToken}`;
   const [qr, setQr] = useState('');
   const [copied, setCopied] = useState(false);
+  const [askNew, setAskNew] = useState(false);
+  const [newMsg, setNewMsg] = useState('');
   const [big, setBig] = useState(false);
 
   useEffect(() => {
@@ -100,7 +104,7 @@ export function ShareBoardModal({ board, canManage, onChangeLinkMode, onChangeMo
       <div role="tablist" aria-label="Chia sẻ với ai" className="mb-4 grid grid-cols-2 gap-1 rounded-full bg-brand-50 p-1">
         {([['students', 'Học sinh · Link & QR'], ['teachers', `Giáo viên · ${(board.collaborators?.length ?? 0) + 1} người`]] as const).map(([id, label]) => (
           <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)}
-            className={`btn btn-sm !min-h-[40px] ${tab === id ? 'bg-white text-brand-700 shadow-soft' : 'text-ink-2'}`}>{label}</button>
+            className={`btn btn-sm !min-h-[40px] max-lg:!min-h-[44px] ${tab === id ? 'bg-white text-brand-700 shadow-soft' : 'text-ink-2'}`}>{label}</button>
         ))}
       </div>
       {tab === 'teachers' && <TeacherSharePanel board={board} access={access} myEmail={myEmail} onInvite={onInvite} onChangeRole={onChangeRole} onRemove={onRemove} onLeave={onLeave} />}
@@ -131,6 +135,23 @@ export function ShareBoardModal({ board, canManage, onChangeLinkMode, onChangeMo
                 {copied ? 'Đã chép' : 'Sao chép'}
               </button>
             </div>
+            {canManage && onRegenerateLink && (
+              <div className="mt-2">
+                {!askNew ? (
+                  <button type="button" onClick={() => { setNewMsg(''); setAskNew(true); }} className="btn-ghost btn-sm">Đổi link khác (khi link bị lộ)</button>
+                ) : (
+                  <div role="alertdialog" aria-label="Đổi link" className="rounded-2xl border-[1.5px] border-amber-300 bg-amber-50 p-3 text-sm">
+                    <p className="font-extrabold text-amber-900">Đổi sang link mới?</p>
+                    <p className="mt-1 text-amber-900">Link và mã QR đang dùng (kể cả QR của từng công việc) sẽ ngừng hoạt động ngay. Bạn cần gửi lại link mới cho mọi người.</p>
+                    <div className="mt-2 flex gap-2">
+                      <button type="button" className="btn-primary btn-sm" onClick={() => { void onRegenerateLink().then(() => { setAskNew(false); setNewMsg('Đã đổi link. Hãy gửi link mới cho mọi người.'); }).catch((e: unknown) => setNewMsg(e instanceof Error ? e.message : 'Không đổi được link.')); }}>Đổi link</button>
+                      <button type="button" className="btn-ghost btn-sm" onClick={() => setAskNew(false)}>Hủy</button>
+                    </div>
+                  </div>
+                )}
+                {newMsg && <p role="status" className="mt-1 text-xs font-bold text-emerald-700">{newMsg}</p>}
+              </div>
+            )}
           </div>
 
           <fieldset disabled={!canManage} className="space-y-2">

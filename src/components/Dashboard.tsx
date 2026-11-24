@@ -163,7 +163,7 @@ export function Dashboard({ boards, currentId, canCreate, onOpen, onCreate, onAr
           <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {urgent.map(({ b, s }) => (
               <li key={b.id} className="min-w-0">
-                <button type="button" onClick={() => onOpen(b.id)} className="flex w-full items-center justify-between gap-3 rounded-2xl bg-white px-3 py-2.5 text-left shadow-soft transition duration-200 hover:-translate-y-0.5 hover:shadow-lift">
+                <button type="button" onClick={() => onOpen(b.id)} className="flex min-h-[44px] w-full items-center justify-between gap-3 rounded-2xl bg-white px-3 py-2.5 text-left shadow-soft transition duration-200 hover:-translate-y-0.5 hover:shadow-lift">
                   <span className="min-w-0 truncate text-sm font-bold">{b.title}</span>
                   <span className="shrink-0 text-xs font-extrabold text-amber-900">{s.pending} duyệt{s.needsEdit > 0 ? ` · ${s.needsEdit} sửa` : ''}</span>
                 </button>
@@ -181,7 +181,7 @@ export function Dashboard({ boards, currentId, canCreate, onOpen, onCreate, onAr
         <div className="flex flex-wrap gap-2" role="group" aria-label="Lọc">
           {FILTERS.map((f) => (
             <button key={f.id} type="button" aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}
-              className={`btn btn-sm !min-h-[40px] border-[1.5px] ${filter === f.id ? 'border-transparent bg-gradient-to-b from-brand-500 to-brand-600 text-white shadow-glow' : 'border-brand-200 bg-white text-ink hover:-translate-y-0.5 hover:bg-brand-50'}`}>{f.label}</button>
+              className={`btn btn-sm !min-h-[40px] max-lg:!min-h-[44px] border-[1.5px] ${filter === f.id ? 'border-transparent bg-gradient-to-b from-brand-500 to-brand-600 text-white shadow-glow' : 'border-brand-200 bg-white text-ink hover:-translate-y-0.5 hover:bg-brand-50'}`}>{f.label}</button>
           ))}
         </div>
       </section>

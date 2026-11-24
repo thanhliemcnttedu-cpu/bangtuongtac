@@ -199,7 +199,11 @@ export function summarizeByUnit(rows: BoardRow[], byClass = false): UnitSummary[
 }
 
 /** Đọc danh sách dán vào: mỗi dòng 1 người; "Tên", "Tên, Lớp", "Tên<Tab>Lớp", "Tên | Lớp", "Tên - Lớp". */
-export function parseRosterText(text: string, idPrefix = 'ds'): RosterMember[] {
+/** Nhận ra một cột là vai trò trong tổ công tác (Tổ trưởng, Tổ phó, Bí thư, Phó bí thư, Thư ký, Ủy viên…). */
+const ROLE_RE = /^(tổ trưởng|tổ phó|phó tổ|bí thư|phó bí thư|chi ủy|chi uỷ|thư ký|ủy viên|uỷ viên|trưởng ban|phó ban|thành viên|chủ tịch|phó chủ tịch)/i;
+const EMAIL_RE = /^[^\s@,;|]+@[^\s@,;|]+\.[^\s@,;|]+$/;
+
+export function parseRosterText(text: string, idPrefix = 'ds', team = false): RosterMember[] {
   const members: RosterMember[] = [];
   const seen = new Set<string>();
   for (const rawLine of text.split(/\r?\n/)) {
@@ -210,12 +214,16 @@ export function parseRosterText(text: string, idPrefix = 'ds'): RosterMember[] {
     const cut = /\t|\s\|\s|\||;|,|\s[-–]\s/.exec(line);
     const name = (cut ? line.slice(0, cut.index) : line).trim();
     if (!name) continue;
-    const unit = cut ? line.slice(cut.index + cut[0].length).split(/\t|\s\|\s|\||;|,/).map((p) => p.trim()).filter(Boolean).join(' – ') : '';
+    const rest = cut ? line.slice(cut.index + cut[0].length).split(/\t|\s\|\s|\||;|,/).map((p) => p.trim()).filter(Boolean) : [];
+    // Gmail nhận ra ở mọi bảng; vai trò (Tổ trưởng, Bí thư…) chỉ tách ra ở tổ công tác. Phần còn lại là lớp / tổ.
+    const email = rest.find((p) => EMAIL_RE.test(p))?.toLowerCase() ?? '';
+    const roles = team ? rest.filter((p) => ROLE_RE.test(p)) : [];
+    const unit = rest.filter((p) => !EMAIL_RE.test(p) && !roles.includes(p)).join(' – ');
     // Khối có nhiều lớp: hai bạn cùng tên ở hai lớp khác nhau vẫn là hai người.
     const key = `${normalize(name)}|${normalize(unit)}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    members.push({ id: `${idPrefix}-${members.length + 1}`, name, unit });
+    members.push({ id: `${idPrefix}-${members.length + 1}`, name, unit, ...(email ? { email } : {}), ...(roles.length ? { role: roles.join(', ') } : {}) });
   }
   return members;
 }

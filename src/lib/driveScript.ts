@@ -15,7 +15,7 @@ export function buildGatewayScript(secret: string): string {
 // Không cần sửa gì. Dán nguyên đoạn này, rồi bấm Triển khai > Ứng dụng web.
 var SECRET = '${secret}';
 var ROOT_NAME = 'Bảng tương tác lớp học';
-var VERSION = 2;
+var VERSION = 4;
 
 function doPost(e) {
   var lock = LockService.getScriptLock();
@@ -30,6 +30,8 @@ function doPost(e) {
     else if (req.action === 'upload') out = upload(req);
     else if (req.action === 'json') out = saveJson(req);
     else if (req.action === 'delete') out = removeFiles(req.ids);
+    else if (req.action === 'fetch') out = fetchFiles(req.ids);
+    else if (req.action === 'mail') out = sendMails(req.items);
     else out = { ok: false, error: 'Lệnh không hợp lệ' };
     return reply(out);
   } catch (err) {
@@ -107,6 +109,32 @@ function inRoot(file) {
     node = p;
   }
   return false;
+}
+
+// Gửi email nhắc việc từ chính Gmail của bạn. Tối đa 30 thư mỗi lệnh; Google giới hạn khoảng 100 thư mỗi ngày (tài khoản thường).
+function sendMails(items) {
+  var left = MailApp.getRemainingDailyQuota();
+  var sent = 0;
+  (items || []).slice(0, 30).forEach(function (m) {
+    if (sent >= left) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(m.to))) return;
+    MailApp.sendEmail(String(m.to), String(m.subject).slice(0, 150), String(m.body).slice(0, 2000));
+    sent++;
+  });
+  return { ok: true, sent: sent, remaining: MailApp.getRemainingDailyQuota() };
+}
+
+// Đọc nội dung vài tệp trong thư mục của ứng dụng để trang web gói minh chứng thành ZIP.
+function fetchFiles(ids) {
+  var out = [];
+  (ids || []).slice(0, 12).forEach(function (id) {
+    try {
+      var f = DriveApp.getFileById(id);
+      if (!inRoot(f)) return;
+      out.push({ id: id, name: f.getName(), mime: f.getMimeType(), b64: Utilities.base64Encode(f.getBlob().getBytes()) });
+    } catch (e) {}
+  });
+  return { ok: true, files: out };
 }
 
 function removeFiles(ids) {

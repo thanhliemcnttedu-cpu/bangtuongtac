@@ -1,7 +1,9 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
-import { Archive, LayoutDashboard, Phone, Plus } from 'lucide-react';
+import { AlertTriangle, Archive, HelpCircle, Phone, Plus } from 'lucide-react';
 import { Logo } from './components/Logo';
 import { BoardSwitcher } from './components/BoardSwitcher';
+import { NavRail } from './components/NavRail';
+import type { NavPage } from './components/NavRail';
 import { Dashboard } from './components/Dashboard';
 import type { BoardData, ViewerRole } from './types/board';
 import type { BoardTemplate } from './data/boardTemplates';
@@ -12,6 +14,9 @@ import { BoardWorkspace } from './components/BoardWorkspace';
 import { LoginScreen } from './components/LoginScreen';
 
 // Nạp khi cần (chia nhỏ gói mã để trang mở nhanh).
+const ReportsPage = lazy(() => import('./components/ReportsPage').then((m) => ({ default: m.ReportsPage })));
+const MyTasksPage = lazy(() => import('./components/MyTasksPage').then((m) => ({ default: m.MyTasksPage })));
+const SystemHelpModal = lazy(() => import('./components/SystemHelpModal').then((m) => ({ default: m.SystemHelpModal })));
 const CreateBoardModal = lazy(() => import('./components/CreateBoardModal').then((m) => ({ default: m.CreateBoardModal })));
 const ArchiveManagerModal = lazy(() => import('./components/ArchiveManagerModal').then((m) => ({ default: m.ArchiveManagerModal })));
 
@@ -32,10 +37,17 @@ export default function App() {
   const [archiveOpen, setArchiveOpen] = useState(false);
   // Trang Tổng quan: bật sẵn khi giáo viên có nhiều bảng (từ 4 bảng của mình trở lên) để không phải chọn từng bảng.
   const [home, setHome] = useState<boolean | null>(null);
+  // Trang "Công việc của tôi" (gom việc từ mọi bảng).
+  const [myTasks, setMyTasks] = useState(false);
+  const [reports, setReports] = useState(false);
+  // Hỗ trợ: kiểm tra hệ thống + hướng dẫn nhanh; biểu ngữ hiện khi máy chủ còn thiếu phần cập nhật.
+  const [help, setHelp] = useState<null | 'check' | 'guide'>(null);
+  const [missingParts, setMissingParts] = useState(0);
 
   const { boards } = store;
   // Bảng trong thùng rác không hiện; bảng đã đóng chỉ hiện khi đang được mở xem.
-  const live = boards.filter((b) => !b.deletedAt);
+  // Bảng việc riêng ẩn khỏi danh sách bảng: chỉ xem qua trang "Công việc của tôi".
+  const live = boards.filter((b) => !b.deletedAt && !b.settings.personal);
   const board: BoardData | undefined =
     live.find((b) => b.id === activeId) ?? live.find((b) => b.shareToken === store.linkToken) ?? live.find((b) => !b.archivedAt);
   // Ghi nhớ bảng đang xem (kể cả khi chọn tự động) để đóng bảng xong vẫn ở lại bảng đó, thấy biểu ngữ "Bảng đã đóng".
@@ -44,7 +56,7 @@ export default function App() {
   const key = (b: BoardData): string => ((b.access ?? 'owner') !== 'owner' ? '￿￿' : b.program ?? '￿');
   const navBoards = live.filter((b) => !b.archivedAt || b.id === board?.id)
     .map((b, i) => ({ b, i })).sort((x, y) => key(x.b).localeCompare(key(y.b), 'vi') || x.i - y.i).map((x) => x.b);
-  const owned = boards.filter((b) => (b.access ?? 'owner') === 'owner');
+  const owned = boards.filter((b) => (b.access ?? 'owner') === 'owner' && !b.settings.personal);
   const storedCount = owned.filter((b) => b.archivedAt || b.deletedAt).length;
   const myTemplates: BoardTemplate[] = live.filter((b) => b.isTemplate && (b.access ?? 'owner') === 'owner').map((b) => ({
     id: `my-${b.id}`, name: b.title, description: `Mẫu của bạn · ${b.mode === 'classroom' ? 'Lớp học' : 'Tập huấn'}`,
@@ -60,18 +72,34 @@ export default function App() {
   const ownCount = owned.filter((b) => !b.deletedAt && !b.archivedAt).length;
   // Học sinh / khách chỉ thấy đúng bảng của mình: không hiện Tổng quan và danh sách bảng khác.
   const teacherNav = canCreate && !store.linkToken && effectiveRole !== 'guest' && effectiveRole !== 'viewonly';
-  const showHome = teacherNav && (home ?? ownCount >= 4);
-  const pick = (id: string): void => { setActiveId(id); setHome(false); };
+  const showMy = teacherNav && myTasks;
+  const showReports = teacherNav && !showMy && reports;
+  const showHome = teacherNav && !showMy && !showReports && (home ?? ownCount >= 4);
+  const activePage: NavPage = showMy ? 'my' : showReports ? 'reports' : showHome ? 'home' : 'board';
+  const go = (p: NavPage): void => { setMyTasks(p === 'my'); setReports(p === 'reports'); if (p === 'home') setHome(true); if (p === 'board') setHome(false); };
+  // Mật độ giao diện: giáo viên dùng bản gọn, học sinh và khách giữ bản to thân thiện.
+  useEffect(() => { document.documentElement.dataset.density = teacherNav ? 'compact' : 'comfortable'; }, [teacherNav]);
+  const pick = (id: string): void => { setActiveId(id); setHome(false); setMyTasks(false); setReports(false); };
 
   const createBoard = async (title: string, template: BoardTemplate, extras: { lessonTitle?: string; program?: string }): Promise<void> => {
     const b = await store.createBoard(title, template, extras);
     setActiveId(b.id);
     setHome(false);
+    setMyTasks(false);
+    setReports(false);
     setRole('owner');
     setCreating(false);
   };
 
+  // Giáo viên đăng nhập bằng Supabase thật: tự kiểm tra một lần để báo sớm nếu quên chạy SQL cập nhật.
+  useEffect(() => {
+    if (!accounts.isReal || !accounts.current || store.linkToken) return;
+    void import('./lib/systemCheck').then((m) => m.runSystemCheck()).then((r) => setMissingParts(r.filter((x) => x.state === 'missing').length)).catch(() => undefined);
+  }, [accounts.isReal, accounts.current?.id, store.linkToken]);
+
   const renderBody = () => {
+    if (showReports) return <Suspense fallback={<p className="p-10 text-center text-ink-2" role="status">Đang tải…</p>}><ReportsPage boards={owned} currentId={board?.id} /></Suspense>;
+    if (showMy) return <Suspense fallback={<p className="p-10 text-center text-ink-2" role="status">Đang tải…</p>}><MyTasksPage store={store} myEmail={accounts.current?.email ?? ''} onOpenBoard={pick} /></Suspense>;
     if (showHome && !store.loading) return <Dashboard boards={navBoards} currentId={board?.id} canCreate={canCreate} onOpen={pick} onCreate={() => setCreating(true)}
       onArchive={async (ids) => { for (const id of ids) await store.setArchived(id, true); }} onTrash={async (ids) => { for (const id of ids) await store.setTrashed(id, true); }} />;
     if (board) return <BoardWorkspace key={board.id} board={board} store={store} role={effectiveRole} onSelectBoard={setActiveId} myEmail={accounts.current?.email ?? ''} />;
@@ -96,10 +124,7 @@ export default function App() {
             <span className="text-base font-extrabold uppercase tracking-tight">Bảng tương tác</span>
           </div>
 
-          {teacherNav && navBoards.length > 1 && (
-            <button type="button" aria-pressed={showHome} onClick={() => setHome(!showHome)} className={`btn !min-h-[52px] !rounded-2xl border-[1.5px] ${showHome ? 'border-transparent bg-gradient-to-b from-brand-500 to-brand-600 text-white shadow-glow' : 'border-brand-200 bg-white text-brand-700 hover:-translate-y-0.5 hover:bg-brand-50'}`}><LayoutDashboard className="h-5 w-5" aria-hidden /> Tổng quan</button>
-          )}
-          {teacherNav && <BoardSwitcher boards={navBoards} currentId={showHome ? undefined : board?.id} onSelect={pick} />}
+          {teacherNav && <BoardSwitcher boards={navBoards} currentId={showHome || showMy || showReports ? undefined : board?.id} onSelect={pick} />}
 
           <div className="ml-auto flex items-center gap-2">
             {canCreate && !store.linkToken && (
@@ -117,6 +142,15 @@ export default function App() {
         </div>
       </header>
 
+      {teacherNav && missingParts > 0 && (
+        <div role="alert" className="flex flex-wrap items-center gap-2 border-b border-rose-200 bg-rose-50 px-4 py-2 text-sm font-bold text-rose-800">
+          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden /> Máy chủ còn thiếu {missingParts} phần cập nhật nên một số tính năng chưa hoạt động đúng.
+          <button type="button" onClick={() => setHelp('check')} className="btn-ghost btn-sm">Xem cách xử lý</button>
+        </div>
+      )}
+      <div className="lg:flex">
+      {teacherNav && <NavRail variant="rail" active={activePage} onGo={go} onArchive={() => setArchiveOpen(true)} storedCount={storedCount} hasBoard={!!board} />}
+      <div className="min-w-0 flex-1">
       {renderBody()}
 
       <footer className="border-t border-brand-200/70 bg-white/70 px-4 pb-24 pt-5 text-center text-sm text-ink-2 backdrop-blur-sm print:hidden sm:pb-16">
@@ -127,12 +161,17 @@ export default function App() {
             <Phone className="h-4 w-4" aria-hidden /> 0888 358 363
           </a>
         </p>
+        {teacherNav && <p className="mt-1"><button type="button" onClick={() => setHelp('guide')} className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold text-brand-700 hover:bg-brand-50"><HelpCircle className="h-4 w-4" aria-hidden /> Hướng dẫn nhanh và kiểm tra hệ thống</button></p>}
         <p className="mt-1 text-xs text-ink-3">
           Phiên bản {__APP_VERSION__}{__BUILD_COMMIT__ ? ` (${__BUILD_COMMIT__})` : ''} · Cập nhật lúc <time dateTime={__BUILD_TIME__}>{buildStamp()}</time>
         </p>
       </footer>
+      </div>
+      </div>
+      {teacherNav && <NavRail variant="bar" active={activePage} onGo={go} onArchive={() => setArchiveOpen(true)} storedCount={storedCount} hasBoard={!!board} />}
 
       <Suspense fallback={null}>
+      {help && <SystemHelpModal isReal={accounts.isReal} initialTab={help} onResult={setMissingParts} onClose={() => setHelp(null)} />}
       {creating && <CreateBoardModal extraTemplates={myTemplates} onCreate={createBoard} onClose={() => setCreating(false)} />}
       {archiveOpen && (
         <ArchiveManagerModal boards={owned} onClose={() => setArchiveOpen(false)} onOpen={pick}

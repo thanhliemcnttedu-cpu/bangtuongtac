@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, BookOpen, Check, GraduationCap, Layers, School } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen, Check, GraduationCap, Layers, School, UsersRound } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { BoardMode } from '../types/board';
 import { BOARD_TEMPLATES } from '../data/boardTemplates';
@@ -18,7 +18,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Scope = 'class' | 'grade' | 'lesson' | 'training';
+type Scope = 'class' | 'grade' | 'lesson' | 'training' | 'team';
 
 interface ScopeDef {
   id: Scope;
@@ -42,6 +42,8 @@ const SCOPES: ScopeDef[] = [
     nameLabel: 'Tên bài học / chủ đề *', namePlaceholder: 'Bài 3 · Tìm kiếm thông tin trên internet', extraLabel: 'Môn và lớp / khối', extraPlaceholder: 'Tin học 4' },
   { id: 'training', mode: 'training', icon: GraduationCap, title: 'Lớp tập huấn', hint: 'Giáo viên nộp sản phẩm theo trường / đơn vị. Có thể gom nhiều lớp tập huấn vào một chương trình.', example: 'Ví dụ: Thiết kế kế hoạch bài dạy',
     nameLabel: 'Tên lớp tập huấn *', namePlaceholder: 'Thiết kế kế hoạch bài dạy', extraLabel: 'Chương trình tập huấn', extraPlaceholder: 'Bồi dưỡng thường xuyên 2025–2026' },
+  { id: 'team', mode: 'training', icon: UsersRound, title: 'Tổ / nhóm công tác', hint: 'Tổ chuyên môn, chi bộ, ban: giao việc, thu minh chứng, xem ai đã nộp, xuất báo cáo. Chỉ người có tên trong danh sách mới nộp được.', example: 'Ví dụ: Tổ Tự nhiên – Tháng 12',
+    nameLabel: 'Tên tổ / nhóm *', namePlaceholder: 'Tổ Tự nhiên', extraLabel: 'Giai đoạn / ghi chú', extraPlaceholder: 'Năm học 2026–2027' },
 ];
 
 /** Ghép tên bảng từ các ô đã điền (xem trước ngay cho giáo viên). */
@@ -51,6 +53,7 @@ function composeTitle(scope: Scope, name: string, extra: string): string {
   if (!a) return '';
   if (scope === 'lesson') return b ? `${b} – ${a}` : a;
   if (scope === 'training') return a;
+  if (scope === 'team') return b ? `${a} – ${b}` : a;
   return b ? `${a} – ${b}` : a;
 }
 
@@ -70,7 +73,7 @@ export function CreateBoardModal({ extraTemplates = [], onCreate, onClose }: Pro
   const [error, setError] = useState('');
 
   const def = SCOPES.find((s) => s.id === scope) ?? SCOPES[0];
-  const templates = useMemo(() => [...BOARD_TEMPLATES, ...extraTemplates].filter((t) => t.mode === def.mode), [extraTemplates, def.mode]);
+  const templates = useMemo(() => [...BOARD_TEMPLATES, ...extraTemplates].filter((t) => t.mode === def.mode && ((t.settings.scope === 'team') === (scope === 'team'))), [extraTemplates, def.mode, scope]);
   const template = templates.find((t) => t.id === templateId) ?? templates[0];
   const title = composeTitle(scope, name, extra);
 

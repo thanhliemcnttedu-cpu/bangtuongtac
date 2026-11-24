@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Save } from 'lucide-react';
 import type { BoardSettings, ViewMode } from '../types/board';
 import { BACKGROUNDS, FONTS, ICONS, SORTS, VIEW_LABEL } from '../lib/boardSettings';
@@ -44,6 +44,16 @@ export function BoardSettingsModal({ initial, onPreview, onSave, onCancel, showP
   const [draft, setDraft] = useState<BoardMetaPatch>(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // Esc hoặc Hủy: nếu đang sửa dở thì hỏi lại trước khi bỏ thay đổi.
+  const [askDiscard, setAskDiscard] = useState(false);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
+  const requestClose = (): void => { if (dirty) setAskDiscard(true); else onCancel(); };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') requestClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty]);
 
   const update = (next: BoardMetaPatch): void => { setDraft(next); onPreview(next); };
   const set = <K extends keyof BoardSettings>(key: K, value: BoardSettings[K]): void =>
@@ -58,13 +68,19 @@ export function BoardSettingsModal({ initial, onPreview, onSave, onCancel, showP
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-ink/30" onClick={onCancel}>
+    <div className="fixed inset-0 z-50 flex justify-end bg-ink/30" onClick={requestClose}>
       <aside role="dialog" aria-modal="true" aria-label="Cài đặt bảng" onClick={(e) => e.stopPropagation()}
         className="pop-in flex h-full w-full max-w-md flex-col bg-white shadow-lift">
         <header className="flex items-center justify-between border-b border-brand-100 px-5 py-3">
           <h2 className="text-lg font-extrabold">Cài đặt bảng</h2>
-          <button type="button" onClick={onCancel} className="btn-ghost btn-sm">Hủy</button>
+          <button type="button" onClick={requestClose} className="btn-ghost btn-sm">Hủy</button>
         </header>
+        {askDiscard && (
+          <div role="alertdialog" aria-label="Bỏ thay đổi?" className="border-b border-amber-300 bg-amber-50 px-5 py-3 text-sm">
+            <p className="font-extrabold text-amber-900">Bạn đang sửa dở. Bỏ các thay đổi chưa lưu?</p>
+            <div className="mt-2 flex gap-2"><button type="button" onClick={onCancel} className="btn-primary btn-sm">Bỏ thay đổi</button><button type="button" onClick={() => setAskDiscard(false)} className="btn-ghost btn-sm">Tiếp tục sửa</button></div>
+          </div>
+        )}
 
         <div className="flex-1 space-y-4 overflow-y-auto p-4">
           <Section title="Thông tin">
@@ -152,6 +168,13 @@ export function BoardSettingsModal({ initial, onPreview, onSave, onCancel, showP
               </select>
             </div>
           </Section>
+
+          {s.scope === 'team' && (
+            <Section title="An toàn của tổ công tác">
+              <Toggle label="Chỉ người có tên trong danh sách mới nộp được" hint="Người lạ có link cũng không nộp được. Máy chủ kiểm tra lại, không chỉ trang web." checked={!!s.rosterOnly} onChange={(v) => set('rosterOnly', v)} />
+              <Toggle label="Mỗi thành viên chỉ thấy bài của chính mình" hint="Người có link không xem được minh chứng của người khác. Chỉ tổ trưởng và người được mời quản lý xem tất cả." checked={!!s.privateView} onChange={(v) => set('privateView', v)} />
+            </Section>
+          )}
 
           <Section title="Kiểm duyệt">
             <ModerationPicker name="settings-moderation" value={s.moderation} onChange={(m) => set('moderation', m)} />

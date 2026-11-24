@@ -25,7 +25,7 @@ export function saveDefaultGateway(c: GatewayConfig): void { try { localStorage.
 
 /* ---------- Gọi cổng ---------- */
 
-interface Reply { ok: boolean; error?: string; id?: string; url?: string; size?: number; folderUrl?: string; deleted?: number; root?: string; version?: number; session?: string }
+interface Reply { ok: boolean; error?: string; id?: string; url?: string; size?: number; folderUrl?: string; deleted?: number; root?: string; version?: number; session?: string; files?: { id: string; name: string; mime: string; b64: string }[]; sent?: number; remaining?: number }
 
 async function call(cfg: GatewayConfig, body: Record<string, unknown>, tries = 2): Promise<Reply> {
   let last = '';
@@ -128,6 +128,23 @@ export function gatewaySend(cfg: GatewayConfig, path: string[], name: string, bl
 export async function gatewayJson(cfg: GatewayConfig, path: string[], name: string, text: string): Promise<GatewayFile> {
   const r = await call(cfg, { action: 'json', path, name, text });
   return { id: r.id ?? '', url: '', size: text.length, folderUrl: r.folderUrl ?? '' };
+}
+
+/** Đọc nội dung các tệp Drive của giáo viên qua cổng (cần mã cổng phiên bản 3 trở lên). Dùng để gói minh chứng thành ZIP. */
+export async function gatewayFetchFiles(cfg: GatewayConfig, ids: string[]): Promise<{ id: string; name: string; mime: string; b64: string }[]> {
+  if (ids.length === 0) return [];
+  const ver = await gatewayVersion(cfg);
+  if (ver < 3) throw new Error('Mã cổng Drive đã cũ. Hãy dán lại mã cổng mới (Cài đặt bảng > Google Drive) rồi triển khai lại.');
+  return (await call(cfg, { action: 'fetch', ids })).files ?? [];
+}
+
+/** Gửi email nhắc việc qua cổng (cần mã cổng phiên bản 4). Thư đi từ Gmail của người triển khai cổng. */
+export async function gatewayMail(cfg: GatewayConfig, items: { to: string; subject: string; body: string }[]): Promise<{ sent: number; remaining: number }> {
+  if (items.length === 0) return { sent: 0, remaining: 0 };
+  const ver = await gatewayVersion(cfg);
+  if (ver < 4) throw new Error('Mã cổng Drive đã cũ, chưa gửi được email. Hãy dán lại mã cổng mới (Cài đặt bảng > Google Drive), triển khai lại và cho phép quyền gửi email.');
+  const r = await call(cfg, { action: 'mail', items }, 1);
+  return { sent: r.sent ?? 0, remaining: r.remaining ?? 0 };
 }
 
 export async function gatewayDelete(cfg: GatewayConfig, ids: string[]): Promise<number> {

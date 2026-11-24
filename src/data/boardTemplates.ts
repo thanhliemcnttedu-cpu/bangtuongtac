@@ -24,6 +24,12 @@ export const BOARD_TEMPLATES: BoardTemplate[] = [
     settings: { ...DEFAULT_SETTINGS, icon: 'cap', defaultView: 'table', sortBy: 'unit' },
   },
   {
+    id: 'to-cong-tac', name: 'Tổ / nhóm công tác', description: 'Tổ chuyên môn, chi bộ, ban: giao việc, thu minh chứng, xem ai đã nộp, xuất báo cáo.',
+    mode: 'training', goals: '', tasks: [],
+    // An toàn mặc định: chỉ người có tên trong danh sách mới nộp được, mỗi người chỉ thấy bài của mình.
+    settings: { ...DEFAULT_SETTINGS, icon: 'cap', defaultView: 'table', sortBy: 'unit', moderation: 'off', scope: 'team', rosterOnly: true, privateView: true },
+  },
+  {
     id: 'phieu-cuoi-gio', name: 'Phiếu cuối giờ', description: 'Mỗi em ghi điều học được và điều còn thắc mắc.',
     mode: 'classroom', goals: 'Cuối giờ, mỗi em viết 1–2 câu: hôm nay em học được gì, em còn thắc mắc gì.',
     tasks: ['Hôm nay em học được gì?', 'Em còn thắc mắc gì?'],

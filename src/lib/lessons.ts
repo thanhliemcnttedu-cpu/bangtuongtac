@@ -70,7 +70,7 @@ export function taskProgress(board: BoardData, task: TaskItem): TaskProgress {
     if (m) doneIds.add(m.id); else outsideNames.add(normalize(c.authorName));
   }
   outside = outsideNames.size;
-  const targeted = board.roster.filter((m) => targetsUnit(task, m.unit));
+  const targeted = board.roster.filter((m) => targetsMember(task, m));
   return { total: targeted.length, done: targeted.filter((m) => doneIds.has(m.id)), missing: targeted.filter((m) => !doneIds.has(m.id)), outside };
 }
 
@@ -100,6 +100,13 @@ export function checkSubmit(t: TaskItem, unit: string, now: number): SubmitCheck
 export function targetsUnit(t: TaskItem, unit: string): boolean {
   const targets = t.targetUnits ?? [];
   return targets.length === 0 || targets.some((u) => unitMatches(u, unit));
+}
+
+/** Thành viên có thuộc đối tượng của việc không: có danh sách Gmail riêng thì theo Gmail, không thì theo tổ / đơn vị. */
+export function targetsMember(t: TaskItem, m: { unit: string; email?: string }): boolean {
+  const emails = t.assigneeEmails ?? [];
+  if (emails.length > 0) return !!m.email && emails.includes(m.email.trim().toLowerCase());
+  return targetsUnit(t, m.unit);
 }
 
 /** Đối tượng giao khớp đơn vị: đúng cả cụm, hoặc đúng phần lớp (giao cho "Lớp 4A" thì mọi tổ của 4A đều khớp). */
@@ -172,7 +179,10 @@ export function groupTasks(lessons: Lesson[], tasks: TaskItem[]): { lesson: Less
 export const KIND_LABEL = { assignment: 'Bài tập', requirement: 'Yêu cầu' } as const;
 
 /** Từ ngữ theo kiểu lớp: lớp học dùng "Bài học / Tổ, nhóm"; lớp tập huấn dùng "Buổi tập huấn / Đơn vị". */
-export function wordsFor(mode: BoardData['mode'], scope?: 'class' | 'grade' | 'lesson') {
+export function wordsFor(mode: BoardData['mode'], scope?: 'class' | 'grade' | 'lesson' | 'team') {
+  if (mode === 'training' && scope === 'team') {
+    return { lesson: 'Nhóm công việc', lessonLower: 'nhóm công việc', unit: 'tổ / nhóm', panel: 'Công việc & tài liệu của tổ', learner: 'thành viên', everyone: 'Cả tổ', common: 'Tài liệu chung của tổ', group: 'tổ' };
+  }
   return mode === 'classroom'
     ? { lesson: 'Bài học', lessonLower: 'bài học', unit: scope === 'grade' ? 'lớp / tổ' : 'tổ / nhóm', panel: scope === 'grade' ? 'Bài học & tài liệu của khối' : scope === 'lesson' ? 'Bài học & tài liệu' : 'Bài học & tài liệu của lớp', learner: 'học sinh', everyone: 'Cả lớp', common: 'Tài liệu chung của lớp', group: 'lớp' }
     : { lesson: 'Buổi tập huấn', lessonLower: 'buổi tập huấn', unit: 'đơn vị', panel: 'Buổi tập huấn & tài liệu của giảng viên', learner: 'học viên', everyone: 'Tất cả học viên', common: 'Tài liệu chung của lớp tập huấn', group: 'lớp tập huấn' };

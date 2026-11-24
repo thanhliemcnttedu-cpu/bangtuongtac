@@ -102,7 +102,10 @@ export function parseSettings(raw: unknown): BoardSettings {
     peerStars: r.peerStars !== false,
     peerComments: r.peerComments !== false,
     showGrades: r.showGrades === true,
-    ...(r.scope === 'class' || r.scope === 'grade' || r.scope === 'lesson' ? { scope: r.scope } : {}),
+    ...(r.scope === 'class' || r.scope === 'grade' || r.scope === 'lesson' || r.scope === 'team' ? { scope: r.scope } : {}),
+    ...(r.rosterOnly === true ? { rosterOnly: true } : {}),
+    ...(r.privateView === true ? { privateView: true } : {}),
+    ...(r.personal === true ? { personal: true } : {}),
     ...(typeof r.driveUrl === 'string' && isGatewayUrl(r.driveUrl) && typeof r.driveSecret === 'string' && /^[A-Za-z0-9]{8,80}$/.test(r.driveSecret)
       ? { driveUrl: r.driveUrl, driveSecret: r.driveSecret } : {}),
   };

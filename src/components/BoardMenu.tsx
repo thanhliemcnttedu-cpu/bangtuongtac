@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Activity, Archive, ArchiveRestore, BookmarkCheck, BookmarkPlus, ClipboardList, CloudUpload, Copy, Download, Eraser, Info,
-  ListChecks, Maximize, MoreHorizontal, Printer, Settings, Trash2, Users,
+  Award, CalendarCheck, ListChecks, Maximize, Medal, Trophy, MoreHorizontal, Printer, Settings, Trash2, Users,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { BoardData } from '../types/board';
@@ -23,6 +23,8 @@ export interface BoardMenuActions {
   onShareTeachers: () => void;
   /** Lưu bản sao bảng và tệp bài nộp lên Google Drive của giáo viên. */
   onDrive: () => void;
+  /** Lớp tập huấn: mở công cụ điểm danh / chứng nhận / triển lãm / tổng kết. */
+  onTraining?: (tab: 'attendance' | 'certificate' | 'showcase' | 'summary') => void;
 }
 
 interface Props {
@@ -61,6 +63,14 @@ export function BoardMenu({ board, canManage, isOwner, canView, actions }: Props
     { label: 'Danh sách', Icon: ListChecks, run: actions.onRoster },
     ...(isOwner ? [{ label: 'Nhân bản', Icon: Copy, run: actions.onDuplicate }] : [{ label: 'Chia sẻ', Icon: Users, run: actions.onShareTeachers }]),
     { label: 'Hoạt động', Icon: Activity, run: actions.onActivity },
+  ] : [];
+
+  // Lớp tập huấn (không phải tổ công tác): điểm danh, giấy chứng nhận, triển lãm, tổng kết khóa.
+  const training: Item[] = canManage && board.mode === 'training' && board.settings.scope !== 'team' && actions.onTraining ? [
+    { label: 'Điểm danh từng buổi', Icon: CalendarCheck, run: () => actions.onTraining?.('attendance') },
+    { label: 'Giấy chứng nhận hoàn thành', Icon: Award, run: () => actions.onTraining?.('certificate') },
+    { label: 'Triển lãm sản phẩm theo bình chọn', Icon: Trophy, run: () => actions.onTraining?.('showcase') },
+    { label: 'Tổng kết khóa tập huấn', Icon: Medal, run: () => actions.onTraining?.('summary') },
   ] : [];
 
   const general: Item[] = [
@@ -107,6 +117,7 @@ export function BoardMenu({ board, canManage, isOwner, canView, actions }: Props
               ))}
             </ul>
           )}
+          {training.length > 0 && <ul className="border-b border-brand-100 py-1" aria-label="Lớp tập huấn">{training.map(row)}</ul>}
           <ul className="py-1">{general.map(row)}</ul>
           {danger.length > 0 && <ul className="border-t border-brand-100 py-1">{danger.map(row)}</ul>}
         </div>

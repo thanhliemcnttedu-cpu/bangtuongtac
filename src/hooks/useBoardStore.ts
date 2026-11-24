@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
-  ActivityEntry, Attachment, BoardData, CardComment, ModerationMode, CardLayoutPatch, CardLocation, CardStatus, CollabRole, LinkMode, Lesson, PinnedResource, ResourceKind, RosterMember, SubmissionCard, TaskItem,
+  ActivityEntry, AttendanceSession, Attachment, BoardData, CardComment, ModerationMode, CardLayoutPatch, CardLocation, CardStatus, CollabRole, LinkMode, Lesson, PinnedResource, ResourceKind, RosterMember, SubmissionCard, TaskItem,
 } from '../types/board';
 import { MOCK_BOARDS } from '../data/mockBoardData';
 import { buildLargeDemo } from '../data/demoLarge';
+import { nextInstance, taskToInput } from '../lib/recurrence';
+import { BOARD_TEMPLATES } from '../data/boardTemplates';
 import type { BoardTemplate } from '../data/boardTemplates';
 import { isSupabaseConfigured } from '../lib/supabase';
 import * as api from '../lib/boardApi';
@@ -131,7 +133,7 @@ export interface BoardStore {
   /** Giáo viên chuyển các bài đã chọn sang một nhiệm vụ khác. */
   moveCards: (boardId: string, cardIds: string[], taskId: string) => Promise<void>;
   /** Danh sách tên để học sinh chọn khi nộp bài (không cần đăng nhập). */
-  loadRosterNames: (boardId: string) => Promise<{ name: string; unit: string }[]>;
+  loadRosterNames: (boardId: string) => Promise<{ name: string; unit: string; role?: string }[]>;
   /** Giáo viên gán bài nộp cho một thành viên trong danh sách (sửa tên và tổ cho khớp). */
   reassignCard: (boardId: string, cardId: string, member: { name: string; unit: string }) => Promise<void>;
   /** Tìm bài theo tên người nộp (tên chính là chìa khóa để sửa). */
@@ -152,6 +154,19 @@ export interface BoardStore {
   /** Bài tập / yêu cầu: thêm (taskId = null) hoặc sửa. Trả về bài tập đã lưu. */
   saveTask: (boardId: string, taskId: string | null, input: TaskInput) => Promise<TaskItem>;
   removeTask: (boardId: string, taskId: string) => Promise<void>;
+  /** Việc riêng: đổi cột Kanban (Cần làm / Đang làm / Xong). */
+  /** Việc định kỳ: sinh kỳ mới cho các việc đã hết hạn. Trả về số kỳ mới. Chỉ chủ bảng. */
+  rollRecurring: (boardId: string) => Promise<number>;
+  /** Điểm danh lớp tập huấn: tải các buổi, tạo / xóa buổi, đánh dấu có mặt (theo tên chuẩn hóa). */
+  loadAttendance: (boardId: string) => Promise<void>;
+  addAttendanceSession: (boardId: string, day: string, label: string) => Promise<void>;
+  removeAttendanceSession: (boardId: string, day: string) => Promise<void>;
+  setAttendancePresent: (boardId: string, day: string, nameKey: string, present: boolean) => Promise<void>;
+  /** Đổi link chia sẻ của bảng (link và QR cũ ngừng hoạt động). */
+  regenerateLink: (boardId: string) => Promise<void>;
+  setTaskProgress: (boardId: string, taskId: string, progress: 'todo' | 'doing' | 'done') => Promise<void>;
+  /** Bảng việc riêng của tôi: có rồi thì trả về, chưa có thì tạo (ẩn khỏi danh sách bảng). */
+  ensurePersonalBoard: () => Promise<BoardData>;
   addResource: (boardId: string, input: MaterialInput) => Promise<void>;
   removeResource: (boardId: string, resourceId: string) => Promise<void>;
   updateResource: (boardId: string, resourceId: string, input: MaterialInput) => Promise<void>;
@@ -384,11 +399,13 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
         tasks: [], createdAt: new Date().toISOString(), isTemplate: false,
         ownerEmail: actor, collaborators: [],
       };
+      boardsRef.current = [b, ...boardsRef.current];
       setBoards((l) => [b, ...l]);
       return b;
     }
     if (!userId) throw new Error('Cần đăng nhập Gmail để tạo bảng.');
     const b = await api.createBoard(title, template, userId, extras);
+    boardsRef.current = [b, ...boardsRef.current];
     setBoards((l) => [b, ...l]);
     return b;
   }, [isReal, userId, actor]);
@@ -523,10 +540,10 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     await note(boardId, 'chuyen_bai', `${cardIds.length} bài → ${label}`, false);
   }, [isReal, boards, patch, note]);
 
-  const loadRosterNames = useCallback(async (boardId: string): Promise<{ name: string; unit: string }[]> => {
+  const loadRosterNames = useCallback(async (boardId: string): Promise<{ name: string; unit: string; role?: string }[]> => {
     const b = boards.find((x) => x.id === boardId);
     if (!b) return [];
-    if (!isReal) return b.roster.map((m) => ({ name: m.name, unit: m.unit }));
+    if (!isReal) return b.roster.map((m) => ({ name: m.name, unit: m.unit, role: m.role ?? '' }));
     try { return await api.getRosterPublic(b.shareToken); } catch { return []; }
   }, [isReal, boards]);
 
@@ -656,10 +673,15 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
   const saveTask = useCallback(async (boardId: string, taskId: string | null, input: TaskInput): Promise<TaskItem> => {
     if (!input.label.trim()) throw new Error('Hãy nhập tên bài tập / yêu cầu.');
     if (input.assignedAt && input.dueAt && Date.parse(input.dueAt) <= Date.parse(input.assignedAt)) throw new Error('Hạn nộp phải sau lúc giao bài.');
-    const board = boards.find((b) => b.id === boardId);
+    const board = boardsRef.current.find((b) => b.id === boardId);
     if (!board) throw new Error('Không tìm thấy lớp.');
-    const clean: TaskInput = { ...input, label: input.label.trim(), instructions: input.instructions.trim(), targetUnits: [...new Set(input.targetUnits.map((u) => u.trim()).filter(Boolean))] };
-    const view = (id: string): TaskItem => ({ id, label: clean.label, lessonId: clean.lessonId ?? undefined, kind: clean.kind, instructions: clean.instructions, assignedAt: clean.assignedAt, dueAt: clean.dueAt, allowLate: clean.allowLate, targetUnits: clean.targetUnits });
+    // Tài liệu / liên kết của công việc: tệp mới được tải lên (Drive của giáo viên nếu có cổng, không thì kho hệ thống).
+    const tcfg = gatewayOf(board.settings);
+    const added = (input.files?.length ?? 0) + (input.links?.length ?? 0) > 0
+      ? await prepareAttachments({ boardId, files: input.files ?? [], links: input.links ?? [] }, isReal, true, tcfg ? { cfg: tcfg, folder: [ROOT_FOLDER, boardFolderName(board), 'Công việc'], author: 'Tài liệu', mode: 'big' as const } : undefined)
+      : [];
+    const clean: TaskInput = { ...input, files: undefined, links: undefined, attachments: [...(input.attachments ?? []), ...added], label: input.label.trim(), instructions: input.instructions.trim(), targetUnits: [...new Set(input.targetUnits.map((u) => u.trim()).filter(Boolean))] };
+    const view = (id: string): TaskItem => ({ id, label: clean.label, lessonId: clean.lessonId ?? undefined, kind: clean.kind, instructions: clean.instructions, assignedAt: clean.assignedAt, dueAt: clean.dueAt, allowLate: clean.allowLate, targetUnits: clean.targetUnits, attachments: clean.attachments, needsEvidence: !!clean.needsEvidence, ackOnly: !!clean.ackOnly, progress: clean.progress ?? 'todo', priority: clean.priority ?? 'normal', assigneeEmails: (clean.assigneeEmails ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean), repeat: clean.repeat ?? 'none', seriesId: clean.seriesId });
     if (taskId) {
       if (isReal) await api.updateTask(taskId, clean);
       patch(boardId, (b) => ({ ...b, tasks: b.tasks.map((t) => (t.id === taskId ? view(taskId) : t)) }));
@@ -671,6 +693,69 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     await note(boardId, 'giao_bai_tap', clean.label, true);
     return made;
   }, [isReal, boards, patch, note]);
+
+  const rolling = useRef(new Set<string>());
+  const rollRecurring = useCallback(async (boardId: string): Promise<number> => {
+    const board = boardsRef.current.find((b) => b.id === boardId);
+    if (!board || (board.access ?? 'owner') !== 'owner' || rolling.current.has(boardId)) return 0;
+    rolling.current.add(boardId);
+    let made = 0;
+    try {
+      for (const t of board.tasks.filter((x) => x.repeat && x.repeat !== 'none' && x.dueAt)) {
+        let cur = t;
+        for (let guard = 0; guard < 12 && cur.dueAt && Date.parse(cur.dueAt) <= Date.now(); guard += 1) {
+          const next = nextInstance(cur);
+          if (!next) break;
+          const created = await saveTask(boardId, null, next);
+          // Kỳ cũ thôi mang quy tắc lặp: chỉ kỳ mới nhất của chuỗi còn lặp.
+          await saveTask(boardId, cur.id, { ...taskToInput(cur), repeat: 'none', seriesId: next.seriesId });
+          cur = created;
+          made += 1;
+        }
+      }
+    } finally { rolling.current.delete(boardId); }
+    return made;
+  }, [saveTask]);
+
+  const loadAttendance = useCallback(async (boardId: string): Promise<void> => {
+    if (!isReal) return; // bản mẫu giữ điểm danh ngay trong bộ nhớ của bảng
+    const attendance = await api.getAttendance(boardId);
+    patch(boardId, (b) => ({ ...b, attendance }));
+  }, [isReal, patch]);
+  const editAttendance = useCallback((boardId: string, fn: (list: AttendanceSession[]) => AttendanceSession[]): void => {
+    patch(boardId, (b) => ({ ...b, attendance: fn(b.attendance ?? []) }));
+  }, [patch]);
+  const addAttendanceSession = useCallback(async (boardId: string, day: string, label: string): Promise<void> => {
+    if (isReal) await api.upsertAttendanceSession(boardId, day, label);
+    editAttendance(boardId, (l) => (l.some((s) => s.day === day) ? l.map((s) => (s.day === day ? { ...s, label } : s)) : [...l, { day, label, present: [] }].sort((a, b) => a.day.localeCompare(b.day))));
+  }, [isReal, editAttendance]);
+  const removeAttendanceSession = useCallback(async (boardId: string, day: string): Promise<void> => {
+    if (isReal) await api.deleteAttendanceSession(boardId, day);
+    editAttendance(boardId, (l) => l.filter((s) => s.day !== day));
+  }, [isReal, editAttendance]);
+  const setAttendancePresent = useCallback(async (boardId: string, day: string, nameKey: string, present: boolean): Promise<void> => {
+    if (isReal) await api.setAttendancePresent(boardId, day, nameKey, present);
+    editAttendance(boardId, (l) => l.map((s) => (s.day === day ? { ...s, present: present ? [...new Set([...s.present, nameKey])] : s.present.filter((k) => k !== nameKey) } : s)));
+  }, [isReal, editAttendance]);
+
+  const regenerateLink = useCallback(async (boardId: string): Promise<void> => {
+    const token = isReal ? await api.regenerateShareToken(boardId) : randomToken();
+    patch(boardId, (b) => ({ ...b, shareToken: token }));
+    await note(boardId, 'cai_dat', 'Đổi link chia sẻ', true);
+  }, [isReal, patch, note]);
+
+  const setTaskProgress = useCallback(async (boardId: string, taskId: string, progress: 'todo' | 'doing' | 'done'): Promise<void> => {
+    if (isReal) await api.updateTaskProgress(taskId, progress);
+    patch(boardId, (b) => ({ ...b, tasks: b.tasks.map((t) => (t.id === taskId ? { ...t, progress } : t)) }));
+  }, [isReal, patch]);
+
+  const ensurePersonalBoard = useCallback(async (): Promise<BoardData> => {
+    const have = boards.find((b) => b.settings.personal && !b.deletedAt && (b.access ?? 'owner') === 'owner');
+    if (have) return have;
+    const tpl = BOARD_TEMPLATES.find((t) => t.id === 'to-cong-tac');
+    if (!tpl) throw new Error('Thiếu mẫu bảng.');
+    return createBoard('Việc riêng của tôi', { ...tpl, settings: { ...tpl.settings, personal: true, rosterOnly: false, privateView: true } });
+  }, [boards, createBoard]);
 
   const removeTask = useCallback(async (boardId: string, taskId: string): Promise<void> => {
     if (isReal) await api.deleteTask(taskId);
@@ -890,6 +975,6 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     rateCard, addComment, deleteOwnComment, setCommentStatus, deleteComment, setTeacherStars,
     inviteCollaborator, changeCollaboratorRole, removeCollaborator, leaveBoard,
     createBoard, duplicateBoard, updateMeta, addCard, setCardLayout, setStatus, setGrade, vote, deleteCard, moveCards, loadRosterNames, reassignCard, findCardByCode, findCardsByName, saveCardByCode, clearSubmissions, updateCardAttachments, removeStoredAttachments,
-    setRoster, setSettings, saveLesson, removeLesson, saveTask, removeTask, addResource, removeResource, updateResource, assignToBoards, setProgram, setArchived, setTrashed, deleteForever, setTemplate, loadActivity,
+    setRoster, setSettings, saveLesson, removeLesson, saveTask, removeTask, regenerateLink, setTaskProgress, ensurePersonalBoard, rollRecurring, loadAttendance, addAttendanceSession, removeAttendanceSession, setAttendancePresent, addResource, removeResource, updateResource, assignToBoards, setProgram, setArchived, setTrashed, deleteForever, setTemplate, loadActivity,
   };
 }

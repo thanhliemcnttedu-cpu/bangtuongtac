@@ -2,7 +2,7 @@
 // Mọi hàm ném lỗi tiếng Việt khi Supabase từ chối (thường do RLS); App hiển thị lỗi đó cho người dùng.
 
 import type {
-  CardComment, ActivityEntry, Attachment, BoardAccess, BoardData, CollabRole, Collaborator, CardLayoutPatch, CardLocation, VennRegion, BoardMode, CardStatus, LinkMode, Lesson, PinnedResource, PollOption, ResourceKind, RosterMember, SubmissionCard, TaskItem, TaskKind,
+  AttendanceSession, CardComment, ActivityEntry, Attachment, BoardAccess, BoardData, CollabRole, Collaborator, CardLayoutPatch, CardLocation, VennRegion, BoardMode, CardStatus, LinkMode, Lesson, PinnedResource, PollOption, ResourceKind, RosterMember, SubmissionCard, TaskItem, TaskKind,
 } from '../types/board';
 import { linkToAttachment } from './embeds';
 import type { BoardSettings } from '../types/board';
@@ -41,6 +41,9 @@ interface VoteCount { card_id: string; option_id: string; n: number }
 interface TaskDb {
   id: string; board_id?: string; label: string; sort?: number; lesson_id?: string | null; kind?: TaskKind | null; instructions?: string | null;
   assigned_at?: string | null; due_at?: string | null; allow_late?: boolean | null; target_units?: string[] | null;
+  attachments?: Attachment[] | null; needs_evidence?: boolean | null; ack_only?: boolean | null;
+  progress?: string | null; priority?: string | null; assignee_emails?: string[] | null;
+  repeat_rule?: string | null; series_id?: string | null;
 }
 interface LessonDb { id: string; board_id?: string; title: string; description: string | null; sort?: number; starts_at?: string | null; ends_at?: string | null }
 
@@ -49,12 +52,19 @@ function toTask(t: TaskDb): TaskItem {
     id: t.id, label: t.label, lessonId: t.lesson_id ?? undefined, kind: t.kind === 'requirement' ? 'requirement' : 'assignment',
     instructions: t.instructions ?? '', assignedAt: t.assigned_at ?? null, dueAt: t.due_at ?? null, allowLate: !!t.allow_late,
     targetUnits: t.target_units ?? [],
+    attachments: t.attachments ?? [], needsEvidence: !!t.needs_evidence, ackOnly: !!t.ack_only,
+    progress: t.progress === 'doing' || t.progress === 'done' ? t.progress : 'todo',
+    priority: t.priority === 'high' || t.priority === 'low' ? t.priority : 'normal',
+    assigneeEmails: t.assignee_emails ?? [],
+    repeat: t.repeat_rule === 'weekly' || t.repeat_rule === 'monthly' ? t.repeat_rule : 'none',
+    seriesId: t.series_id ?? undefined,
   };
 }
 function toLesson(l: LessonDb): Lesson {
   return { id: l.id, title: l.title, description: l.description ?? '', startsAt: l.starts_at ?? null, endsAt: l.ends_at ?? null };
 }
-interface RosterDb { id: string; board_id: string; name: string; unit: string; started_working: boolean }
+interface RosterDb { id: string; board_id: string; name: string; unit: string; started_working: boolean; role?: string | null; email?: string | null }
+const toRoster = (r: RosterDb): RosterMember => ({ id: r.id, name: r.name, unit: r.unit, startedWorking: r.started_working, role: r.role ?? '', email: r.email ?? '' });
 interface RatingAgg { card_id: string; n: number; sum: number }
 /** Nhận xét: hàng của bảng comments (author_name, created_at) hoặc phần tử của get_board_public (author, at). */
 interface CommentDb { id: string; card_id: string; board_id?: string; author?: string; author_name?: string; body: string; at?: string; created_at?: string; status?: string }
@@ -217,7 +227,7 @@ export async function loadMyBoards(myEmail: string): Promise<BoardData[]> {
       cardRows.filter((c) => c.board_id === b.id),
       taskRows.filter((t) => t.board_id === b.id).map(toTask),
       lessonRows.filter((l) => l.board_id === b.id).map(toLesson),
-      rosterRows.filter((r) => r.board_id === b.id).map((r) => ({ id: r.id, name: r.name, unit: r.unit, startedWorking: r.started_working })),
+      rosterRows.filter((r) => r.board_id === b.id).map(toRoster),
       accessFor(b, me, collabRows),
       voteRows,
       collabRows.filter((c) => c.board_id === b.id).map((c) => ({ email: c.email, role: c.role, addedAt: c.added_at })),
@@ -275,6 +285,15 @@ export async function updateBoardSettings(boardId: string, patch: { linkMode?: L
   if (error) fail('Không lưu được cài đặt', error.message);
 }
 
+/** Đổi link chia sẻ: sinh mã mới, link và mã QR cũ ngừng hoạt động ngay. */
+export async function regenerateShareToken(boardId: string): Promise<string> {
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  const token = Array.from(bytes, (b) => 'abcdefghijkmnpqrstuvwxyz23456789'[b % 32]).join('');
+  const { error } = await db().from('boards').update({ share_token: token }).eq('id', boardId);
+  if (error) fail('Không đổi được link', error.message);
+  return token;
+}
+
 export async function setCardStatus(cardId: string, status: CardStatus): Promise<void> {
   const { error } = await db().from('cards').update({ status }).eq('id', cardId);
   if (error) fail('Không đổi được trạng thái', error.message);
@@ -298,10 +317,10 @@ export async function replaceRoster(boardId: string, roster: RosterMember[]): Pr
   if (roster.length === 0) return [];
   const ins = await client
     .from('board_roster')
-    .insert(roster.map((m) => ({ board_id: boardId, name: m.name, unit: m.unit, started_working: false })))
+    .insert(roster.map((m) => ({ board_id: boardId, name: m.name, unit: m.unit, started_working: false, role: m.role ?? '', email: (m.email ?? '').trim().toLowerCase() })))
     .select('*');
   if (ins.error) fail('Không lưu được danh sách', ins.error.message);
-  return ((ins.data ?? []) as RosterDb[]).map((r) => ({ id: r.id, name: r.name, unit: r.unit, startedWorking: r.started_working }));
+  return ((ins.data ?? []) as RosterDb[]).map(toRoster);
 }
 
 export interface ResourceInput {
@@ -421,10 +440,10 @@ export async function getCardByCode(token: string, code: string): Promise<Submis
 }
 
 /** Tên và tổ/lớp trong danh sách thành viên, để học sinh chọn tên khi nộp bài (không cần đăng nhập). */
-export async function getRosterPublic(token: string): Promise<{ name: string; unit: string }[]> {
+export async function getRosterPublic(token: string): Promise<{ name: string; unit: string; role?: string }[]> {
   const { data, error } = await db().rpc('get_roster_public', { p_token: token });
   if (error) throw new Error(error.message);
-  return ((data ?? []) as { name: string; unit: string }[]).map((r) => ({ name: r.name, unit: r.unit ?? '' }));
+  return ((data ?? []) as { name: string; unit: string; role?: string }[]).map((r) => ({ name: r.name, unit: r.unit ?? '', role: r.role ?? '' }));
 }
 
 /** Giáo viên gán bài cho đúng thành viên trong danh sách (đổi tên người nộp thành tên chuẩn). */
@@ -489,12 +508,21 @@ export interface LessonInput { title: string; description: string; startsAt: str
 export interface TaskInput {
   label: string; lessonId: string | null; kind: TaskKind; instructions: string;
   assignedAt: string | null; dueAt: string | null; allowLate: boolean; targetUnits: string[];
+  attachments?: Attachment[]; needsEvidence?: boolean; ackOnly?: boolean;
+  /** Tệp và liên kết MỚI chọn khi giao việc; kho lưu trữ chuẩn bị rồi ghép vào attachments trước khi gửi lên máy chủ. */
+  files?: File[]; links?: string[];
+  progress?: 'todo' | 'doing' | 'done'; priority?: 'high' | 'normal' | 'low'; assigneeEmails?: string[];
+  repeat?: 'none' | 'weekly' | 'monthly'; seriesId?: string;
 }
 
 const lessonRow = (i: LessonInput) => ({ title: i.title, description: i.description, starts_at: i.startsAt, ends_at: i.endsAt });
 const taskRow = (i: TaskInput) => ({
   label: i.label, lesson_id: i.lessonId, kind: i.kind, instructions: i.instructions,
   assigned_at: i.assignedAt, due_at: i.dueAt, allow_late: i.allowLate, target_units: i.targetUnits,
+  attachments: i.attachments ?? [], needs_evidence: !!i.needsEvidence, ack_only: !!i.ackOnly,
+  progress: i.progress ?? 'todo', priority: i.priority ?? 'normal',
+  assignee_emails: (i.assigneeEmails ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean),
+  repeat_rule: i.repeat ?? 'none', series_id: i.seriesId ?? null,
 });
 
 export async function createLesson(boardId: string, input: LessonInput, sort: number): Promise<Lesson> {
@@ -519,6 +547,56 @@ export async function updateTask(id: string, input: TaskInput): Promise<void> {
   const { error } = await db().from('board_tasks').update(taskRow(input)).eq('id', id);
   if (error) fail('Không lưu được bài tập', error.message);
 }
+/** Điểm danh: đọc mọi buổi của bảng (dòng name_key rỗng là dấu buổi). */
+export async function getAttendance(boardId: string): Promise<AttendanceSession[]> {
+  const { data, error } = await db().from('board_attendance').select('day,name_key,label').eq('board_id', boardId).order('day');
+  if (error) fail('Không tải được điểm danh', error.message);
+  const map = new Map<string, AttendanceSession>();
+  for (const r of (data ?? []) as { day: string; name_key: string; label: string }[]) {
+    const s = map.get(r.day) ?? { day: r.day, label: '', present: [] };
+    if (r.name_key === '') s.label = r.label; else s.present.push(r.name_key);
+    map.set(r.day, s);
+  }
+  return [...map.values()];
+}
+export async function upsertAttendanceSession(boardId: string, day: string, label: string): Promise<void> {
+  const { error } = await db().from('board_attendance').upsert({ board_id: boardId, day, name_key: '', label }, { onConflict: 'board_id,day,name_key' });
+  if (error) fail('Không tạo được buổi', error.message);
+}
+export async function setAttendancePresent(boardId: string, day: string, nameKey: string, present: boolean): Promise<void> {
+  const q = present
+    ? db().from('board_attendance').upsert({ board_id: boardId, day, name_key: nameKey }, { onConflict: 'board_id,day,name_key' })
+    : db().from('board_attendance').delete().eq('board_id', boardId).eq('day', day).eq('name_key', nameKey);
+  const { error } = await q;
+  if (error) fail('Không lưu được điểm danh', error.message);
+}
+export async function deleteAttendanceSession(boardId: string, day: string): Promise<void> {
+  const { error } = await db().from('board_attendance').delete().eq('board_id', boardId).eq('day', day);
+  if (error) fail('Không xóa được buổi', error.message);
+}
+
+/** Đổi cột Kanban của một việc riêng. */
+export async function updateTaskProgress(id: string, progress: 'todo' | 'doing' | 'done'): Promise<void> {
+  const { error } = await db().from('board_tasks').update({ progress }).eq('id', id);
+  if (error) fail('Không đổi được trạng thái việc', error.message);
+}
+
+/** Một việc được giao cho tôi ở bảng của người khác (hàm my_tasks của máy chủ). */
+export interface AssignedTask {
+  boardId: string; boardTitle: string; shareToken: string; ownerEmail: string; taskId: string; label: string; instructions: string;
+  dueAt: string | null; allowLate: boolean; needsEvidence: boolean; ackOnly: boolean; memberName: string; role: string; doneAt: string | null;
+}
+export async function getMyAssigned(): Promise<AssignedTask[]> {
+  const { data, error } = await db().rpc('my_tasks');
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    boardId: String(r.board_id), boardTitle: String(r.board_title ?? ''), shareToken: String(r.share_token ?? ''), ownerEmail: String(r.owner_email ?? ''),
+    taskId: String(r.task_id), label: String(r.label ?? ''), instructions: String(r.instructions ?? ''), dueAt: (r.due_at as string | null) ?? null,
+    allowLate: !!r.allow_late, needsEvidence: !!r.needs_evidence, ackOnly: !!r.ack_only, memberName: String(r.member_name ?? ''), role: String(r.role ?? ''),
+    doneAt: (r.done_at as string | null) ?? null,
+  }));
+}
+
 export async function deleteTask(id: string): Promise<void> {
   const { error } = await db().from('board_tasks').delete().eq('id', id);
   if (error) fail('Không xóa được bài tập', error.message);

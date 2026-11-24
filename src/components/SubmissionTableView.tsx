@@ -76,6 +76,7 @@ export function SubmissionTableView({ rows, board, canManage, onOpen, onSetStatu
                 <td className="px-3 py-2.5 font-semibold text-ink-2">{i + 1}</td>
                 <td className="px-3 py-2.5">
                   <span className="font-bold">{r.member.name}</span>
+                  {(r.member.role ?? '').split(',').map((x) => x.trim()).filter(Boolean).map((x) => <span key={x} className="chip ml-1.5 bg-indigo-100 text-indigo-800 ring-indigo-200">{x}</span>)}
                   {!r.inRoster && <span className="chip ml-2 bg-violet-100 text-violet-800 ring-violet-200">Ngoài danh sách</span>}
                 </td>
                 <td className="px-3 py-2.5 text-ink-2">{r.member.unit || '—'}</td>

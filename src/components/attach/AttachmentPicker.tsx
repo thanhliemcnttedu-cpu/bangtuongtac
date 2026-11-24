@@ -34,6 +34,9 @@ interface Props {
   extraCount?: number;
   /** Ẩn bớt công cụ (khi sửa bài không đổi được thăm dò và vị trí). */
   hideTools?: Tool[];
+  /** Tiêu đề khung (mặc định "Đính kèm") và có bắt buộc hay không (ẩn chữ "không bắt buộc"). */
+  label?: string;
+  required?: boolean;
 }
 
 export type Tool = 'camera' | 'video' | 'audio' | 'screen' | 'draw' | 'mindmap' | 'link' | 'poll' | 'location';
@@ -79,7 +82,7 @@ function FileRow({ file, onRemove }: { file: File; onRemove: () => void }) {
  * Bộ đính kèm: MỘT bài có thể chứa cùng lúc nhiều tệp (ảnh, video, tài liệu), ảnh chụp, hình vẽ, nhiều liên kết,
  * kèm văn bản và một thăm dò. Có thể chọn tệp, kéo thả, hoặc dán (Ctrl+V / nút Dán) ảnh, liên kết, đoạn văn.
  */
-export function AttachmentPicker({ files, links, poll, location, onLocation, error, onAddFiles, onRemoveFile, onAddLinks, onRemoveLink, onPoll, onIngest, extraCount = 0, hideTools = [] }: Props) {
+export function AttachmentPicker({ files, links, poll, location, onLocation, error, onAddFiles, onRemoveFile, onAddLinks, onRemoveLink, onPoll, onIngest, extraCount = 0, hideTools = [], label = 'Đính kèm', required = false }: Props) {
   const [tool, setTool] = useState<Tool | null>(null);
   const [dragging, setDragging] = useState(false);
   const [msg, setMsg] = useState('');
@@ -188,14 +191,14 @@ export function AttachmentPicker({ files, links, poll, location, onLocation, err
       className={`rounded-2xl border-2 border-dashed p-3 transition duration-150 ${dragging ? 'border-brand-600 bg-brand-50' : 'border-brand-200 bg-brand-50/40'}`}>
       {hidden}
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <span className="field-label !mb-0">Đính kèm <span className="font-normal text-ink-2">({count}/{MAX_ATTACHMENTS}, không bắt buộc)</span></span>
+        <span className="field-label !mb-0">{label}{required ? ' *' : ''} <span className="font-normal text-ink-2">({count}/{MAX_ATTACHMENTS}{required ? '' : ', không bắt buộc'})</span></span>
         <button type="button" onClick={() => void pasteFromClipboard()} className="btn-ghost btn-sm"><ClipboardPaste className="h-3.5 w-3.5" aria-hidden /> Dán từ bộ nhớ tạm</button>
       </div>
 
       {mindmap}
       {panel ? <div className="rounded-2xl bg-white/70 p-3">{panel}</div> : (
         <>
-          <button type="button" disabled={full} onClick={() => pick('mindmap')} className="btn-primary mb-3 !min-h-[56px] w-full !rounded-2xl text-base"><Network className="h-6 w-6" aria-hidden /> Vẽ sơ đồ tư duy ngay tại đây</button>
+          {!hideTools.includes('mindmap') && <button type="button" disabled={full} onClick={() => pick('mindmap')} className="btn-primary mb-3 !min-h-[56px] w-full !rounded-2xl text-base"><Network className="h-6 w-6" aria-hidden /> Vẽ sơ đồ tư duy ngay tại đây</button>}
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
             {TOOLS.filter((t) => t.id === 'file' || !hideTools.includes(t.id)).map(({ id, label, Icon }) => {
               const disabled = full && id !== 'poll';

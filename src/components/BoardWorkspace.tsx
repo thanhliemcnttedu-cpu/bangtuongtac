@@ -1,10 +1,10 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { KeyRound, ListChecks, Lock, Pencil, Plus, Presentation, Settings, Share2, Star, Trash2 } from 'lucide-react';
 import type {
   BoardData, BoardRow, CardLayoutPatch, CardStatus, FilterState, Lesson, PinnedResource, RosterMember, SubmissionCard, TaskItem, ViewMode, ViewerRole,
 } from '../types/board';
 import type { BoardStore } from '../hooks/useBoardStore';
-import { EMPTY_FILTERS, applyFilters, buildRows, computeKpis, isFiltered, sortRows } from '../lib/boardLogic';
+import { EMPTY_FILTERS, applyFilters, buildRows, computeKpis, isFiltered, normalize, sortRows } from '../lib/boardLogic';
 import { BACKGROUNDS, FONTS, ICONS } from '../lib/boardSettings';
 import type { BoardMetaPatch } from '../lib/boardApi';
 import { DataBoardSummary } from './DataBoardSummary';
@@ -29,6 +29,11 @@ import { downloadCsv } from '../lib/csv';
 // Nạp khi cần (chia nhỏ gói mã để trang mở nhanh).
 const LessonModal = lazy(() => import('./LessonModal').then((m) => ({ default: m.LessonModal })));
 const TaskModal = lazy(() => import('./TaskModal').then((m) => ({ default: m.TaskModal })));
+const TaskReportModal = lazy(() => import('./TaskReportModal').then((m) => ({ default: m.TaskReportModal })));
+const PeriodReportModal = lazy(() => import('./PeriodReportModal').then((m) => ({ default: m.PeriodReportModal })));
+const MyWorkStepper = lazy(() => import('./MyWorkStepper').then((m) => ({ default: m.MyWorkStepper })));
+const TrainingToolsModal = lazy(() => import('./TrainingToolsModal').then((m) => ({ default: m.TrainingToolsModal })));
+const TaskShareModal = lazy(() => import('./TaskShareModal').then((m) => ({ default: m.TaskShareModal })));
 const MaterialModal = lazy(() => import('./MaterialModal').then((m) => ({ default: m.MaterialModal })));
 const SubmissionTableView = lazy(() => import('./SubmissionTableView').then((m) => ({ default: m.SubmissionTableView })));
 const GroupSummaryView = lazy(() => import('./GroupSummaryView').then((m) => ({ default: m.GroupSummaryView })));
@@ -38,6 +43,7 @@ const CanvasView = lazy(() => import('./views/CanvasView').then((m) => ({ defaul
 const MindMapView = lazy(() => import('./views/MindMapView').then((m) => ({ default: m.MindMapView })));
 const VennView = lazy(() => import('./views/VennView').then((m) => ({ default: m.VennView })));
 const QuickPostModal = lazy(() => import('./QuickPostModal').then((m) => ({ default: m.QuickPostModal })));
+const TeamSubmitModal = lazy(() => import('./TeamSubmitModal').then((m) => ({ default: m.TeamSubmitModal })));
 const ShareBoardModal = lazy(() => import('./ShareBoardModal').then((m) => ({ default: m.ShareBoardModal })));
 const SlidePresentationModal = lazy(() => import('./SlidePresentationModal').then((m) => ({ default: m.SlidePresentationModal })));
 const RosterImportModal = lazy(() => import('./RosterImportModal').then((m) => ({ default: m.RosterImportModal })));
@@ -93,11 +99,15 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
   const [view, setView] = useState<ViewMode>(savedBoard.settings.defaultView);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [shareTab, setShareTab] = useState<'students' | 'teachers'>('students');
-  const [modal, setModal] = useState<'post' | 'share' | 'roster' | 'resource' | 'duplicate' | 'activity' | 'gradebook' | 'details' | 'lesson' | 'task' | 'material' | 'drive' | 'edit-mine' | 'confirm-card' | 'confirm-cards' | 'confirm-lesson' | 'confirm-task' | 'confirm-material' | 'confirm-clear' | 'confirm-trash' | 'confirm-archive' | null>(null);
+  const [modal, setModal] = useState<'post' | 'share' | 'roster' | 'resource' | 'duplicate' | 'activity' | 'gradebook' | 'details' | 'lesson' | 'task' | 'task-share' | 'task-report' | 'period' | 'training' | 'material' | 'drive' | 'edit-mine' | 'confirm-card' | 'confirm-cards' | 'confirm-lesson' | 'confirm-task' | 'confirm-material' | 'confirm-clear' | 'confirm-trash' | 'confirm-archive' | null>(null);
   const [slideStart, setSlideStart] = useState<string | null>(null);
   // Đối tượng đang soạn trong các hộp Bài học / Bài tập / Tài liệu.
   const [editLesson, setEditLesson] = useState<Lesson | undefined>();
   const [editTask, setEditTask] = useState<TaskItem | undefined>();
+  const [trainingTab, setTrainingTab] = useState<'attendance' | 'certificate' | 'showcase' | 'summary'>('attendance');
+  const [shareTaskItem, setShareTaskItem] = useState<TaskItem | undefined>();
+  // Link riêng của một công việc (?task=…): thành viên mở là vào thẳng form nộp của việc đó, chỉ một lần.
+  const deepLinked = useRef(false);
   const [taskLesson, setTaskLesson] = useState<string | null>(null);
   const [materialLesson, setMaterialLesson] = useState<string | null>(null);
   const [materialMM, setMaterialMM] = useState(false);
@@ -112,7 +122,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
   /** Bài của chính em này (tra bằng mã đã lưu trên máy): máy chủ không đưa bài chờ duyệt / cần sửa vào danh sách công khai. */
   const [mine, setMine] = useState<SubmissionCard[]>([]);
   /** Tên trong danh sách lớp, để học sinh chọn khi nộp bài. */
-  const [rosterNames, setRosterNames] = useState<{ name: string; unit: string }[]>([]);
+  const [rosterNames, setRosterNames] = useState<{ name: string; unit: string; role?: string }[]>([]);
   const [editCodePick, setEditCodePick] = useState<string | undefined>();
   const [codeShown, setCodeShown] = useState<{ code: string; name: string; title: string; note?: string } | null>(null);
 
@@ -125,6 +135,17 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
     }, 1500);
     return () => window.clearTimeout(id);
   }, [role]);
+  // Việc định kỳ: chủ bảng mở bảng là kỳ mới của các việc đã hết hạn được sinh ra.
+  useEffect(() => {
+    if (role === 'owner' && savedBoard.settings.scope === 'team') void store.rollRecurring(savedBoard.id).catch(() => undefined);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, savedBoard.id]);
+  useEffect(() => {
+    if (role !== 'guest' || deepLinked.current) return;
+    const id = new URLSearchParams(window.location.search).get('task');
+    if (!id) { deepLinked.current = true; return; }
+    if (savedBoard.tasks.some((t) => t.id === id)) { deepLinked.current = true; setPostTask(id); setModal('post'); }
+  }, [role, savedBoard.tasks]);
   useEffect(() => {
     if (role !== 'guest') { setRosterNames([]); return; }
     let alive = true;
@@ -171,7 +192,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
       tasks: board.tasks.filter((x) => isAssigned(x, t)),
       roster: [],
       // Bài đã duyệt + bài của chính em (kể cả chờ duyệt / cần sửa, tra bằng mã đã lưu trên máy này).
-      cards: [...board.cards.filter((c) => c.status === 'approved' || c.status === 'featured' || c.id in myPosts), ...mine.filter((m) => !board.cards.some((c) => c.id === m.id) && !(m.id in myPosts))],
+      cards: [...board.cards.filter((c) => (!board.settings.privateView && (c.status === 'approved' || c.status === 'featured')) || c.id in myPosts), ...mine.filter((m) => !board.cards.some((c) => c.id === m.id) && !(m.id in myPosts))],
     };
   }, [board, canView, myPosts, mine]);
 
@@ -297,6 +318,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
   const menuActions = {
     onDuplicate: () => setModal('duplicate'),
     onActivity: () => setModal('activity'),
+    onTraining: (tab: 'attendance' | 'certificate' | 'showcase' | 'summary') => { setTrainingTab(tab); setModal('training'); },
     onSettings: () => setMetaDraft({ title: savedBoard.title, goals: savedBoard.goals, settings: savedBoard.settings, program: savedBoard.program ?? '' }),
     onGradebook: () => setModal('gradebook'),
     onRoster: () => setModal('roster'),
@@ -381,6 +403,10 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
             onDeleteLesson: (l) => { setToDelete({ lesson: l }); setModal('confirm-lesson'); },
             onAddTask: (lessonId) => { setEditTask(undefined); setTaskLesson(lessonId); setModal('task'); },
             onEditTask: (t) => { setEditTask(t); setTaskLesson(null); setModal('task'); },
+            onShareTask: (t) => { setShareTaskItem(t); setModal('task-share'); },
+            onRoster: () => setModal('roster'),
+            onPeriodReport: () => setModal('period'),
+            onReportTask: (t) => { setShareTaskItem(t); setModal('task-report'); },
             onDeleteTask: (t) => { setToDelete({ task: t }); setModal('confirm-task'); },
             onAddMaterial: (lessonId, opts) => { setEditMaterial(undefined); setMaterialLesson(lessonId); setMaterialMM(!!opts?.mindmap); setModal('material'); },
             onEditMaterial: (r) => { setEditMaterial(r); setMaterialLesson(r.lessonId ?? null); setMaterialMM(false); setModal('material'); },
@@ -389,6 +415,9 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
             onViewSubmissions: (taskId) => { patchFilters({ taskId }); document.querySelector('section[aria-label="Bài nộp và sản phẩm"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
           }} />
 
+        {!canView && role === 'guest' && visibleBoard.cards.some((c) => mineSet.has(c.id)) && (
+          <Suspense fallback={null}><MyWorkStepper cards={visibleBoard.cards.filter((c) => mineSet.has(c.id))} teacher={board.mode === 'classroom' ? 'cô' : board.settings.scope === 'team' ? 'tổ trưởng' : 'giảng viên'} team={board.settings.scope === 'team'} onEdit={() => { setEditCodePick(undefined); setModal('edit-mine'); }} /></Suspense>
+        )}
         {canView && <DataBoardSummary kpis={kpis} active={filters.progress} hasRoster={savedBoard.roster.length > 0} onSelect={(p) => patchFilters({ progress: p })} />}
 
         {!canView && role === 'guest' && (
@@ -470,7 +499,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
       )}
       {showFab && (
         <button type="button" disabled={fabLocked} onClick={() => { setPostTask(undefined); setModal('post'); }} aria-label={fabLocked ? 'Bảng đã khóa nộp bài' : 'Thêm bài nộp'}
-          className="btn-primary fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-5 z-[19] !min-h-[60px] !gap-2 !px-6 text-base sm:right-8">
+          className={`btn-primary fixed ${canManage ? 'max-lg:bottom-[calc(5.2rem+env(safe-area-inset-bottom))] lg:bottom-5' : 'bottom-[max(1.25rem,env(safe-area-inset-bottom))]'} right-5 z-[19] !min-h-[60px] !gap-2 !px-6 text-base sm:right-8`}>
           {fabLocked ? <Lock className="h-6 w-6" aria-hidden /> : <Plus className="h-7 w-7" strokeWidth={3} aria-hidden />}
           <span>{fabLocked ? 'Đã khóa nộp bài' : 'Nộp bài'}</span>
         </button>
@@ -518,14 +547,22 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
         onSave={(code, input, del) => store.saveCardByCode(savedBoard.id, code, input, del)}
         onDone={(msg) => { setModal(null); showToast(msg); }} onClose={() => setModal(null)} />}
       {codeShown && <EditCodeModal kid={board.mode === 'classroom'} code={codeShown.code} name={codeShown.name} title={codeShown.title} note={codeShown.note} onClose={() => setCodeShown(null)} />}
-      {modal === 'post' && <QuickPostModal board={visibleBoard} roster={rosterNames} initialName={profile.name} initialUnit={profile.unit} initialTaskId={postTask} onSubmit={submitPost} onClose={() => setModal(null)} />}
+      {modal === 'post' && visibleBoard.settings.scope === 'team' && <TeamSubmitModal board={visibleBoard} roster={rosterNames} initialName={profile.name} initialTaskId={postTask} onSubmit={submitPost}
+        findMine={(name, taskId) => (canManage ? undefined : visibleBoard.cards.find((c) => mineSet.has(c.id) && !!c.editCode && c.taskId === taskId && normalize(c.authorName) === normalize(name)))}
+        onReplace={async (c, d) => { try { await store.saveCardByCode(savedBoard.id, c.editCode as string, { title: c.title, body: d.body.trim(), authorName: c.authorName, unit: c.unit, keep: [], files: d.files, links: d.links }); setModal(null); showToast('Đã thay bằng bản mới.'); return null; } catch (e) { return e instanceof Error ? e.message : 'Không thay được bài.'; } }} onClose={() => setModal(null)} />}
+      {modal === 'post' && visibleBoard.settings.scope !== 'team' && <QuickPostModal board={visibleBoard} roster={rosterNames} initialName={profile.name} initialUnit={profile.unit} initialTaskId={postTask} onSubmit={submitPost} onClose={() => setModal(null)} />}
       {modal === 'share' && <ShareBoardModal board={board} canManage={canManage} access={access} myEmail={myEmail} initialTab={shareTab}
         onInvite={(email, r) => store.inviteCollaborator(savedBoard.id, email, r)}
         onChangeRole={(email, r) => store.changeCollaboratorRole(savedBoard.id, email, r)}
         onRemove={(email) => store.removeCollaborator(savedBoard.id, email)}
         onLeave={async () => { await store.leaveBoard(savedBoard.id); setModal(null); }}
         onChangeLinkMode={(m) => void run(() => store.setSettings(board.id, { linkMode: m }))}
+        onRegenerateLink={() => store.regenerateLink(savedBoard.id)}
         onChangeModeration={(m) => void run(() => store.setSettings(board.id, { moderation: m }), 'Đã đổi chế độ kiểm duyệt.')} onClose={() => setModal(null)} />}
+      {modal === 'task-report' && shareTaskItem && <TaskReportModal board={savedBoard} task={savedBoard.tasks.find((t) => t.id === shareTaskItem.id) ?? shareTaskItem} onClose={() => setModal(null)} />}
+      {modal === 'training' && <TrainingToolsModal board={savedBoard} store={store} initialTab={trainingTab} onClose={() => setModal(null)} />}
+      {modal === 'period' && <PeriodReportModal board={savedBoard} onClose={() => setModal(null)} />}
+      {modal === 'task-share' && shareTaskItem && <TaskShareModal board={savedBoard} task={shareTaskItem} onClose={() => setModal(null)} />}
       {modal === 'roster' && <RosterImportModal board={board} onApply={applyRoster} onClose={() => setModal(null)} />}
       {modal === 'lesson' && <LessonModal mode={board.mode} lesson={editLesson} onClose={() => setModal(null)}
         onSave={async (input) => { await store.saveLesson(savedBoard.id, editLesson?.id ?? null, input); setModal(null); showToast(editLesson ? 'Đã lưu thay đổi.' : 'Đã thêm vào danh sách.'); }} />}

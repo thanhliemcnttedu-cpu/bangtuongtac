@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
-  BookOpen, CalendarClock, ChevronDown, Download, ExternalLink, Eye, FileText, Image as ImageIcon, Link2, ListChecks, Mic, Network, Paperclip, Pencil, Plus, Presentation,
-  Sparkles, Trash2, Users, Video, X,
+  BarChart3, BookOpen, CalendarClock, ChevronDown, Download, ExternalLink, Eye, FileText, Image as ImageIcon, Link2, ListChecks, Mic, Network, Paperclip, Pencil, Plus, Presentation,
+  QrCode, Sparkles, Trash2, Users, Video, X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Attachment, BoardData, Lesson, PinnedResource, ResourceKind, TaskItem } from '../types/board';
@@ -17,6 +17,14 @@ export interface LessonsPanelActions {
   onDeleteLesson: (l: Lesson) => void;
   onAddTask: (lessonId: string | null) => void;
   onEditTask: (t: TaskItem) => void;
+  /** Tổ công tác: mở link và mã QR riêng của công việc. */
+  onShareTask?: (t: TaskItem) => void;
+  /** Tổ công tác: mở báo cáo ngắn (đã nộp, chưa nộp, nhắc, tải minh chứng). */
+  onReportTask?: (t: TaskItem) => void;
+  /** Tổ công tác: mở hộp nhập danh sách thành viên. */
+  onRoster?: () => void;
+  /** Tổ công tác: tổng hợp tuần / tháng. */
+  onPeriodReport?: () => void;
   onDeleteTask: (t: TaskItem) => void;
   onAddMaterial: (lessonId: string | null, opts?: { mindmap?: boolean }) => void;
   onDeleteMaterial: (r: PinnedResource) => void;
@@ -229,6 +237,8 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
     const phase = taskPhase(t, now);
     const mayPost = canSubmit && !canManage && phase !== 'scheduled' && !(phase === 'overdue' && !t.allowLate);
     const targets = t.targetUnits ?? [];
+    const team = board.settings.scope === 'team';
+    const docs = t.attachments ?? [];
     return (
       <li key={t.id} className={`rounded-2xl border-2 border-l-[10px] bg-white p-3 transition duration-200 hover:-translate-y-0.5 hover:shadow-soft ${kid ? 'sm:p-4' : ''} ${pal.task}`}>
         <div className="flex flex-wrap items-start justify-between gap-2">
@@ -236,11 +246,19 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
             <p className="flex flex-wrap items-center gap-2">
               <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-extrabold text-white ${pal.num}`} aria-hidden>{ti + 1}</span>
               <span className={`chip ${t.kind === 'requirement' ? 'bg-violet-100 text-violet-800 ring-violet-200' : 'bg-brand-100 text-brand-800 ring-brand-200'}`}>
-                <ListChecks className="h-3.5 w-3.5" aria-hidden /> {KIND_LABEL[t.kind ?? 'assignment']}
+                <ListChecks className="h-3.5 w-3.5" aria-hidden /> {team ? (t.ackOnly ? 'Chỉ đọc' : t.needsEvidence ? 'Cần minh chứng' : 'Công việc') : KIND_LABEL[t.kind ?? 'assignment']}
               </span>
               <span className={`${kid ? 'text-lg' : 'text-sm'} font-extrabold`}>{t.label}</span>
             </p>
             {t.instructions && <p className={`mt-1 ${kid ? 'text-base text-ink' : 'text-sm text-ink-2'}`}>{t.instructions}</p>}
+            {docs.length > 0 && (
+              <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Tài liệu và liên kết của công việc">
+                {docs.map((a, i) => (a.url ? (
+                  <li key={`${a.url}-${i}`}><a href={a.url} target="_blank" rel="noopener noreferrer" className="chip bg-white text-brand-800 ring-brand-200 hover:bg-brand-50">
+                    {a.type === 'link' || a.type === 'embed' ? <Link2 className="h-3.5 w-3.5" aria-hidden /> : <FileText className="h-3.5 w-3.5" aria-hidden />} {a.label || a.name}</a></li>
+                ) : null))}
+              </ul>
+            )}
           </div>
           <PhaseChip task={t} now={now} />
         </div>
@@ -252,10 +270,12 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
         <TimeBar task={t} now={now} />
         {canManage && <ProgressBlock board={board} task={t} />}
         <div className="mt-2 flex flex-wrap gap-2">
-          {mayPost && <button type="button" onClick={() => actions.onSubmitTo(t.id)} className={kid ? 'btn-primary !min-h-[52px] !px-6 text-base' : 'btn-primary btn-sm'}>Nộp bài</button>}
+          {mayPost && <button type="button" onClick={() => actions.onSubmitTo(t.id)} className={kid ? 'btn-primary !min-h-[52px] !px-6 text-base' : 'btn-primary btn-sm'}>{team ? (t.ackOnly ? 'Tôi đã đọc' : 'Nộp minh chứng') : 'Nộp bài'}</button>}
           <button type="button" onClick={() => actions.onViewSubmissions(t.id)} className="btn-ghost btn-sm">Xem bài nộp</button>
           {canManage && (
             <>
+              {team && actions.onReportTask && <button type="button" onClick={() => actions.onReportTask?.(t)} className="btn-primary btn-sm"><BarChart3 className="h-3.5 w-3.5" aria-hidden /> Báo cáo</button>}
+              {team && actions.onShareTask && <button type="button" onClick={() => actions.onShareTask?.(t)} className="btn-ghost btn-sm"><QrCode className="h-3.5 w-3.5" aria-hidden /> Link & QR</button>}
               <button type="button" onClick={() => actions.onEditTask(t)} className="btn-ghost btn-sm"><Pencil className="h-3.5 w-3.5" aria-hidden /> Sửa</button>
               <button type="button" onClick={() => actions.onDeleteTask(t)} aria-label={`Xóa ${t.label}`} className="btn-ghost btn-sm !px-2.5 hover:!border-rose-300 hover:!text-rose-700"><Trash2 className="h-3.5 w-3.5" aria-hidden /></button>
             </>
@@ -296,10 +316,21 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
 
             {canManage && (
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={actions.onAddLesson} className="btn-primary btn-sm"><Plus className="h-3.5 w-3.5" aria-hidden /> Thêm {w.lessonLower}</button>
-                <button type="button" onClick={() => actions.onAddTask(null)} className="btn-ghost btn-sm"><ListChecks className="h-3.5 w-3.5" aria-hidden /> Giao bài tập / yêu cầu</button>
-                <button type="button" onClick={() => actions.onAddMaterial(null)} className="btn-ghost btn-sm"><Paperclip className="h-3.5 w-3.5" aria-hidden /> Thêm tài liệu</button>
-                <button type="button" onClick={() => actions.onAddMaterial(null, { mindmap: true })} className="btn-ghost btn-sm"><Network className="h-3.5 w-3.5" aria-hidden /> Tạo sơ đồ tư duy</button>
+                {board.settings.scope === 'team' ? (
+                  <>
+                    <button type="button" onClick={() => actions.onAddTask(null)} className="btn-primary btn-sm"><Plus className="h-3.5 w-3.5" aria-hidden /> Giao việc</button>
+                    <button type="button" onClick={actions.onRoster} className="btn-ghost btn-sm"><Users className="h-3.5 w-3.5" aria-hidden /> Danh sách thành viên ({board.roster.length})</button>
+                    <button type="button" onClick={actions.onPeriodReport} className="btn-ghost btn-sm"><BarChart3 className="h-3.5 w-3.5" aria-hidden /> Tổng hợp tuần / tháng</button>
+                    <button type="button" onClick={() => actions.onAddMaterial(null)} className="btn-ghost btn-sm"><Paperclip className="h-3.5 w-3.5" aria-hidden /> Thêm tài liệu chung</button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" onClick={actions.onAddLesson} className="btn-primary btn-sm"><Plus className="h-3.5 w-3.5" aria-hidden /> Thêm {w.lessonLower}</button>
+                    <button type="button" onClick={() => actions.onAddTask(null)} className="btn-ghost btn-sm"><ListChecks className="h-3.5 w-3.5" aria-hidden /> Giao bài tập / yêu cầu</button>
+                    <button type="button" onClick={() => actions.onAddMaterial(null)} className="btn-ghost btn-sm"><Paperclip className="h-3.5 w-3.5" aria-hidden /> Thêm tài liệu</button>
+                    <button type="button" onClick={() => actions.onAddMaterial(null, { mindmap: true })} className="btn-ghost btn-sm"><Network className="h-3.5 w-3.5" aria-hidden /> Tạo sơ đồ tư duy</button>
+                  </>
+                )}
               </div>
             )}
 
@@ -310,11 +341,15 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
               </div>
             )}
 
-            {board.lessons.length === 0 && (canManage ? (
+            {(board.settings.scope === 'team' ? board.roster.length === 0 || board.tasks.length === 0 : board.lessons.length === 0) && (canManage ? (
               <ol className="grid grid-cols-1 gap-3 sm:grid-cols-3" aria-label="Bắt đầu nhanh">
                 {[
-                  { n: 1, t: `Thêm ${w.lessonLower}`, d: `Tạo ${w.lessonLower} đầu tiên của ${w.group}.`, run: actions.onAddLesson },
-                  { n: 2, t: 'Giao bài tập / yêu cầu', d: `Đặt hạn nộp, giao ${w.everyone.toLowerCase()} hoặc từng ${w.unit}.`, run: () => actions.onAddTask(null) },
+                  board.settings.scope === 'team'
+                    ? { n: 1, t: 'Nhập danh sách thành viên', d: 'Họ tên, vai trò (Tổ trưởng, Bí thư…), Gmail nếu có.', run: actions.onRoster }
+                    : { n: 1, t: `Thêm ${w.lessonLower}`, d: `Tạo ${w.lessonLower} đầu tiên của ${w.group}.`, run: actions.onAddLesson },
+                  board.settings.scope === 'team'
+                    ? { n: 2, t: 'Giao việc', d: 'Đính kèm tài liệu, liên kết khảo sát, đặt hạn và yêu cầu minh chứng.', run: () => actions.onAddTask(null) }
+                    : { n: 2, t: 'Giao bài tập / yêu cầu', d: `Đặt hạn nộp, giao ${w.everyone.toLowerCase()} hoặc từng ${w.unit}.`, run: () => actions.onAddTask(null) },
                   { n: 3, t: `Chia sẻ link cho ${w.learner}`, d: 'Bấm “Chia sẻ & QR” ở đầu trang.', run: undefined },
                 ].map((x) => (
                   <li key={x.n} className="flex items-start gap-3 rounded-2xl border border-dashed border-teal2-200 bg-white/80 p-3">
@@ -327,7 +362,7 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
                   </li>
                 ))}
               </ol>
-            ) : looseTasks.length === 0 && <p className="rounded-2xl bg-white/80 p-3 text-sm text-ink-3">Giáo viên chưa đăng {w.lessonLower} nào.</p>)}
+            ) : looseTasks.length === 0 && <p className="rounded-2xl bg-white/80 p-3 text-sm text-ink-3">{board.settings.scope === 'team' ? 'Tổ trưởng chưa giao việc nào.' : `Giáo viên chưa đăng ${w.lessonLower} nào.`}</p>)}
 
             {groups.filter((g) => g.lesson !== null).map(({ lesson, tasks }, idx) => {
               if (!lesson) return null;
@@ -373,7 +408,7 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
 
             {looseTasks.length > 0 && (
               <div>
-                <h3 className="mb-2 text-sm font-extrabold text-brand-700">Bài tập & yêu cầu chưa xếp vào {w.lessonLower}</h3>
+                <h3 className="mb-2 text-sm font-extrabold text-brand-700">{board.settings.scope === 'team' ? 'Công việc của tổ' : `Bài tập & yêu cầu chưa xếp vào ${w.lessonLower}`}</h3>
                 <ul className="space-y-3">{looseTasks.map((t, ti) => taskRow(t, PALETTES[ti % PALETTES.length], ti))}</ul>
               </div>
             )}

@@ -3,6 +3,14 @@
 @tailwind utilities;
 
 @layer base {
+  /* Màu trạng thái dùng chung cho chip, biểu đồ và báo cáo: một nghĩa một màu trong cả hệ thống. */
+  :root {
+    --st-done: #15803d; --st-doing: #0369a1; --st-wait: #b45309; --st-late: #c2410c; --st-miss: #be123c; --st-todo: #64748b;
+  }
+  /* Hai mật độ: giáo viên dùng bản gọn (nhiều thông tin hơn trên một màn hình, chỉ áp từ máy tính bảng ngang trở lên để ô nhập trên điện thoại vẫn ≥16px); học sinh nhỏ giữ bản to, thân thiện. */
+  @media (min-width: 1024px) {
+    html[data-density='compact'] { font-size: clamp(14.5px, calc(11px + 0.3vw), 21px); }
+  }
   /* Cỡ chữ gốc tăng nhẹ theo bề rộng: 1366→~16px, 1920→~18px, 2K→~20px, 3K→~21px; mọi khoảng cách theo rem nên cả giao diện co giãn theo. */
   html { -webkit-text-size-adjust: 100%; font-size: clamp(16px, calc(12px + 0.3vw), 22px); scroll-behavior: smooth; }
   body {
@@ -69,6 +77,12 @@
   }
   .btn-ghost:active:not(:disabled) { transform: translateY(3px); box-shadow: inset 0 2px 4px rgba(22,104,242,.18), 0 1px 0 var(--edge); }
   .btn-sm { @apply min-h-[36px] px-3.5 text-xs; --edge-h: 4px; }
+  /* Điện thoại và máy tính bảng dọc: vùng chạm tối thiểu 44px cho nút nhỏ và nút biểu tượng (đủ cho ngón tay). */
+  @media (max-width: 1023px) {
+    .btn-sm { min-height: 44px; }
+    .btn-sm.\!px-2\.5, .btn-sm.\!px-2 { min-width: 44px; }
+    button.h-8.w-8, button.h-7.w-7 { height: 44px; width: 44px; }
+  }
 
   /* Nút nổi: lơ lửng nhẹ, quầng sáng xung quanh. */
 

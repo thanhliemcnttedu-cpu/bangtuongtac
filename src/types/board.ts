@@ -115,7 +115,25 @@ export interface TaskItem {
   allowLate?: boolean;
   /** Tổ / nhóm / đơn vị được giao; trống = cả lớp. */
   targetUnits?: string[];
+  /** Tài liệu (PDF, Word…) và liên kết (ví dụ phiếu khảo sát) giáo viên / tổ trưởng đính kèm công việc. */
+  attachments?: Attachment[];
+  /** true = người nhận phải nộp minh chứng (ảnh / tệp). */
+  needsEvidence?: boolean;
+  /** true = chỉ cần bấm "Tôi đã đọc" (công việc chỉ đọc, không nộp gì). */
+  ackOnly?: boolean;
+  /** Việc riêng: Cần làm / Đang làm / Xong (cột Kanban). Việc của tổ tính theo bài nộp, không dùng trường này. */
+  progress?: 'todo' | 'doing' | 'done';
+  priority?: 'high' | 'normal' | 'low';
+  /** Giao riêng cho các Gmail này (chữ thường). Rỗng = cả tổ / theo đơn vị. Chỉ chủ bảng thấy, khách không nhận trường này. */
+  assigneeEmails?: string[];
+  /** Việc định kỳ: kỳ mới tự sinh khi tổ trưởng mở bảng. Chỉ kỳ mới nhất của chuỗi còn mang quy tắc lặp. */
+  repeat?: 'none' | 'weekly' | 'monthly';
+  /** Mã chuỗi định kỳ (mã của việc đầu tiên) để gom báo cáo theo kỳ. */
+  seriesId?: string;
 }
+
+/** Một buổi điểm danh của lớp tập huấn: ngày (YYYY-MM-DD), tên buổi, và tên chuẩn hóa của những người có mặt. */
+export interface AttendanceSession { day: string; label: string; present: string[] }
 
 export interface SessionSlot {
   id: string;
@@ -200,6 +218,10 @@ export interface RosterMember {
   unit: string;
   /** true = đã bắt đầu làm nhưng chưa nộp (hiển thị "Đang làm"). */
   startedWorking?: boolean;
+  /** Vai trò trong tổ công tác: "Tổ trưởng", "Tổ phó", "Bí thư chi bộ"… (nhiều vai ngăn bằng dấu phẩy). */
+  role?: string;
+  /** Gmail (tùy chọn): để tổ phó làm đồng quản lý và để gom công việc về một chỗ. */
+  email?: string;
 }
 
 /** Cài đặt giao diện của một bảng; lưu thành một cột JSON `settings` trong bảng boards. */
@@ -223,7 +245,13 @@ export interface BoardSettings {
   /** Cho học sinh xem điểm số của giáo viên (mặc định tắt vì điểm là riêng tư). */
   showGrades: boolean;
   /** Phạm vi do giáo viên chọn khi tạo bảng; quyết định cách gọi (lớp / khối / bài học). */
-  scope?: 'class' | 'grade' | 'lesson';
+  scope?: 'class' | 'grade' | 'lesson' | 'team';
+  /** Tổ công tác: chỉ nhận bài của người có tên trong danh sách. */
+  rosterOnly?: boolean;
+  /** Tổ công tác: thành viên chỉ thấy bài của chính mình. */
+  privateView?: boolean;
+  /** Bảng việc riêng của giáo viên (tự tạo, ẩn khỏi danh sách bảng). */
+  personal?: boolean;
   /** Cổng Google Drive của giáo viên (địa chỉ ứng dụng web Apps Script và mật khẩu cổng): tệp học sinh nộp được lưu thẳng vào Drive. */
   driveUrl?: string;
   driveSecret?: string;
@@ -244,6 +272,8 @@ export interface BoardData {
   program?: string;
   tasks: TaskItem[];
   sessions: SessionSlot[];
+  /** Điểm danh các buổi (chỉ chủ bảng tải khi mở hộp Điểm danh). */
+  attendance?: AttendanceSession[];
   roster: RosterMember[];
   cards: SubmissionCard[];
   settings: BoardSettings;
