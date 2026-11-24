@@ -137,7 +137,7 @@ export function BoardSettingsModal({ initial, onPreview, onSave, onCancel, showP
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-ink/30" onClick={requestClose}>
+    <div className="fixed inset-0 z-50 flex justify-end bg-ink/30">
       <aside role="dialog" aria-modal="true" aria-label="Cài đặt bảng" onClick={(e) => e.stopPropagation()}
         className="pop-in flex h-full w-full max-w-md flex-col bg-white shadow-lift">
         <header className="flex items-center justify-between border-b border-brand-100 px-5 py-3">

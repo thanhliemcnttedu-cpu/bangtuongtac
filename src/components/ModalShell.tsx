@@ -29,7 +29,8 @@ export function ModalShell({ title, onClose, children, maxWidth = 'max-w-lg', la
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/50 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+      {/* Không đóng khi bấm hoặc nhả chuột ở nền mờ: kéo chọn chữ rồi nhả ngoài hộp từng làm mất nội dung đang soạn. Chỉ nút ✕, Hủy hoặc Esc mới đóng. */}
       <div
         ref={ref}
         tabIndex={-1}
