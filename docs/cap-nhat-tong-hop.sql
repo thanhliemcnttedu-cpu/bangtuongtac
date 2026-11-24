@@ -220,10 +220,10 @@ declare t board_tasks;
 begin
   if public.is_board_manager(new.board_id) then return new; end if;
   new.late := false;
-  if length(coalesce(new.body,'')) > 5000 or length(coalesce(new.title,'')) > 200 then
+  if length(coalesce(new.body,'')) > 8000 or length(coalesce(new.title,'')) > 200 then
     raise exception 'Nội dung quá dài'; end if;
   if (select count(*) from cards where board_id = new.board_id and session_id = new.session_id
-      and created_at > now() - interval '10 minutes') >= 5 then
+      and created_at > now() - interval '10 minutes') >= 10 then
     raise exception 'Gửi quá nhanh, vui lòng đợi vài phút'; end if;
   if (select mode from boards where id = new.board_id) = 'training'
      and coalesce((select settings->>'scope' from boards where id = new.board_id), '') <> 'team'

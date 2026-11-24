@@ -229,7 +229,7 @@ export function ShareBoardModal({ board, canManage, onChangeLinkMode, onRegenera
             </div>
           )}
           <ModerationPicker name="share-moderation" value={board.settings.moderation} disabled={!canManage} onChange={onChangeModeration} />
-          <p className="text-xs text-ink-2">Giới hạn chống spam: tối đa 5 bài / 10 phút mỗi trình duyệt.</p>
+          <p className="text-xs text-ink-2">Giới hạn chống spam: tối đa 10 bài / 10 phút mỗi trình duyệt.</p>
           {!canManage && <p className="text-xs text-ink-2">Chỉ chủ bảng và đồng quản lý mới đổi được quyền của link.</p>}
         </div>
         </div>

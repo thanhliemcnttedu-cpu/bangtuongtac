@@ -28,7 +28,7 @@ interface CardDb {
   resubmitted_at?: string | null; revisions?: number | null;
   attachments: Attachment[] | null; poll: { id: string; label: string }[] | null; grade: number | string | null;
   /** Trình bày thẻ tài liệu: { badge, color, steps }. */
-  meta?: { badge?: string; color?: string; steps?: string[] } | null;
+  meta?: { badge?: string; color?: string; steps?: string[]; order?: number } | null;
 }
 interface CollabDb { board_id: string; email: string; role: CollabRole; added_at: string }
 
@@ -104,8 +104,13 @@ function toResource(c: CardDb): PinnedResource {
     id: c.id, kind, title: c.title ?? 'Tài liệu', description: c.body ?? '', url: c.link_url ?? attachments?.[0]?.url ?? '#',
     lessonId: c.lesson_id ?? undefined, attachments,
     badge: c.meta?.badge || undefined, color: c.meta?.color || undefined, steps: c.meta?.steps && c.meta.steps.length > 0 ? c.meta.steps : undefined,
+    order: typeof c.meta?.order === 'number' ? c.meta.order : undefined,
   };
 }
+
+/** Tài liệu đã được giáo viên kéo thả thì theo thứ tự đó; chưa sắp thì giữ nguyên thứ tự cũ và đứng sau. */
+const byOrder = (list: PinnedResource[]): PinnedResource[] =>
+  list.map((r, i) => ({ r, i })).sort((a, b) => (a.r.order ?? Infinity) - (b.r.order ?? Infinity) || a.i - b.i).map((x) => x.r);
 
 function toSubmission(c: CardDb, boardId: string, votes: VoteCount[], ratings: RatingAgg[] = [], comments: CommentDb[] = []): SubmissionCard {
   const rate = ratings.find((r) => r.card_id === c.id);
@@ -158,7 +163,7 @@ function assemble(
     joinCode: b.join_code ?? null,
     joinEnabled: b.join_enabled ?? true,
     linkMode: b.link_mode,
-    pinned: cards.filter((c) => c.kind === 'resource').map(toResource),
+    pinned: byOrder(cards.filter((c) => c.kind === 'resource').map(toResource)),
     lessons,
     program: b.program ?? undefined,
     tasks,
@@ -365,12 +370,14 @@ export interface ResourceInput {
   /** Tệp đã tải lên kho hoặc liên kết đính kèm. */
   attachments?: Attachment[];
   badge?: string; color?: string; steps?: string[];
+  /** Thứ tự kéo thả; sửa tài liệu phải giữ nguyên số này. */
+  order?: number;
 }
 
 /** Gói phần trình bày thành cột meta; rỗng thì để null. */
-export function metaOf(r: { badge?: string; color?: string; steps?: string[] }): { badge?: string; color?: string; steps?: string[] } | null {
-  const m = { badge: r.badge?.trim() || undefined, color: r.color || undefined, steps: r.steps && r.steps.length > 0 ? r.steps : undefined };
-  return m.badge || m.color || m.steps ? m : null;
+export function metaOf(r: { badge?: string; color?: string; steps?: string[]; order?: number }): { badge?: string; color?: string; steps?: string[]; order?: number } | null {
+  const m = { badge: r.badge?.trim() || undefined, color: r.color || undefined, steps: r.steps && r.steps.length > 0 ? r.steps : undefined, order: typeof r.order === 'number' ? r.order : undefined };
+  return m.badge || m.color || m.steps || m.order !== undefined ? m : null;
 }
 
 /** CSDL chưa chạy lệnh thêm cột `meta` (docs/cap-nhat-tep-nen.sql) thì lưu lại không có phần trình bày để không chặn giáo viên. */
@@ -394,6 +401,16 @@ export async function updateResource(id: string, input: ResourceInput): Promise<
   if (res.error && missingMeta(res.error.message)) res = await run({});
   if (res.error) fail('Không lưu được tài liệu', res.error.message);
   return toResource(res.data as CardDb);
+}
+
+/** Lưu thứ tự tài liệu sau khi giáo viên kéo thả: ghi lại `meta` (giữ nguyên nhãn, màu, các bước) kèm số thứ tự mới. */
+export async function setResourceOrder(items: { id: string; badge?: string; color?: string; steps?: string[]; order: number }[]): Promise<void> {
+  const results = await Promise.all(items.map((it) => db().from('cards').update({ meta: metaOf(it) }).eq('id', it.id).eq('kind', 'resource')));
+  const bad = results.find((r) => r.error);
+  if (bad?.error) {
+    if (missingMeta(bad.error.message)) fail('Không lưu được thứ tự', 'Cơ sở dữ liệu chưa có cột trình bày thẻ: chạy tệp cap-nhat-tong-hop.sql trong Supabase.');
+    fail('Không lưu được thứ tự tài liệu', bad.error.message);
+  }
 }
 
 /* ---------- Khách không đăng nhập ---------- */

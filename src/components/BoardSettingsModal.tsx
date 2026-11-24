@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
-import { Save } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ClipboardPaste, ImagePlus, Save, Trash2 } from 'lucide-react';
 import type { BoardSettings, ViewMode } from '../types/board';
-import { BACKGROUNDS, FONTS, ICONS, SORTS, VIEW_LABEL } from '../lib/boardSettings';
+import { BACKGROUNDS, FONTS, ICONS, ICON_GROUPS, MAX_BG_CHARS, SORTS, VIEW_LABEL } from '../lib/boardSettings';
+import { compressImage } from '../lib/media';
 import type { BoardMetaPatch } from '../lib/boardApi';
 import { ModerationPicker } from './ModerationPicker';
 
@@ -17,6 +18,25 @@ interface Props {
 }
 
 const VIEWS = Object.keys(VIEW_LABEL) as ViewMode[];
+const FONT_GROUPS = ['Hiện đại', 'Có chân', 'Nghệ thuật'] as const;
+const CARD_SIZES = [['compact', 'Nhỏ'], ['standard', 'Tiêu chuẩn'], ['wide', 'Rộng (chiếu tivi)']] as const;
+
+const readDataUrl = (f: Blob): Promise<string> => new Promise((res, rej) => {
+  const r = new FileReader();
+  r.onload = () => res(String(r.result));
+  r.onerror = () => rej(new Error('Không đọc được ảnh.'));
+  r.readAsDataURL(f);
+});
+
+/** Thu nhỏ ảnh nền (cắt theo bề ngang banner) cho tới khi đủ nhẹ để lưu cùng cài đặt bảng. */
+async function bgFromFile(file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) throw new Error('Tệp này không phải ảnh. Hãy chọn ảnh JPG, PNG hoặc WebP.');
+  for (const [side, q] of [[1600, 0.78], [1280, 0.68], [1024, 0.6], [800, 0.55]] as const) {
+    const url = await readDataUrl(await compressImage(file, side, q));
+    if (url.length <= MAX_BG_CHARS && /^data:image\/(jpeg|png|webp);base64,/.test(url)) return url;
+  }
+  throw new Error('Ảnh quá phức tạp để lưu làm nền. Hãy chọn ảnh khác hoặc ảnh nhỏ hơn.');
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -46,6 +66,9 @@ export function BoardSettingsModal({ initial, onPreview, onSave, onCancel, showP
   const [error, setError] = useState('');
   // Esc hoặc Hủy: nếu đang sửa dở thì hỏi lại trước khi bỏ thay đổi.
   const [askDiscard, setAskDiscard] = useState(false);
+  const [bgBusy, setBgBusy] = useState(false);
+  const [bgMsg, setBgMsg] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
   const requestClose = (): void => { if (dirty) setAskDiscard(true); else onCancel(); };
   useEffect(() => {
@@ -59,6 +82,34 @@ export function BoardSettingsModal({ initial, onPreview, onSave, onCancel, showP
   const set = <K extends keyof BoardSettings>(key: K, value: BoardSettings[K]): void =>
     update({ ...draft, settings: { ...draft.settings, [key]: value } });
   const s = draft.settings;
+
+  const applyBgFile = async (file: File | undefined | null): Promise<void> => {
+    if (!file) return;
+    setBgBusy(true); setBgMsg('');
+    try {
+      const url = await bgFromFile(file);
+      update({ ...draft, settings: { ...draft.settings, background: 'custom', bgImage: url } });
+      setBgMsg('Đã áp ảnh nền. Phần mềm tự căn ảnh theo bề ngang của bảng.');
+    } catch (e) { setBgMsg(e instanceof Error ? e.message : 'Không dùng được ảnh này.'); }
+    setBgBusy(false);
+  };
+  const pasteBg = async (): Promise<void> => {
+    setBgMsg('');
+    try {
+      const items = await navigator.clipboard.read();
+      for (const it of items) {
+        const type = it.types.find((t) => t.startsWith('image/'));
+        if (type) { await applyBgFile(new File([await it.getType(type)], 'dan.png', { type })); return; }
+      }
+      setBgMsg('Bộ nhớ tạm chưa có ảnh. Hãy sao chép một ảnh rồi bấm lại, hoặc bấm vào ô này và nhấn Ctrl + V.');
+    } catch { setBgMsg('Trình duyệt không cho đọc bộ nhớ tạm. Bấm vào khung ảnh nền bên dưới rồi nhấn Ctrl + V để dán.'); }
+  };
+  const clearBg = (): void => {
+    const next = { ...draft.settings, background: 'default' };
+    delete next.bgImage;
+    update({ ...draft, settings: next });
+    setBgMsg('');
+  };
 
   const save = async (): Promise<void> => {
     if (!draft.title.trim()) { setError('Tên bảng không được để trống.'); return; }
@@ -100,18 +151,25 @@ export function BoardSettingsModal({ initial, onPreview, onSave, onCancel, showP
             </div>
             <div>
               <span className="field-label">Biểu tượng</span>
-              <div className="flex flex-wrap gap-2">
-                {(Object.keys(ICONS) as (keyof typeof ICONS)[]).map((id) => {
-                  const { Icon, label } = ICONS[id];
-                  const on = s.icon === id;
-                  return (
-                    <button key={id} type="button" aria-pressed={on} aria-label={label} title={label} onClick={() => set('icon', id)}
-                      className={`flex h-11 w-11 items-center justify-center rounded-xl border-2 transition duration-150 ${on ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-brand-100 bg-white text-ink-2 hover:border-brand-300'}`}>
-                      <Icon className="h-5 w-5" aria-hidden />
-                    </button>
-                  );
-                })}
+              <div className="space-y-2.5">
+                {ICON_GROUPS.map((g) => (
+                  <div key={g.title} role="group" aria-label={`Biểu tượng ${g.title}`}>
+                    <p className="mb-1 text-[11px] font-extrabold uppercase tracking-wide text-ink-3">{g.title}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {g.items.map(([id, label, Icon]) => {
+                        const on = s.icon === id;
+                        return (
+                          <button key={id} type="button" aria-pressed={on} aria-label={label} title={label} onClick={() => set('icon', id)}
+                            className={`flex h-11 w-11 items-center justify-center rounded-xl border-2 transition duration-150 ${on ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-brand-100 bg-white text-ink-2 hover:border-brand-300'}`}>
+                            <Icon className="h-5 w-5" aria-hidden />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
+              <p className="mt-1 text-xs text-ink-2">Đang chọn: {ICONS[s.icon]?.label ?? 'Sách'}</p>
             </div>
           </Section>
 
@@ -119,7 +177,7 @@ export function BoardSettingsModal({ initial, onPreview, onSave, onCancel, showP
             <div>
               <span className="field-label">Nền</span>
               <div className="grid grid-cols-5 gap-2">
-                {(Object.keys(BACKGROUNDS) as (keyof typeof BACKGROUNDS)[]).map((id) => (
+                {(Object.keys(BACKGROUNDS).filter((k) => k !== 'custom')).map((id) => (
                   <button key={id} type="button" aria-pressed={s.background === id} onClick={() => set('background', id)} title={BACKGROUNDS[id].label}
                     className={`h-12 rounded-xl border-2 text-[10px] font-bold text-ink-2 transition duration-150 ${s.background === id ? 'border-brand-600 ring-2 ring-brand-200' : 'border-brand-100 hover:border-brand-300'}`}
                     style={{ background: BACKGROUNDS[id].css }}>
@@ -127,27 +185,54 @@ export function BoardSettingsModal({ initial, onPreview, onSave, onCancel, showP
                   </button>
                 ))}
               </div>
-              <p className="mt-1 text-xs text-ink-2">{BACKGROUNDS[s.background].label}</p>
-            </div>
-            <div>
-              <span className="field-label">Phông chữ</span>
-              <div className="grid grid-cols-3 gap-2">
-                {(Object.keys(FONTS) as (keyof typeof FONTS)[]).map((id) => (
-                  <button key={id} type="button" aria-pressed={s.font === id} onClick={() => set('font', id)}
-                    style={{ fontFamily: FONTS[id].family }}
-                    className={`min-h-[44px] rounded-xl border-2 px-2 text-sm font-bold transition duration-150 ${s.font === id ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-brand-100 bg-white hover:border-brand-300'}`}>
-                    {FONTS[id].label}
-                  </button>
-                ))}
+              <p className="mt-1 text-xs text-ink-2">{BACKGROUNDS[s.background]?.label ?? BACKGROUNDS.default.label}</p>
+
+              <div className="mt-2 rounded-xl border-2 border-dashed border-brand-200 bg-white p-2.5"
+                tabIndex={0} role="group" aria-label="Ảnh nền riêng: tải lên hoặc dán"
+                onPaste={(e) => { const f = [...e.clipboardData.files].find((x) => x.type.startsWith('image/')); if (f) { e.preventDefault(); void applyBgFile(f); } }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => { e.preventDefault(); void applyBgFile(e.dataTransfer.files[0]); }}>
+                {s.background === 'custom' && s.bgImage && (
+                  <div className="mb-2 h-20 w-full rounded-lg bg-cover bg-center ring-1 ring-brand-200" style={{ backgroundImage: `url("${s.bgImage}")` }} role="img" aria-label="Ảnh nền đang dùng" />
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" disabled={bgBusy} onClick={() => fileRef.current?.click()} className="btn-ghost btn-sm"><ImagePlus className="h-4 w-4" aria-hidden /> Tải ảnh từ máy tính</button>
+                  <button type="button" disabled={bgBusy} onClick={() => void pasteBg()} className="btn-ghost btn-sm"><ClipboardPaste className="h-4 w-4" aria-hidden /> Dán ảnh</button>
+                  {s.background === 'custom' && <button type="button" onClick={clearBg} className="btn-ghost btn-sm text-rose-700"><Trash2 className="h-4 w-4" aria-hidden /> Bỏ ảnh nền</button>}
+                </div>
+                <input ref={fileRef} type="file" accept="image/*" className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => { void applyBgFile(e.target.files?.[0]); e.target.value = ''; }} />
+                <p className="mt-1.5 text-xs text-ink-2">Chọn ảnh ngang, phần mềm tự thu nhỏ, cắt vừa bề ngang và làm mờ dần phía dưới. Cũng kéo thả ảnh vào khung này hoặc nhấn Ctrl + V được.</p>
+                {bgBusy && <p role="status" className="mt-1 text-xs font-bold text-brand-700">Đang xử lý ảnh…</p>}
+                {bgMsg && !bgBusy && <p role="status" className="mt-1 text-xs font-bold text-brand-700">{bgMsg}</p>}
               </div>
             </div>
             <div>
+              <span className="field-label">Phông chữ</span>
+              <div className="space-y-2">
+                {FONT_GROUPS.map((grp) => (
+                  <div key={grp} role="group" aria-label={`Phông chữ ${grp}`}>
+                    <p className="mb-1 text-[11px] font-extrabold uppercase tracking-wide text-ink-3">{grp}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {Object.keys(FONTS).filter((id) => FONTS[id].group === grp).map((id) => (
+                        <button key={id} type="button" aria-pressed={s.font === id} onClick={() => set('font', id)}
+                          style={{ fontFamily: FONTS[id].family }}
+                          className={`min-h-[44px] rounded-xl border-2 px-2 text-sm font-bold transition duration-150 ${s.font === id ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-brand-100 bg-white hover:border-brand-300'}`}>
+                          {FONTS[id].label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-ink-2" style={{ fontFamily: FONTS[s.font]?.family }}>Xem thử: Em yêu trường lớp của em – 0123456789</p>
+            </div>
+            <div>
               <span className="field-label">Cỡ thẻ</span>
-              <div className="grid grid-cols-2 gap-2">
-                {(['standard', 'wide'] as const).map((id) => (
+              <div className="grid grid-cols-3 gap-2">
+                {CARD_SIZES.map(([id, label]) => (
                   <button key={id} type="button" aria-pressed={s.cardSize === id} onClick={() => set('cardSize', id)}
-                    className={`min-h-[44px] rounded-xl border-2 text-sm font-bold transition duration-150 ${s.cardSize === id ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-brand-100 bg-white hover:border-brand-300'}`}>
-                    {id === 'standard' ? 'Tiêu chuẩn' : 'Rộng (chiếu tivi)'}
+                    className={`min-h-[44px] rounded-xl border-2 px-1 text-sm font-bold transition duration-150 ${s.cardSize === id ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-brand-100 bg-white hover:border-brand-300'}`}>
+                    {label}
                   </button>
                 ))}
               </div>

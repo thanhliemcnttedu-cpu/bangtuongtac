@@ -7,6 +7,7 @@ import { MAX_ATTACHMENTS, usePostDraft } from '../hooks/usePostDraft';
 import { forgetCode, myCodes, normalizeEditCode } from '../lib/editCode';
 import { formatSize } from '../lib/media';
 import { ModalShell } from './ModalShell';
+import { RichEditor } from './RichEditor';
 import { AttachmentPicker } from './attach/AttachmentPicker';
 
 interface Props {
@@ -171,8 +172,8 @@ export function EditSubmissionModal({ boardToken, isClass, initialCode, onFind, 
         </div>
         <div><label htmlFor="es-title" className="field-label">Tên bài</label>
           <input id="es-title" className={inp} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
-        <div><label htmlFor="es-body" className="field-label">Nội dung</label>
-          <textarea id="es-body" className={`${inp} min-h-[90px] py-2`} value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} /></div>
+        <div><span id="es-body-label" className="field-label block">Nội dung</span>
+          <RichEditor labelledBy="es-body-label" value={form.body} onChange={(v) => setForm((f) => ({ ...f, body: v }))} minHeight={96} large={isClass} /></div>
 
         {keep.length > 0 && (
           <div>

@@ -7,6 +7,7 @@ import { usePostDraft } from '../hooks/usePostDraft';
 import type { PostDraft } from '../hooks/usePostDraft';
 import { ModalShell } from './ModalShell';
 import { AttachmentPicker } from './attach/AttachmentPicker';
+import { RichEditor } from './RichEditor';
 import { classPart, normalize } from '../lib/boardLogic';
 import { checkSubmit, countdown, formatDateTime, groupTasks, taskPhase } from '../lib/lessons';
 
@@ -195,9 +196,8 @@ export function QuickPostModal({ board, initialName = '', initialUnit = '', init
           </div>
         )}
         <div>
-          <label htmlFor="qp-body" className={lbl}>{isClass ? 'Em muốn viết thêm gì không?' : 'Nội dung'} <span className="font-normal text-ink-2">(không bắt buộc)</span></label>
-          <textarea id="qp-body" rows={2} className={`${inp} min-h-[72px] py-2`} value={draft.body} onChange={(e) => set('body', e.target.value)}
-            placeholder="Viết hoặc dán nội dung bài nộp…" />
+          <span id="qp-body-label" className={`${lbl} block`}>{isClass ? 'Em muốn viết thêm gì không?' : 'Nội dung'} <span className="font-normal text-ink-2">(không bắt buộc)</span></span>
+          <RichEditor labelledBy="qp-body-label" value={draft.body} onChange={(v) => set('body', v)} placeholder="Viết hoặc dán nội dung bài nộp…" minHeight={isClass ? 110 : 96} large={isClass} />
         </div>
 
         </div>

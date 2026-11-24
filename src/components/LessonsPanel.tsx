@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { renderRich } from '../lib/richText';
+import type { DragEvent } from 'react';
 import {
-  BarChart3, BookOpen, CalendarClock, ChevronDown, Download, ExternalLink, Eye, FileText, Image as ImageIcon, Link2, ListChecks, Mic, Network, Paperclip, Pencil, Plus, Presentation,
+  BarChart3, BookOpen, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, Eye, FileText, GripVertical, Image as ImageIcon, Link2, ListChecks, Mic, Network, Paperclip, Pencil, Plus, Presentation,
   QrCode, Sparkles, Trash2, Users, Video, X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -30,6 +32,8 @@ export interface LessonsPanelActions {
   onAddMaterial: (lessonId: string | null, opts?: { mindmap?: boolean }) => void;
   onDeleteMaterial: (r: PinnedResource) => void;
   onEditMaterial: (r: PinnedResource) => void;
+  /** Giáo viên kéo thả: danh sách mã tài liệu theo thứ tự mới (trong cùng một nhóm). */
+  onReorderMaterials?: (ids: string[]) => void;
   /** Học sinh bấm "Nộp bài" ở một bài tập: mở form nộp với bài tập đã chọn. */
   onSubmitTo: (taskId: string) => void;
   /** Lọc danh sách bài nộp theo bài tập. */
@@ -71,13 +75,33 @@ const extOf = (name: string): string => { const m = /\.([a-z0-9]{1,6})$/i.exec(n
 /** Có xem trực tiếp trong trang được không (ảnh, video, âm thanh, nhúng, PDF, Word, Excel, PowerPoint, văn bản). */
 const viewable = (a: Attachment): boolean => a.type === 'image' || a.type === 'video' || a.type === 'audio' || a.type === 'embed' || (a.type === 'file' && !['archive', 'other'].includes(docKindOf(a)));
 
+/** Trang web mà thẻ trỏ tới (liên kết hoặc tài liệu nhúng, không tính tệp trên Drive); không có thì trả về null. */
+function siteHost(r: PinnedResource): string | null {
+  const a = (r.attachments ?? []).find((x) => (x.type === 'link' || x.type === 'embed') && !x.driveId && x.url);
+  const raw = a?.url ?? (!r.attachments?.length && r.url && r.url !== '#' ? r.url : '');
+  try { const u = new URL(raw); return u.protocol === 'http:' || u.protocol === 'https:' ? u.hostname.replace(/^www\./, '') : null; } catch { return null; }
+}
+
+/** Biểu tượng (favicon) của trang web để học sinh nhận ra phần mềm, trang web; không tải được thì dùng biểu tượng loại tài liệu. */
+function SiteIcon({ host, fallback: Fallback }: { host: string; fallback: LucideIcon }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <Fallback className="h-6 w-6" aria-hidden />;
+  return <img src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} className="h-9 w-9 rounded-lg bg-white object-contain" />;
+}
+
+interface DragProps {
+  dragging: boolean; over: boolean; canPrev: boolean; canNext: boolean;
+  onDragStart: () => void; onDragEnd: () => void; onDragOver: (e: DragEvent) => void; onDrop: (e: DragEvent) => void; onPrev: () => void; onNext: () => void;
+}
+
 /**
  * Thẻ tài liệu theo kiểu thẻ hướng dẫn: vạch màu, biểu tượng, nhãn nhỏ, mô tả, các bước đánh số, rồi các nút do giáo viên đặt tên
  * ("Tải gói Gemini cách A  .rar · 342 KB"). Nút đầu tiên là nút chính (tô màu thẻ), các nút sau viền nhạt.
  */
-function MaterialCard({ r, canManage, onOpen, onDelete, onEdit }: { r: PinnedResource; canManage: boolean; onOpen: () => void; onDelete: () => void; onEdit: () => void }) {
+function MaterialCard({ r, canManage, onOpen, onDelete, onEdit, drag }: { r: PinnedResource; canManage: boolean; onOpen: () => void; onDelete: () => void; onEdit: () => void; drag?: DragProps }) {
   const k = KIND[r.kind];
   const Icon = k.icon;
+  const host = siteHost(r);
   const col = colorOf(r.color);
   const atts = r.attachments ?? [];
   const actions = atts.filter((a) => a.url);
@@ -88,10 +112,11 @@ function MaterialCard({ r, canManage, onOpen, onDelete, onEdit }: { r: PinnedRes
   const note = (a: Attachment): string => (a.type === 'link' || a.type === 'embed' ? a.name : `${a.name || extOf(a.name) || 'tệp'}${a.size ? ` · ${formatSize(a.size)}` : ''}`);
   const photos = atts.filter((a) => a.type === 'image' && a.url && !a.driveId).slice(0, 3);
   return (
-    <li className="relative flex flex-col overflow-hidden rounded-2xl border border-teal2-100 bg-white shadow-soft transition duration-200 hover:-translate-y-0.5 hover:shadow-lift">
+    <li onDragOver={drag?.onDragOver} onDrop={drag?.onDrop}
+      className={`relative flex flex-col overflow-hidden rounded-2xl border bg-white shadow-soft transition duration-200 hover:-translate-y-0.5 hover:shadow-lift ${drag?.over ? 'border-brand-500 ring-4 ring-brand-200' : 'border-teal2-100'} ${drag?.dragging ? 'opacity-40' : ''}`}>
       <span className="h-1.5 w-full" style={{ background: col?.bar ?? KIND_BAR[r.kind] }} aria-hidden />
-      <button type="button" onClick={onOpen} className="flex items-start gap-3 p-3 pr-16 text-left">
-        <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${col ? '' : k.tone}`} style={col ? { background: col.soft, color: col.text } : undefined}><Icon className="h-6 w-6" aria-hidden /></span>
+      <button type="button" onClick={onOpen} className={`flex items-start gap-3 p-3 text-left ${drag ? 'pr-44' : 'pr-16'}`}>
+        <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${col ? '' : k.tone}`} style={col ? { background: col.soft, color: col.text } : undefined}>{host ? <SiteIcon host={host} fallback={Icon} /> : <Icon className="h-6 w-6" aria-hidden />}</span>
         <span className="min-w-0">
           <span className="block text-base font-extrabold leading-snug">{r.title}</span>
           <span className="block text-xs text-ink-2">{k.label}{r.sizeLabel ? ` · ${r.sizeLabel}` : ''}{atts.length > 1 ? ` · ${atts.length} đính kèm` : ''}</span>
@@ -136,6 +161,20 @@ function MaterialCard({ r, canManage, onOpen, onDelete, onEdit }: { r: PinnedRes
       </div>
       {canManage && (
         <span className="absolute right-1.5 top-3 flex items-center gap-0.5">
+          {drag && (
+            <>
+              <span draggable onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', r.id); const li = (e.currentTarget as HTMLElement).closest('li'); if (li) e.dataTransfer.setDragImage(li, 24, 24); drag.onDragStart(); }} onDragEnd={drag.onDragEnd}
+                title="Kéo để đổi vị trí" aria-label={`Kéo để đổi vị trí tài liệu ${r.title}`} className="flex h-8 w-8 cursor-grab items-center justify-center rounded-full text-ink-3 transition hover:bg-brand-50 hover:text-brand-700 active:cursor-grabbing">
+                <GripVertical className="h-4 w-4" aria-hidden />
+              </span>
+              <button type="button" onClick={drag.onPrev} disabled={!drag.canPrev} aria-label={`Đưa ${r.title} lên trước`} title="Đưa lên trước" className="flex h-8 w-8 items-center justify-center rounded-full text-ink-3 transition hover:bg-brand-50 hover:text-brand-700 disabled:opacity-30 max-lg:h-11 max-lg:w-11">
+                <ChevronLeft className="h-4 w-4" aria-hidden />
+              </button>
+              <button type="button" onClick={drag.onNext} disabled={!drag.canNext} aria-label={`Đưa ${r.title} ra sau`} title="Đưa ra sau" className="flex h-8 w-8 items-center justify-center rounded-full text-ink-3 transition hover:bg-brand-50 hover:text-brand-700 disabled:opacity-30 max-lg:h-11 max-lg:w-11">
+                <ChevronRight className="h-4 w-4" aria-hidden />
+              </button>
+            </>
+          )}
           <button type="button" onClick={onEdit} aria-label={`Sửa tài liệu ${r.title}`} title="Sửa tài liệu" className="flex h-8 w-8 items-center justify-center rounded-full text-ink-3 transition hover:bg-brand-50 hover:text-brand-700">
             <Pencil className="h-4 w-4" aria-hidden />
           </button>
@@ -151,12 +190,12 @@ function MaterialCard({ r, canManage, onOpen, onDelete, onEdit }: { r: PinnedRes
 
 /** Mỗi bài học một màu riêng (vạch trên, nền, số thứ tự, viền bài tập) để học sinh nhỏ dễ phân biệt các bài. */
 const PALETTES = [
-  { name: 'xanh dương', bar: 'linear-gradient(90deg,#1668f2,#5c9bf8,#1668f2)', box: 'border-brand-300 bg-brand-50/80', num: 'bg-brand-600', text: 'text-brand-700', task: 'border-brand-200 border-l-brand-600', soft: 'bg-brand-100 text-brand-800' },
-  { name: 'cam', bar: 'linear-gradient(90deg,#ea580c,#fbbf24,#ea580c)', box: 'border-orange-300 bg-orange-50/80', num: 'bg-orange-500', text: 'text-orange-700', task: 'border-orange-200 border-l-orange-500', soft: 'bg-orange-100 text-orange-900' },
-  { name: 'xanh lá', bar: 'linear-gradient(90deg,#16a34a,#86efac,#16a34a)', box: 'border-emerald-300 bg-emerald-50/80', num: 'bg-emerald-600', text: 'text-emerald-700', task: 'border-emerald-200 border-l-emerald-600', soft: 'bg-emerald-100 text-emerald-900' },
-  { name: 'tím', bar: 'linear-gradient(90deg,#7c3aed,#c4b5fd,#7c3aed)', box: 'border-violet-300 bg-violet-50/80', num: 'bg-violet-600', text: 'text-violet-700', task: 'border-violet-200 border-l-violet-600', soft: 'bg-violet-100 text-violet-900' },
-  { name: 'hồng', bar: 'linear-gradient(90deg,#e11d48,#fda4af,#e11d48)', box: 'border-rose-300 bg-rose-50/80', num: 'bg-rose-500', text: 'text-rose-700', task: 'border-rose-200 border-l-rose-500', soft: 'bg-rose-100 text-rose-900' },
-  { name: 'vàng', bar: 'linear-gradient(90deg,#d97706,#fcd34d,#d97706)', box: 'border-amber-300 bg-amber-50/80', num: 'bg-amber-500', text: 'text-amber-700', task: 'border-amber-200 border-l-amber-500', soft: 'bg-amber-100 text-amber-900' },
+  { name: 'xanh dương', bar: 'linear-gradient(90deg,#1668f2,#5c9bf8,#1668f2)', box: 'border-brand-300 bg-brand-50/80', num: 'bg-brand-600', text: 'text-brand-700', task: 'border-brand-200 border-l-brand-600', soft: 'bg-brand-100 text-brand-800', tint: 'bg-brand-50/70' },
+  { name: 'cam', bar: 'linear-gradient(90deg,#ea580c,#fbbf24,#ea580c)', box: 'border-orange-300 bg-orange-50/80', num: 'bg-orange-500', text: 'text-orange-700', task: 'border-orange-200 border-l-orange-500', soft: 'bg-orange-100 text-orange-900', tint: 'bg-orange-50/70' },
+  { name: 'xanh lá', bar: 'linear-gradient(90deg,#16a34a,#86efac,#16a34a)', box: 'border-emerald-300 bg-emerald-50/80', num: 'bg-emerald-600', text: 'text-emerald-700', task: 'border-emerald-200 border-l-emerald-600', soft: 'bg-emerald-100 text-emerald-900', tint: 'bg-emerald-50/70' },
+  { name: 'tím', bar: 'linear-gradient(90deg,#7c3aed,#c4b5fd,#7c3aed)', box: 'border-violet-300 bg-violet-50/80', num: 'bg-violet-600', text: 'text-violet-700', task: 'border-violet-200 border-l-violet-600', soft: 'bg-violet-100 text-violet-900', tint: 'bg-violet-50/70' },
+  { name: 'hồng', bar: 'linear-gradient(90deg,#e11d48,#fda4af,#e11d48)', box: 'border-rose-300 bg-rose-50/80', num: 'bg-rose-500', text: 'text-rose-700', task: 'border-rose-200 border-l-rose-500', soft: 'bg-rose-100 text-rose-900', tint: 'bg-rose-50/70' },
+  { name: 'vàng', bar: 'linear-gradient(90deg,#d97706,#fcd34d,#d97706)', box: 'border-amber-300 bg-amber-50/80', num: 'bg-amber-500', text: 'text-amber-700', task: 'border-amber-200 border-l-amber-500', soft: 'bg-amber-100 text-amber-900', tint: 'bg-amber-50/70' },
 ] as const;
 type Palette = (typeof PALETTES)[number];
 
@@ -227,6 +266,9 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
   const [open, setOpen] = useState(true);
   const [viewing, setViewing] = useState<PinnedResource | null>(null);
   const [closedLessons, setClosedLessons] = useState<Record<string, boolean>>({});
+  // Kéo thả đổi thứ tự tài liệu: mã tài liệu đang kéo và thẻ đang được rê tới.
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
 
   const classMaterials = board.pinned.filter((r) => !r.lessonId || !board.lessons.some((l) => l.id === r.lessonId));
   const groups = groupTasks(board.lessons, board.tasks);
@@ -240,15 +282,15 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
     const targets = t.targetUnits ?? [];
     const team = board.settings.scope === 'team';
     return (
-      <li key={t.id} className={`rounded-2xl border-2 border-l-[10px] bg-white p-3 transition duration-200 hover:-translate-y-0.5 hover:shadow-soft ${kid ? 'sm:p-4' : ''} ${pal.task}`}>
+      <li key={t.id} className={`rounded-2xl border-2 border-l-[10px] ${pal.tint} p-3 transition duration-200 hover:-translate-y-0.5 hover:shadow-soft ${kid ? 'sm:p-4' : ''} ${pal.task}`}>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="flex flex-wrap items-center gap-2">
               <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-extrabold text-white ${pal.num}`} aria-hidden>{ti + 1}</span>
-              <span className={`chip ${t.kind === 'requirement' ? 'bg-violet-100 text-violet-800 ring-violet-200' : 'bg-brand-100 text-brand-800 ring-brand-200'}`}>
+              <span className={`chip ring-black/5 ${t.kind === 'requirement' ? 'bg-violet-100 text-violet-800 ring-violet-200' : pal.soft}`}>
                 <ListChecks className="h-3.5 w-3.5" aria-hidden /> {team ? (t.ackOnly ? 'Chỉ đọc' : t.needsEvidence ? 'Cần minh chứng' : 'Công việc') : KIND_LABEL[t.kind ?? 'assignment']}
               </span>
-              <span className={`${kid ? 'text-lg' : 'text-sm'} font-extrabold`}>{t.label}</span>
+              <span className={`${kid ? 'text-lg' : 'text-sm'} font-extrabold ${pal.text}`}>{t.label}</span>
             </p>
             {t.instructions && <p className={`mt-1 ${kid ? 'text-base text-ink' : 'text-sm text-ink-2'}`}>{t.instructions}</p>}
             <TaskDocs task={t} />
@@ -278,11 +320,30 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
     );
   };
 
-  const materialList = (list: PinnedResource[]) => (
-    <ul className="grid grid-cols-1 items-stretch gap-x-4 gap-y-7 sm:grid-cols-2 xl:grid-cols-3 min-[1800px]:grid-cols-4">
-      {list.map((r) => <MaterialCard key={r.id} r={r} canManage={canManage} onOpen={() => setViewing(r)} onDelete={() => actions.onDeleteMaterial(r)} onEdit={() => actions.onEditMaterial(r)} />)}
-    </ul>
-  );
+  const materialList = (list: PinnedResource[]) => {
+    const ids = list.map((r) => r.id);
+    const place = (from: string, to: string): void => {
+      const a = ids.indexOf(from); const b = ids.indexOf(to);
+      if (a < 0 || b < 0 || a === b) return;
+      const next = [...ids]; next.splice(b, 0, next.splice(a, 1)[0]);
+      actions.onReorderMaterials?.(next);
+    };
+    const canDrag = canManage && !!actions.onReorderMaterials && list.length > 1;
+    return (
+      <ul className="grid grid-cols-1 items-stretch gap-x-4 gap-y-7 sm:grid-cols-2 xl:grid-cols-3 min-[1800px]:grid-cols-4">
+        {list.map((r, i) => (
+          <MaterialCard key={r.id} r={r} canManage={canManage} onOpen={() => setViewing(r)} onDelete={() => actions.onDeleteMaterial(r)} onEdit={() => actions.onEditMaterial(r)}
+            drag={canDrag ? {
+              dragging: dragId === r.id, over: overId === r.id && dragId !== null && dragId !== r.id, canPrev: i > 0, canNext: i < list.length - 1,
+              onDragStart: () => setDragId(r.id), onDragEnd: () => { setDragId(null); setOverId(null); },
+              onDragOver: (e) => { if (dragId && ids.includes(dragId)) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (overId !== r.id) setOverId(r.id); } },
+              onDrop: (e) => { e.preventDefault(); if (dragId) place(dragId, r.id); setDragId(null); setOverId(null); },
+              onPrev: () => place(r.id, ids[i - 1]), onNext: () => place(r.id, ids[i + 1]),
+            } : undefined} />
+        ))}
+      </ul>
+    );
+  };
 
   return (
     <section aria-label={w.panel} className="overflow-hidden rounded-3xl border-[1.5px] border-teal2-100 bg-gradient-to-br from-white/90 to-teal2-50/80 shadow-soft backdrop-blur-md">
@@ -373,7 +434,8 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
                         {(lesson.startsAt || lesson.endsAt) && (
                           <span className="mt-0.5 flex items-center gap-1 text-xs text-ink-2"><CalendarClock className="h-3.5 w-3.5" aria-hidden /> {formatDateTime(lesson.startsAt)}{lesson.endsAt ? ` – ${formatDateTime(lesson.endsAt)}` : ''}</span>
                         )}
-                        {lesson.description && <span className="mt-1 block text-sm text-ink-2">{lesson.description}</span>}
+                        {/* Mục đích / nội dung của bài: chữ to, đậm, màu theo bài để học sinh nhìn là biết hôm nay học gì. */}
+                        {lesson.description && <span className={`mt-1.5 block rounded-xl bg-white/80 px-3 py-1.5 font-bold leading-snug ring-1 ring-black/5 ${kid ? 'text-xl' : 'text-lg'} ${pal.text}`}>{renderRich(lesson.description)}</span>}
                       </span>
                     </button>
                     {canManage && (
@@ -391,7 +453,7 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
                       {mats.length > 0 && <div><h4 className={`mb-2 inline-block rounded-full px-3 py-1 text-xs font-extrabold uppercase tracking-wide ${pal.soft}`}>Tài liệu</h4>{materialList(mats)}</div>}
                       <div>
                         <h4 className={`mb-2 inline-block rounded-full px-3 py-1 text-xs font-extrabold uppercase tracking-wide ${pal.soft}`}>Bài tập & yêu cầu</h4>
-                        {tasks.length === 0 ? <p className="text-sm text-ink-3">Chưa có bài tập hoặc yêu cầu.</p> : <ul className="space-y-3">{tasks.map((t, ti) => taskRow(t, pal, ti))}</ul>}
+                        {tasks.length === 0 ? <p className="text-sm text-ink-3">Chưa có bài tập hoặc yêu cầu.</p> : <ul className="space-y-3">{tasks.map((t, ti) => taskRow(t, PALETTES[(idx + 1 + ti) % PALETTES.length], ti))}</ul>}
                       </div>
                     </div>
                   )}

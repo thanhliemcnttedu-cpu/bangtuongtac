@@ -17,7 +17,7 @@
 
 Khách đăng bài bằng hai cách: INSERT trực tiếp (chính sách `cards_guest_insert` + trigger chống spam) hoặc gọi hàm Postgres `submit_card(...)` (RPC, `SECURITY DEFINER`):
 1. Tìm bảng theo `share_token`; kiểm tra `link_mode = 'guest_post'` và chưa khóa.
-2. Giới hạn tần suất theo `session_id` (tối đa 5 bài / 10 phút) và độ dài chữ.
+2. Giới hạn tần suất theo `session_id` (tối đa 10 bài / 10 phút) và độ dài chữ.
 3. Đặt `status = 'pending'` nếu bảng bật "Duyệt trước", ngược lại `approved`.
 4. Trả về `edit_token` ngẫu nhiên; trình duyệt lưu vào `localStorage`. Sửa/xóa bài qua `edit_card(card_id, edit_token, ...)` chỉ trong 15 phút đầu.
 

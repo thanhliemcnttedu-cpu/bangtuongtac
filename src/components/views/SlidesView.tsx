@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Maximize } from 'lucide-react';
+import { renderRich } from '../../lib/richText';
 import { StatusBadge } from '../StatusBadge';
 import { AttachmentView } from '../AttachmentView';
 import { AttachmentThumb } from '../AttachmentThumb';
@@ -65,7 +66,7 @@ export function SlidesView({ rows, board, onOpen, onVote, feedback }: LayoutView
         </div>
         <h2 className="text-[clamp(1.5rem,3vw,2.4rem)] font-extrabold leading-tight tracking-tight">{card.title}</h2>
         <p className="mt-1 text-lg font-extrabold text-brand-700">{card.authorName}{card.unit && <span className="font-bold text-ink-2"> · {card.unit}</span>}</p>
-        {card.body && <p className="mt-3 whitespace-pre-line text-lg leading-relaxed">{card.body}</p>}
+        {card.body && <div className="mt-3 text-lg leading-relaxed">{renderRich(card.body)}</div>}
         {media.length > 0 && <div className="mt-4 space-y-4">{media.map((a, i) => <AttachmentView key={`${a.name}-${i}`} attachment={a} />)}</div>}
         {links.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{links.map((l, i) => <AttachmentView key={`${l.name}-${i}`} attachment={l} />)}</div>}
         {card.poll && onVote && (

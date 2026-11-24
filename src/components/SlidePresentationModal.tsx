@@ -8,6 +8,7 @@ import { PollView } from './PollView';
 import { FeedbackPanel } from './FeedbackPanel';
 import type { FeedbackActions } from './FeedbackPanel';
 import { safeHref } from '../lib/safeUrl';
+import { renderRich } from '../lib/richText';
 
 interface Props {
   /** Chỉ các dòng đã có bài, đúng thứ tự đang hiển thị. */
@@ -88,7 +89,7 @@ export function SlidePresentationModal({ items, startCardId, board, canManage, o
             {card.authorName}
             {card.unit && <span className="font-bold text-ink-2"> · {card.unit}</span>}
           </p>
-          <p className="whitespace-pre-line text-[clamp(1.05rem,1.8vw,1.6rem)] leading-relaxed text-ink">{card.body}</p>
+          <div className="text-[clamp(1.05rem,1.8vw,1.6rem)] leading-relaxed text-ink">{renderRich(card.body)}</div>
           {links.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {links.map((l, i) => (

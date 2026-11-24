@@ -1,7 +1,19 @@
 import { isGatewayUrl } from './drive';
 import {
-  BookOpen, Calculator, Clock, Columns3, FlaskConical, Globe, GraduationCap, Layers, LayoutDashboard, LayoutGrid, Lightbulb,
-  MapPin, Move, Music, Network, Palette, Presentation, Table2, Blend,
+  Apple, Atom, Award, Backpack, Beaker, Bell, Bird, Blend,
+  Bone, BookOpen, Bot, Brush, Bug, Calculator, Camera, Cat,
+  Clapperboard, Clock, Cloud, CloudRain, Code, Columns3, Contrast, Cpu,
+  Database, Dna, Dog, Droplets, Eraser, Film, Fish, FlaskConical,
+  Flower, Flower2, Folder, Gamepad2, Globe, GraduationCap, HardDrive, Heart,
+  Highlighter, Keyboard, Languages, Laptop, Layers, LayoutDashboard, LayoutGrid, Leaf,
+  Library, Lightbulb, Magnet, MapPin, Medal, Mic, Microscope, Monitor,
+  Mountain, Mouse, Move, Music, Network, Notebook, NotebookPen, Orbit,
+  PaintBucket, Palette, Paperclip, PawPrint, Pen, PenTool, Pencil, Pipette,
+  Presentation, Puzzle, Rabbit, Rainbow, Rat, Rocket, Ruler, Satellite,
+  School, Scissors, Sigma, Smartphone, Smile, Snail, Snowflake, Sparkles,
+  Sprout, Squirrel, Star, StickyNote, Sun, Sunrise, Table2, Telescope,
+  Terminal, TreeDeciduous, TreePine, Trophy, Turtle, Users, WandSparkles, Waves,
+  Wifi,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { BoardBackground, BoardFont, BoardIconId, BoardSettings, ModerationMode, SortBy, ViewMode } from '../types/board';
@@ -23,30 +35,85 @@ export const DEFAULT_SETTINGS: BoardSettings = {
   showGrades: false,
 };
 
-export const ICONS: Record<BoardIconId, { label: string; Icon: LucideIcon }> = {
-  book: { label: 'Sách', Icon: BookOpen },
-  cap: { label: 'Mũ tốt nghiệp', Icon: GraduationCap },
-  idea: { label: 'Ý tưởng', Icon: Lightbulb },
-  palette: { label: 'Mỹ thuật', Icon: Palette },
-  flask: { label: 'Khoa học', Icon: FlaskConical },
-  calc: { label: 'Toán', Icon: Calculator },
-  music: { label: 'Âm nhạc', Icon: Music },
-  globe: { label: 'Địa lý', Icon: Globe },
-};
+/** Biểu tượng của bảng, chia theo nhóm để giáo viên tìm nhanh. `id` lưu trong cài đặt bảng nên không đổi tên về sau. */
+export const ICON_GROUPS: { title: string; items: [id: string, label: string, Icon: LucideIcon][] }[] = [
+  { title: 'Giáo dục', items: [
+    ['book', 'Sách', BookOpen], ['cap', 'Mũ tốt nghiệp', GraduationCap], ['school', 'Trường học', School], ['library', 'Thư viện', Library],
+    ['award', 'Giải thưởng', Award], ['medal', 'Huy chương', Medal], ['trophy', 'Cúp', Trophy], ['users', 'Nhóm học tập', Users],
+    ['present', 'Bài giảng', Presentation], ['lang', 'Ngôn ngữ', Languages], ['notepen', 'Ghi chép', NotebookPen], ['apple', 'Quả táo', Apple],
+  ] },
+  { title: 'Máy tính & kỹ thuật', items: [
+    ['monitor', 'Màn hình', Monitor], ['laptop', 'Máy tính xách tay', Laptop], ['keyboard', 'Bàn phím', Keyboard], ['mouse', 'Chuột', Mouse],
+    ['cpu', 'Vi xử lý', Cpu], ['disk', 'Ổ cứng', HardDrive], ['code', 'Lập trình', Code], ['terminal', 'Dòng lệnh', Terminal],
+    ['wifi', 'Mạng', Wifi], ['phone', 'Điện thoại', Smartphone], ['database', 'Dữ liệu', Database], ['bot', 'Robot / AI', Bot],
+  ] },
+  { title: 'Sáng tạo', items: [
+    ['idea', 'Ý tưởng', Lightbulb], ['sparkles', 'Lấp lánh', Sparkles], ['wand', 'Đũa phép', WandSparkles], ['rocket', 'Tên lửa', Rocket],
+    ['puzzle', 'Trò chơi ghép', Puzzle], ['brush', 'Cọ vẽ', Brush], ['camera', 'Máy ảnh', Camera], ['film', 'Phim', Film],
+    ['clap', 'Làm phim', Clapperboard], ['mic', 'Micro', Mic], ['music', 'Âm nhạc', Music], ['game', 'Trò chơi', Gamepad2],
+  ] },
+  { title: 'Màu sắc', items: [
+    ['palette', 'Bảng màu', Palette], ['drops', 'Giọt màu', Droplets], ['bucket', 'Xô sơn', PaintBucket], ['pipette', 'Ống hút màu', Pipette],
+    ['rainbow', 'Cầu vồng', Rainbow], ['blend', 'Hòa màu', Blend], ['contrast', 'Tương phản', Contrast], ['sun', 'Mặt trời', Sun],
+    ['heart', 'Trái tim', Heart], ['star', 'Ngôi sao', Star], ['smile', 'Mặt cười', Smile], ['bell', 'Chuông', Bell],
+  ] },
+  { title: 'Khoa học', items: [
+    ['flask', 'Bình thí nghiệm', FlaskConical], ['beaker', 'Cốc đong', Beaker], ['atom', 'Nguyên tử', Atom], ['microscope', 'Kính hiển vi', Microscope],
+    ['telescope', 'Kính thiên văn', Telescope], ['dna', 'ADN', Dna], ['magnet', 'Nam châm', Magnet], ['orbit', 'Quỹ đạo', Orbit],
+    ['calc', 'Toán', Calculator], ['sigma', 'Ký hiệu toán', Sigma], ['globe', 'Địa lý', Globe], ['satellite', 'Vệ tinh', Satellite],
+  ] },
+  { title: 'Thiên nhiên', items: [
+    ['leaf', 'Chiếc lá', Leaf], ['pine', 'Cây thông', TreePine], ['tree', 'Cái cây', TreeDeciduous], ['flower', 'Bông hoa', Flower],
+    ['flower2', 'Hoa nhiều cánh', Flower2], ['sprout', 'Mầm cây', Sprout], ['mountain', 'Núi', Mountain], ['waves', 'Sóng nước', Waves],
+    ['cloud', 'Mây', Cloud], ['rain', 'Mưa', CloudRain], ['snow', 'Bông tuyết', Snowflake], ['sunrise', 'Bình minh', Sunrise],
+  ] },
+  { title: 'Động vật', items: [
+    ['cat', 'Mèo', Cat], ['dog', 'Chó', Dog], ['bird', 'Chim', Bird], ['fish', 'Cá', Fish],
+    ['rabbit', 'Thỏ', Rabbit], ['squirrel', 'Sóc', Squirrel], ['turtle', 'Rùa', Turtle], ['bug', 'Côn trùng', Bug],
+    ['rat', 'Chuột nhắt', Rat], ['snail', 'Ốc sên', Snail], ['paw', 'Dấu chân thú', PawPrint], ['bone', 'Khúc xương', Bone],
+  ] },
+  { title: 'Đồ dùng học tập', items: [
+    ['pencil', 'Bút chì', Pencil], ['pentool', 'Bút vẽ', PenTool], ['pen', 'Bút mực', Pen], ['highlighter', 'Bút dạ', Highlighter],
+    ['ruler', 'Thước kẻ', Ruler], ['eraser', 'Cục tẩy', Eraser], ['scissors', 'Kéo', Scissors], ['clip', 'Kẹp giấy', Paperclip],
+    ['backpack', 'Cặp sách', Backpack], ['notebook', 'Vở', Notebook], ['sticky', 'Giấy nhớ', StickyNote], ['folder', 'Thư mục', Folder],
+  ] },
+];
+
+export const ICONS: Record<string, { label: string; Icon: LucideIcon }> = Object.fromEntries(
+  ICON_GROUPS.flatMap((g) => g.items.map(([id, label, Icon]) => [id, { label, Icon }])),
+);
 
 /** `css` là nền của vùng làm việc; chọn màu sáng, nhạt để chữ luôn đạt tương phản khi chiếu. */
-export const BACKGROUNDS: Record<BoardBackground, { label: string; css: string }> = {
+export const BACKGROUNDS: Record<string, { label: string; css: string }> = {
   default: { label: 'Xanh băng', css: 'radial-gradient(900px 480px at 8% -8%, #d6e7ff 0%, transparent 60%), radial-gradient(800px 460px at 96% -4%, #c9f3ea 0%, transparent 58%), #f3f8ff' },
   mint: { label: 'Bạc hà', css: 'linear-gradient(160deg, #e6faf6 0%, #f3fbf8 55%, #eaf7ff 100%)' },
   sunset: { label: 'Hoàng hôn', css: 'linear-gradient(160deg, #fff1e6 0%, #fff7f0 50%, #ffeef3 100%)' },
   lavender: { label: 'Oải hương', css: 'linear-gradient(160deg, #f1ecff 0%, #f7f4ff 55%, #eaf1ff 100%)' },
   paper: { label: 'Giấy trắng', css: '#fbfbf8' },
+  // Ảnh do giáo viên tải lên: phần ảnh vẽ riêng ở đầu trang (xem BoardWorkspace), nên màu nền bên dưới là màu nhạt.
+  custom: { label: 'Ảnh của bạn', css: '#f3f8ff' },
 };
 
-export const FONTS: Record<BoardFont, { label: string; family: string }> = {
-  sans: { label: 'Hiện đại', family: "'Be Vietnam Pro', system-ui, sans-serif" },
-  serif: { label: 'Có chân', family: "'Lora', Georgia, serif" },
-  hand: { label: 'Viết tay', family: "'Patrick Hand', 'Be Vietnam Pro', cursive" },
+export interface FontDef { label: string; family: string; group: 'Hiện đại' | 'Có chân' | 'Nghệ thuật' }
+/** Toàn bộ phông chữ dưới đây đều có đủ dấu tiếng Việt (nạp từ Google Fonts trong index.html). */
+export const FONTS: Record<string, FontDef> = {
+  sans: { label: 'Be Vietnam Pro', family: "'Be Vietnam Pro', system-ui, sans-serif", group: 'Hiện đại' },
+  nunito: { label: 'Nunito', family: "'Nunito', 'Be Vietnam Pro', sans-serif", group: 'Hiện đại' },
+  quicksand: { label: 'Quicksand', family: "'Quicksand', 'Be Vietnam Pro', sans-serif", group: 'Hiện đại' },
+  lexend: { label: 'Lexend', family: "'Lexend', 'Be Vietnam Pro', sans-serif", group: 'Hiện đại' },
+  montserrat: { label: 'Montserrat', family: "'Montserrat', 'Be Vietnam Pro', sans-serif", group: 'Hiện đại' },
+  roboto: { label: 'Roboto', family: "'Roboto', 'Be Vietnam Pro', sans-serif", group: 'Hiện đại' },
+  opensans: { label: 'Open Sans', family: "'Open Sans', 'Be Vietnam Pro', sans-serif", group: 'Hiện đại' },
+  serif: { label: 'Lora', family: "'Lora', Georgia, serif", group: 'Có chân' },
+  playfair: { label: 'Playfair Display', family: "'Playfair Display', Georgia, serif", group: 'Có chân' },
+  hand: { label: 'Patrick Hand', family: "'Patrick Hand', 'Be Vietnam Pro', cursive", group: 'Nghệ thuật' },
+  baloo: { label: 'Baloo 2', family: "'Baloo 2', 'Be Vietnam Pro', cursive", group: 'Nghệ thuật' },
+  playpen: { label: 'Playpen Sans', family: "'Playpen Sans', 'Be Vietnam Pro', cursive", group: 'Nghệ thuật' },
+  sriracha: { label: 'Sriracha', family: "'Sriracha', 'Be Vietnam Pro', cursive", group: 'Nghệ thuật' },
+  charm: { label: 'Charm', family: "'Charm', 'Be Vietnam Pro', cursive", group: 'Nghệ thuật' },
+  dancing: { label: 'Dancing Script', family: "'Dancing Script', 'Be Vietnam Pro', cursive", group: 'Nghệ thuật' },
+  lobster: { label: 'Lobster', family: "'Lobster', 'Be Vietnam Pro', cursive", group: 'Nghệ thuật' },
+  pacifico: { label: 'Pacifico', family: "'Pacifico', 'Be Vietnam Pro', cursive", group: 'Nghệ thuật' },
 };
 
 export const SORTS: Record<SortBy, string> = {
@@ -82,6 +149,11 @@ function parseVennLabels(v: unknown): [string, string] {
   return [clean(v[0], d[0]), clean(v[1], d[1])];
 }
 
+/** Chỉ nhận ảnh nền dạng data URL ảnh, ký tự base64 thuần và không quá lớn: dùng trong CSS url() nên phải chắc chắn không chứa gì khác. */
+export const MAX_BG_CHARS = 420_000;
+export const isBgImage = (v: unknown): v is string =>
+  typeof v === 'string' && v.length <= MAX_BG_CHARS && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v);
+
 /** Đọc cột JSON từ CSDL: giá trị thiếu hoặc lạ thì dùng mặc định, không bao giờ làm sập giao diện. */
 export function parseSettings(raw: unknown): BoardSettings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof BoardSettings, unknown>>;
@@ -93,7 +165,8 @@ export function parseSettings(raw: unknown): BoardSettings {
     icon: pick(r.icon, Object.keys(ICONS), DEFAULT_SETTINGS.icon),
     background: pick(r.background, Object.keys(BACKGROUNDS), DEFAULT_SETTINGS.background),
     font: pick(r.font, Object.keys(FONTS), DEFAULT_SETTINGS.font),
-    cardSize: r.cardSize === 'wide' ? 'wide' : 'standard',
+    cardSize: r.cardSize === 'wide' ? 'wide' : r.cardSize === 'compact' ? 'compact' : 'standard',
+    ...(isBgImage(r.bgImage) ? { bgImage: r.bgImage } : {}),
     showAuthor: r.showAuthor !== false,
     showTime: r.showTime !== false,
     vennLabels: parseVennLabels(r.vennLabels),

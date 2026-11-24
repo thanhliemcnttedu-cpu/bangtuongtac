@@ -352,11 +352,16 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
   const showFab = role !== 'viewonly' && role !== 'viewer' && board.linkMode !== 'view' && !closed;
   const fabLocked = board.linkMode === 'locked' && !canManage;
   const profile = loadProfile();
-  const { Icon: BoardIcon } = ICONS[board.settings.icon];
+  const { Icon: BoardIcon } = ICONS[board.settings.icon] ?? ICONS.book;
 
   return (
-    <div className="min-h-[calc(100vh-4rem)]" style={{ background: BACKGROUNDS[board.settings.background].css, fontFamily: FONTS[board.settings.font].family }}>
-      <main className="mx-auto w-full max-w-[min(100%,2800px)] space-y-5 px-4 py-5 pb-28 sm:px-6 2xl:px-10">
+    <div className="relative min-h-[calc(100vh-4rem)]" style={{ background: (BACKGROUNDS[board.settings.background] ?? BACKGROUNDS.default).css, fontFamily: (FONTS[board.settings.font] ?? FONTS.sans).family }}>
+      {/* Ảnh nền của giáo viên: tự cắt vừa bề ngang (cover), chỉ phủ phần đầu trang và mờ dần xuống để thẻ bài luôn dễ đọc. */}
+      {board.settings.background === 'custom' && board.settings.bgImage && (
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[min(560px,70vh)] bg-cover bg-center bg-no-repeat"
+          style={{ backgroundImage: `url("${board.settings.bgImage}")`, WebkitMaskImage: 'linear-gradient(#000 45%, transparent)', maskImage: 'linear-gradient(#000 45%, transparent)' }} />
+      )}
+      <main className="relative mx-auto w-full max-w-[min(100%,2800px)] space-y-5 px-4 py-5 pb-28 sm:px-6 2xl:px-10">
         <header className="relative z-20 rounded-3xl border-[1.5px] border-brand-200 bg-white/90 p-4 shadow-soft backdrop-blur-md sm:p-6">
           {/* Quầng sáng trang trí được cắt trong khung riêng, để khung tiêu đề không cần overflow-hidden (nếu không, trình đơn "Thêm" bị cắt mất). */}
           <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-3xl" aria-hidden><div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-gradient-to-br from-brand-200/70 to-teal2-100/70 blur-2xl" /></div>
@@ -424,6 +429,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
             onAddMaterial: (lessonId, opts) => { setEditMaterial(undefined); setMaterialLesson(lessonId); setMaterialMM(!!opts?.mindmap); setModal('material'); },
             onEditMaterial: (r) => { setEditMaterial(r); setMaterialLesson(r.lessonId ?? null); setMaterialMM(false); setModal('material'); },
             onDeleteMaterial: (r) => { setToDelete({ resource: r }); setModal('confirm-material'); },
+            onReorderMaterials: (ids) => { void run(() => store.reorderResources(savedBoard.id, ids)); },
             onSubmitTo: (taskId) => { setPostTask(taskId); setModal('post'); },
             onViewSubmissions: (taskId) => { patchFilters({ taskId }); document.querySelector('section[aria-label="Bài nộp và sản phẩm"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
           }} />

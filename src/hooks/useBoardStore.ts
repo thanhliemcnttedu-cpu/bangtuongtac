@@ -21,6 +21,7 @@ import type { LessonInput, TaskInput } from '../lib/boardApi';
 import { checkSubmit } from '../lib/lessons';
 import { newEditCode, normalizeEditCode, normalizeName } from '../lib/editCode';
 import { cleanJoinCode, randomJoinCode } from '../lib/joinCode';
+import { stripRich } from '../lib/richText';
 
 /** Cứ mỗi chừng này mili giây trang hỏi "dấu vân tay" của bảng; có đổi thì tải lại êm, không cần bấm F5. */
 const POLL_MS = 5000;
@@ -177,6 +178,8 @@ export interface BoardStore {
   addResource: (boardId: string, input: MaterialInput) => Promise<void>;
   removeResource: (boardId: string, resourceId: string) => Promise<void>;
   updateResource: (boardId: string, resourceId: string, input: MaterialInput) => Promise<void>;
+  /** Giáo viên kéo thả: ids là thứ tự mới của các tài liệu trong cùng một nhóm (bài học hoặc tài liệu chung). */
+  reorderResources: (boardId: string, ids: string[]) => Promise<void>;
   /** Giao một bài tập (kèm bài học và tài liệu của bài) cho các lớp khác của tôi. Trả về số lớp đã giao. */
   assignToBoards: (sourceBoardId: string, task: TaskItem, targetBoardIds: string[]) => Promise<number>;
   /** Gán lớp vào chương trình tập huấn (rỗng = bỏ khỏi chương trình). */
@@ -452,7 +455,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     // off: hiện ngay · manual: chờ giáo viên · auto: hệ thống đọc chữ, sạch thì duyệt luôn, nghi ngờ thì giữ lại.
     const status: CardStatus = asManager || moderation === 'off' ? 'approved'
       : moderation === 'manual' ? 'pending'
-        : textFlagged([input.authorName, input.unit, input.title, input.body, input.location?.name, ...(input.poll ?? []), ...attachments.map((a) => a.name)]) ? 'pending' : 'approved';
+        : textFlagged([input.authorName, input.unit, input.title, stripRich(input.body), input.location?.name, ...(input.poll ?? []), ...attachments.map((a) => a.name)]) ? 'pending' : 'approved';
     let card: SubmissionCard;
     if (isReal) {
       card = await api.insertSubmission(
@@ -586,7 +589,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     if (!isReal && !del) {
       // Bản mẫu mô phỏng đúng máy chủ: sửa xong thì áp lại chế độ kiểm duyệt của bảng.
       const mode = b.settings.moderation;
-      const flagged = mode === 'auto' && textFlagged([input.authorName, input.unit, input.title, input.body, ...attachments.map((x) => x.name)]);
+      const flagged = mode === 'auto' && textFlagged([input.authorName, input.unit, input.title, stripRich(input.body), ...attachments.map((x) => x.name)]);
       status = mode === 'manual' || flagged ? 'pending' : old.status === 'featured' ? 'featured' : 'approved';
     }
     if (isReal) {
@@ -826,12 +829,31 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     const kind: ResourceKind = input.kind === 'auto' ? inferKind(attachments) : input.kind;
     const first = attachments.find((a) => a.type === 'link' || a.type === 'embed');
     const look = { badge: input.badge?.trim() || undefined, color: input.color || undefined, steps: stepsOf(input.steps) };
-    const payload = { title: input.title.trim(), description: input.description.trim(), url: first?.url ?? '', kind, lessonId: input.lessonId, attachments, ...look };
+    // Sửa tài liệu không làm mất vị trí đã kéo thả.
+    const keepOrder = ub?.pinned.find((r) => r.id === resourceId)?.order;
+    const payload = { title: input.title.trim(), description: input.description.trim(), url: first?.url ?? '', kind, lessonId: input.lessonId, attachments, ...look, order: keepOrder };
     const res: PinnedResource = isReal
       ? await api.updateResource(resourceId, payload)
-      : { id: resourceId, kind, title: payload.title, description: payload.description, url: payload.url || attachments[0]?.url || '#', lessonId: input.lessonId ?? undefined, attachments, ...look, steps: look.steps.length > 0 ? look.steps : undefined };
+      : { id: resourceId, kind, title: payload.title, description: payload.description, url: payload.url || attachments[0]?.url || '#', lessonId: input.lessonId ?? undefined, attachments, ...look, steps: look.steps.length > 0 ? look.steps : undefined, order: keepOrder };
     patch(boardId, (b) => ({ ...b, pinned: b.pinned.map((r) => (r.id === resourceId ? { ...res, sizeLabel: sizeLabelOf(attachments) } : r)) }));
     await note(boardId, 'sua_tai_lieu', input.title, true);
+  }, [isReal, boards, patch, note]);
+
+  const reorderResources = useCallback(async (boardId: string, ids: string[]): Promise<void> => {
+    const b = boards.find((x) => x.id === boardId);
+    if (!b) return;
+    const byId = new Map(b.pinned.map((r) => [r.id, r]));
+    const list = ids.map((id) => byId.get(id)).filter((r): r is PinnedResource => !!r);
+    if (list.length < 2) return;
+    if (isReal) await api.setResourceOrder(list.map((r, i) => ({ id: r.id, badge: r.badge, color: r.color, steps: r.steps, order: i })));
+    patch(boardId, (bd) => {
+      // Các tài liệu của nhóm giữ nguyên "ô" của mình trong danh sách chung, chỉ đổi người đứng trong ô.
+      const next = [...bd.pinned];
+      const slots = bd.pinned.map((r, i) => (ids.includes(r.id) ? i : -1)).filter((i) => i >= 0);
+      slots.forEach((slot, k) => { const r = byId.get(ids[k]); if (r) next[slot] = { ...r, order: k }; });
+      return { ...bd, pinned: next };
+    });
+    await note(boardId, 'sua_tai_lieu', 'Sắp xếp lại tài liệu', true);
   }, [isReal, boards, patch, note]);
 
   const removeResource = useCallback(async (boardId: string, resourceId: string): Promise<void> => {
@@ -1003,6 +1025,6 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     rateCard, addComment, deleteOwnComment, setCommentStatus, deleteComment, setTeacherStars,
     inviteCollaborator, changeCollaboratorRole, removeCollaborator, leaveBoard,
     createBoard, duplicateBoard, updateMeta, addCard, setCardLayout, setStatus, setGrade, vote, deleteCard, moveCards, loadRosterNames, reassignCard, findCardByCode, findCardsByName, saveCardByCode, clearSubmissions, updateCardAttachments, removeStoredAttachments,
-    setRoster, setSettings, saveLesson, removeLesson, saveTask, removeTask, regenerateLink, changeJoinCode, setJoinEnabled, resolveJoinCode, setTaskProgress, ensurePersonalBoard, rollRecurring, loadAttendance, addAttendanceSession, removeAttendanceSession, setAttendancePresent, addResource, removeResource, updateResource, assignToBoards, setProgram, setArchived, setTrashed, deleteForever, setTemplate, loadActivity,
+    setRoster, setSettings, saveLesson, removeLesson, saveTask, removeTask, regenerateLink, changeJoinCode, setJoinEnabled, resolveJoinCode, setTaskProgress, ensurePersonalBoard, rollRecurring, loadAttendance, addAttendanceSession, removeAttendanceSession, setAttendancePresent, addResource, removeResource, updateResource, reorderResources, assignToBoards, setProgram, setArchived, setTrashed, deleteForever, setTemplate, loadActivity,
   };
 }

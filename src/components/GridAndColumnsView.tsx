@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { renderRich } from '../lib/richText';
 import { CheckCheck, Clock, FileEdit, MessageCircle, Star, Trash2 } from 'lucide-react';
 import type { BoardData, BoardRow, CardStatus, MemberProgress } from '../types/board';
 import { PROGRESS_LABEL, formatRelative } from '../lib/format';
@@ -110,7 +111,7 @@ export function Tile({ row, board, compact, wall, canManage, onOpen, onSetStatus
             {commentCount > 0 && <span className="chip bg-sky-100 text-sky-800 ring-sky-200" title="Nhận xét của các bạn"><MessageCircle className="h-3 w-3" aria-hidden /> {commentCount}</span>}
           </div>
           <h3 className={`font-extrabold leading-snug ${compact ? 'text-sm' : 'text-base'}`}>{card.title}</h3>
-          {!compact && <p className={`${wall ? '' : 'line-clamp-2'} whitespace-pre-line text-sm text-ink-2`}>{card.body}</p>}
+          {!compact && <p className={`${wall ? '' : 'line-clamp-2'} text-sm text-ink-2`}>{renderRich(card.body, { inline: !wall })}</p>}
           <p className="text-xs text-ink-2">
             {[s.showAuthor ? card.unit : '', taskLabel(board, card.taskId), s.showTime ? (card.resubmittedAt ? `nộp lại ${formatRelative(card.resubmittedAt)}` : formatRelative(card.submittedAt)) : ''].filter(Boolean).join(' · ')}
           </p>
@@ -158,11 +159,12 @@ export function GridAndColumnsView({ rows, board, mode, ...actions }: Props) {
   }
 
   const wide = board.settings.cardSize === 'wide';
+  const compact = board.settings.cardSize === 'compact';
 
   if (mode === 'wall') {
     // Cột CSS: thẻ cao thấp khác nhau xếp khít như bức tường. Số cột giảm một bậc khi chọn thẻ rộng.
     return (
-      <div className={`gap-4 ${wide ? 'columns-1 min-[640px]:columns-2 min-[1024px]:columns-3' : 'columns-1 min-[480px]:columns-2 min-[768px]:columns-3 min-[1024px]:columns-4'}`}>
+      <div className={`gap-4 ${wide ? 'columns-1 min-[640px]:columns-2 min-[1024px]:columns-3' : compact ? 'columns-2 min-[640px]:columns-3 min-[1024px]:columns-5 min-[1536px]:columns-6' : 'columns-1 min-[480px]:columns-2 min-[768px]:columns-3 min-[1024px]:columns-4'}`}>
         {rows.map((r) => (
           <div key={r.member.id} className="mb-4 break-inside-avoid">
             <Tile row={r} board={board} wall {...actions} />
@@ -174,7 +176,7 @@ export function GridAndColumnsView({ rows, board, mode, ...actions }: Props) {
 
   if (mode === 'grid') {
     return (
-      <div className={`grid grid-cols-1 gap-4 ${wide ? 'min-[640px]:grid-cols-2 min-[1024px]:grid-cols-3' : 'min-[480px]:grid-cols-2 min-[768px]:grid-cols-3 min-[1024px]:grid-cols-4'}`}>
+      <div className={`grid grid-cols-1 gap-4 ${wide ? 'min-[640px]:grid-cols-2 min-[1024px]:grid-cols-3' : compact ? 'grid-cols-2 min-[640px]:grid-cols-3 min-[1024px]:grid-cols-5 min-[1536px]:grid-cols-6' : 'min-[480px]:grid-cols-2 min-[768px]:grid-cols-3 min-[1024px]:grid-cols-4'}`}>
         {rows.map((r) => <Tile key={r.member.id} row={r} board={board} {...actions} />)}
       </div>
     );

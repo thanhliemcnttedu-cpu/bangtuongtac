@@ -170,18 +170,20 @@ export default function App() {
       <div className="min-w-0 flex-1">
       {renderBody()}
 
-      <footer className="border-t border-brand-200/70 bg-white/70 px-4 pb-24 pt-5 text-center text-sm text-ink-2 backdrop-blur-sm print:hidden sm:pb-16">
-        <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
-          <span>Phần mềm được phát triển bởi <b className="font-extrabold text-ink">Nguyễn Thanh Liêm</b></span>
-          <span className="hidden text-ink-3 sm:inline" aria-hidden>·</span>
-          <a href="tel:0888358363" className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 font-bold text-brand-700 hover:bg-brand-50 hover:underline" aria-label="Gọi số 0888 358 363">
-            <Phone className="h-4 w-4" aria-hidden /> 0888 358 363
-          </a>
-        </p>
-        {teacherNav && <p className="mt-1"><button type="button" onClick={() => setHelp('guide')} className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold text-brand-700 hover:bg-brand-50"><HelpCircle className="h-4 w-4" aria-hidden /> Hướng dẫn nhanh và kiểm tra hệ thống</button></p>}
-        <p className="mt-1 text-xs text-ink-3">
-          Phiên bản {__APP_VERSION__}{__BUILD_COMMIT__ ? ` (${__BUILD_COMMIT__})` : ''} · Cập nhật lúc <time dateTime={__BUILD_TIME__}>{buildStamp()}</time>
-        </p>
+      {/* Chân trang mỏng một hàng: nền xanh đêm chuyển sắc cùng tông với màu chính, chữ sáng; trên điện thoại gọn thành hai dòng. */}
+      <footer className="bg-gradient-to-r from-[#0a1730] via-[#0f2a5c] to-[#0b4fd0] px-4 pb-[88px] pt-2.5 text-sm text-white/80 print:hidden sm:pb-3 sm:pt-3">
+        <div className="mx-auto flex max-w-[min(100%,2800px)] flex-wrap items-center justify-center gap-x-4 gap-y-1 sm:justify-between 2xl:px-6">
+          <p className="flex flex-wrap items-center justify-center gap-x-2">
+            <span>Phát triển bởi <b className="font-extrabold text-white">Nguyễn Thanh Liêm</b></span>
+            <a href="tel:0888358363" className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full bg-white/10 px-3 font-bold text-white ring-1 ring-white/20 transition hover:bg-white/20" aria-label="Gọi số 0888 358 363">
+              <Phone className="h-4 w-4" aria-hidden /> 0888 358 363
+            </a>
+          </p>
+          <p className="flex flex-wrap items-center justify-center gap-x-3 text-xs">
+            {teacherNav && <button type="button" onClick={() => setHelp('guide')} className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-2 font-bold text-white hover:bg-white/10"><HelpCircle className="h-4 w-4" aria-hidden /> Hướng dẫn<span className="hidden sm:inline">&nbsp;nhanh và kiểm tra hệ thống</span></button>}
+            <span className="text-white/60">v{__APP_VERSION__}{__BUILD_COMMIT__ ? ` (${__BUILD_COMMIT__})` : ''} · <time dateTime={__BUILD_TIME__}>{buildStamp()}</time></span>
+          </p>
+        </div>
       </footer>
       </div>
       </div>

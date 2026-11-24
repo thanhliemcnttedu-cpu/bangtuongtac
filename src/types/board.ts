@@ -13,9 +13,10 @@ export type ViewMode =
 /** Vùng của biểu đồ Venn hai vòng: chỉ A, giao nhau, chỉ B. */
 export type VennRegion = 'a' | 'ab' | 'b';
 export type SortBy = 'newest' | 'oldest' | 'name' | 'unit';
-export type BoardFont = 'sans' | 'serif' | 'hand';
-export type BoardBackground = 'default' | 'mint' | 'sunset' | 'lavender' | 'paper';
-export type BoardIconId = 'book' | 'cap' | 'idea' | 'palette' | 'flask' | 'calc' | 'music' | 'globe';
+/** Mã phông chữ / nền / biểu tượng: danh sách đầy đủ nằm ở lib/boardSettings.ts (giá trị lạ được đưa về mặc định khi đọc). */
+export type BoardFont = string;
+export type BoardBackground = string;
+export type BoardIconId = string;
 export type CardStatus = 'pending' | 'approved' | 'featured' | 'needs_edit';
 /** Tiến trình của một thành viên: trạng thái bài nộp, hoặc chưa nộp / đang làm khi chưa có bài. */
 export type MemberProgress = 'not_submitted' | 'in_progress' | CardStatus;
@@ -66,6 +67,8 @@ export interface PinnedResource {
   badge?: string;
   color?: string;
   steps?: string[];
+  /** Thứ tự do giáo viên kéo thả (nhỏ đứng trước); trống = chưa sắp xếp, đứng sau các tài liệu đã sắp. */
+  order?: number;
 }
 
 /** Bài học (lớp học) hoặc buổi / nội dung tập huấn. Có thể có thời gian diễn ra. */
@@ -231,7 +234,9 @@ export interface BoardSettings {
   icon: BoardIconId;
   background: BoardBackground;
   font: BoardFont;
-  cardSize: 'standard' | 'wide';
+  cardSize: 'compact' | 'standard' | 'wide';
+  /** Ảnh nền do giáo viên tải lên (data URL JPEG đã thu nhỏ); chỉ dùng khi background = 'custom'. */
+  bgImage?: string;
   showAuthor: boolean;
   showTime: boolean;
   /** Tên hai vòng của biểu đồ Venn. */

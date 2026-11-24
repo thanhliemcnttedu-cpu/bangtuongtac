@@ -10,6 +10,7 @@ import { checkSubmit, countdown, formatDateTime, taskPhase } from '../lib/lesson
 import { ModalShell } from './ModalShell';
 import { AttachmentPicker } from './attach/AttachmentPicker';
 import { TaskDocs } from './TaskDocs';
+import { RichEditor } from './RichEditor';
 
 interface Props {
   board: BoardData;
@@ -134,8 +135,8 @@ export function TeamSubmitModal({ board, roster, initialName = '', initialTaskId
                 onPoll={() => undefined} onIngest={ingest} hideTools={['video', 'audio', 'screen', 'draw', 'mindmap', 'poll', 'location']} label="Minh chứng" required={!!task?.needsEvidence} />
             </div>
             <div>
-              <label htmlFor="ts-body" className={lbl}>Ghi chú <span className="font-normal text-ink-2">(không bắt buộc)</span></label>
-              <textarea id="ts-body" rows={2} className="input min-h-[64px] py-2" value={draft.body} onChange={(e) => set('body', e.target.value)} />
+              <span id="ts-body-label" className={`${lbl} block`}>Ghi chú <span className="font-normal text-ink-2">(không bắt buộc)</span></span>
+              <RichEditor labelledBy="ts-body-label" value={draft.body} onChange={(v) => set('body', v)} minHeight={72} />
             </div>
           </>
         )}
