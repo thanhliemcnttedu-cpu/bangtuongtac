@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
-  ActivityEntry, AttendanceSession, Attachment, BoardData, CardComment, ModerationMode, CardLayoutPatch, CardLocation, CardStatus, CollabRole, LinkMode, Lesson, PinnedResource, ResourceKind, RosterMember, SubmissionCard, TaskItem,
+  ActivityEntry, AttendanceSession, Attachment, BoardData, CardComment, ModerationMode, CardLayoutPatch, CardLocation, CardStatus, CollabRole, LinkMode, Lesson, PinnedResource, ResourceKind, RosterMember, SubmissionCard, TaskItem, TaskLog, TaskProgress, TaskSubItem, ItemStatus,
 } from '../types/board';
 import { MOCK_BOARDS } from '../data/mockBoardData';
 import { buildLargeDemo } from '../data/demoLarge';
@@ -22,6 +22,8 @@ import { checkSubmit } from '../lib/lessons';
 import { newEditCode, normalizeEditCode, normalizeName } from '../lib/editCode';
 import { cleanJoinCode, randomJoinCode } from '../lib/joinCode';
 import { stripRich } from '../lib/richText';
+import * as itemsApi from '../lib/taskItemsApi';
+import { actionOf, diffItem } from '../lib/taskPlan';
 
 /** Cứ mỗi chừng này mili giây trang hỏi "dấu vân tay" của bảng; có đổi thì tải lại êm, không cần bấm F5. */
 const POLL_MS = 5000;
@@ -112,6 +114,13 @@ export interface DuplicateOptions {
   keepPinned: boolean;
 }
 
+/** Dữ liệu nhập của một đầu việc: giữ lại các minh chứng cũ (keep), thêm tệp / liên kết mới kèm phân loại. */
+export interface ItemInput {
+  title: string; subject: string; plannedAt: string | null; status: ItemStatus; result: string; note: string;
+  startedAt: string | null; doneAt: string | null; sort: number;
+  keep: Attachment[]; files: File[]; links: string[]; group: string;
+}
+
 export interface BoardStore {
   boards: BoardData[];
   loading: boolean;
@@ -172,7 +181,20 @@ export interface BoardStore {
   setJoinEnabled: (boardId: string, enabled: boolean) => Promise<void>;
   /** Học sinh nhập mã ở trang chủ: trả về mã link của bảng, null nếu mã sai. */
   resolveJoinCode: (code: string) => Promise<string | null>;
-  setTaskProgress: (boardId: string, taskId: string, progress: 'todo' | 'doing' | 'done') => Promise<void>;
+  setTaskProgress: (boardId: string, taskId: string, progress: TaskProgress) => Promise<void>;
+  /** Đầu việc thành phần và nhật ký tiến độ của một công việc (Đợt A). */
+  loadTaskItems: (boardId: string, taskId: string) => Promise<{ items: TaskSubItem[]; logs: TaskLog[] }>;
+  /** Đọc đầu việc của nhiều công việc cùng lúc để tính tiến độ trên danh sách. */
+  loadItemSummaries: (taskIds: string[]) => Promise<TaskSubItem[]>;
+  /** Thêm (prev = null) hoặc sửa một đầu việc; ghi nhật ký những gì đã đổi. */
+  saveTaskItem: (boardId: string, taskId: string, prev: TaskSubItem | null, input: ItemInput, reason?: string) => Promise<TaskSubItem>;
+  /** Thêm nhiều đầu việc một lượt (mỗi dòng một đối tượng). */
+  addTaskItems: (boardId: string, taskId: string, rows: { title: string; subject: string; plannedAt: string | null }[], startSort: number) => Promise<void>;
+  /** Xóa mềm / khôi phục đầu việc (kèm lý do). */
+  setTaskItemDeleted: (boardId: string, item: TaskSubItem, deleted: boolean, reason?: string) => Promise<void>;
+  reorderTaskItems: (boardId: string, taskId: string, ordered: TaskSubItem[]) => Promise<void>;
+  /** Ghi một dòng ghi chú vào nhật ký (công việc tổng hoặc một đầu việc). */
+  addTaskNote: (boardId: string, taskId: string, itemId: string | null, note: string) => Promise<void>;
   /** Bảng việc riêng của tôi: có rồi thì trả về, chưa có thì tạo (ẩn khỏi danh sách bảng). */
   ensurePersonalBoard: () => Promise<BoardData>;
   addResource: (boardId: string, input: MaterialInput) => Promise<void>;
@@ -693,14 +715,14 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
       ? await prepareAttachments({ boardId, files: input.files ?? [], links: input.links ?? [] }, isReal, true, tcfg ? { cfg: tcfg, folder: [ROOT_FOLDER, boardFolderName(board), 'Công việc'], author: 'Tài liệu', mode: 'big' as const } : undefined)
       : [];
     const clean: TaskInput = { ...input, files: undefined, links: undefined, attachments: [...(input.attachments ?? []), ...added], label: input.label.trim(), instructions: input.instructions.trim(), targetUnits: [...new Set(input.targetUnits.map((u) => u.trim()).filter(Boolean))] };
-    const view = (id: string): TaskItem => ({ id, label: clean.label, lessonId: clean.lessonId ?? undefined, kind: clean.kind, instructions: clean.instructions, assignedAt: clean.assignedAt, dueAt: clean.dueAt, allowLate: clean.allowLate, targetUnits: clean.targetUnits, attachments: clean.attachments, needsEvidence: !!clean.needsEvidence, ackOnly: !!clean.ackOnly, progress: clean.progress ?? 'todo', priority: clean.priority ?? 'normal', assigneeEmails: (clean.assigneeEmails ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean), repeat: clean.repeat ?? 'none', seriesId: clean.seriesId });
+    const view = (id: string): TaskItem => ({ id, label: clean.label, lessonId: clean.lessonId ?? undefined, kind: clean.kind, instructions: clean.instructions, assignedAt: clean.assignedAt, dueAt: clean.dueAt, allowLate: clean.allowLate, targetUnits: clean.targetUnits, attachments: clean.attachments, needsEvidence: !!clean.needsEvidence, ackOnly: !!clean.ackOnly, progress: clean.progress ?? 'todo', priority: clean.priority ?? 'normal', assigneeEmails: (clean.assigneeEmails ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean), repeat: clean.repeat ?? 'none', seriesId: clean.seriesId, category: clean.category, startAt: clean.startAt ?? null, reportDueAt: clean.reportDueAt ?? null, completedAt: clean.completedAt ?? null, repeatUntil: clean.repeatUntil ?? null });
     if (taskId) {
       if (isReal) await api.updateTask(taskId, clean);
       patch(boardId, (b) => ({ ...b, tasks: b.tasks.map((t) => (t.id === taskId ? view(taskId) : t)) }));
       await note(boardId, 'sua_bai_tap', clean.label, true);
       return view(taskId);
     }
-    const made: TaskItem = isReal ? await api.createTask(boardId, clean, board.tasks.length) : view(`nv-${Date.now()}`);
+    const made: TaskItem = isReal ? await api.createTask(boardId, clean, board.tasks.length) : view(`nv-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
     patch(boardId, (b) => ({ ...b, tasks: [...b.tasks, made] }));
     await note(boardId, 'giao_bai_tap', clean.label, true);
     return made;
@@ -775,10 +797,104 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     return boardsRef.current.find((b) => b.joinCode === code && b.joinEnabled !== false && !b.deletedAt)?.shareToken ?? null;
   }, [isReal]);
 
-  const setTaskProgress = useCallback(async (boardId: string, taskId: string, progress: 'todo' | 'doing' | 'done'): Promise<void> => {
-    if (isReal) await api.updateTaskProgress(taskId, progress);
-    patch(boardId, (b) => ({ ...b, tasks: b.tasks.map((t) => (t.id === taskId ? { ...t, progress } : t)) }));
-  }, [isReal, patch]);
+  // ---- Đầu việc thành phần và nhật ký tiến độ (Đợt A). Bản mẫu giữ trong bộ nhớ; dữ liệu thật nằm ở task_items và task_logs. ----
+  const mockItems = useRef<Map<string, TaskSubItem[]>>(new Map());
+  const mockLogs = useRef<TaskLog[]>([]);
+  const newId = (p: string): string => `${p}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const writeLog = useCallback(async (boardId: string, taskId: string, itemId: string | null, action: string, before: Record<string, unknown> | null, after: Record<string, unknown> | null, noteText: string): Promise<void> => {
+    const entry = { taskId, boardId, itemId, actor, action, before, after, note: noteText };
+    if (isReal) { await itemsApi.addLog(entry); return; }
+    mockLogs.current = [{ id: newId('lg'), createdAt: new Date().toISOString(), ...entry }, ...mockLogs.current];
+  }, [isReal, actor]);
+
+  const putMockItem = (it: TaskSubItem): void => {
+    const list = mockItems.current.get(it.taskId) ?? [];
+    mockItems.current.set(it.taskId, list.some((x) => x.id === it.id) ? list.map((x) => (x.id === it.id ? it : x)) : [...list, it]);
+  };
+
+  const loadTaskItems = useCallback(async (_boardId: string, taskId: string): Promise<{ items: TaskSubItem[]; logs: TaskLog[] }> => {
+    if (isReal) {
+      const [items, logs] = await Promise.all([itemsApi.listItems([taskId]), itemsApi.listLogs(taskId)]);
+      return { items, logs };
+    }
+    return { items: [...(mockItems.current.get(taskId) ?? [])].sort((a, b) => a.sort - b.sort), logs: mockLogs.current.filter((l) => l.taskId === taskId) };
+  }, [isReal]);
+
+  const loadItemSummaries = useCallback(async (taskIds: string[]): Promise<TaskSubItem[]> => {
+    if (isReal) return itemsApi.listItems(taskIds);
+    return taskIds.flatMap((id) => mockItems.current.get(id) ?? []);
+  }, [isReal]);
+
+  const saveTaskItem = useCallback(async (boardId: string, taskId: string, prev: TaskSubItem | null, input: ItemInput, reason = ''): Promise<TaskSubItem> => {
+    if (!input.title.trim() && !input.subject.trim()) throw new Error('Hãy nhập tên đầu việc hoặc đối tượng thực hiện.');
+    const board = boardsRef.current.find((b) => b.id === boardId);
+    if (!board) throw new Error('Không tìm thấy bảng.');
+    const gw = gatewayOf(board.settings);
+    const added = input.files.length + input.links.length > 0
+      ? (await prepareAttachments({ boardId, files: input.files, links: input.links }, isReal, true, gw ? { cfg: gw, folder: [ROOT_FOLDER, boardFolderName(board), 'Minh chứng'], author: 'Minh chứng', mode: 'big' as const } : undefined))
+        .map((a) => (input.group ? { ...a, group: input.group } : a))
+      : [];
+    const now = new Date().toISOString();
+    // Ngày thực tế tự điền khi đổi trạng thái; mở lại thì bỏ ngày hoàn thành (nhật ký vẫn giữ ngày cũ).
+    let startedAt = input.startedAt;
+    let doneAt = input.doneAt;
+    if ((input.status === 'doing' || input.status === 'done') && !startedAt) startedAt = prev?.startedAt ?? (input.status === 'doing' ? now : null);
+    if (input.status === 'done' && !doneAt) doneAt = now;
+    if (input.status !== 'done') doneAt = null;
+    const body = {
+      taskId, boardId, title: input.title.trim() || input.subject.trim(), subject: input.subject.trim(), plannedAt: input.plannedAt, status: input.status,
+      result: input.result.trim(), note: input.note.trim(), startedAt, doneAt, sort: prev?.sort ?? input.sort, attachments: [...input.keep, ...added], deletedAt: prev?.deletedAt ?? null,
+    };
+    let saved: TaskSubItem;
+    if (prev) saved = isReal ? await itemsApi.updateItem(prev.id, body) : { ...prev, ...body };
+    else saved = isReal ? (await itemsApi.insertItems([body]))[0] : { ...body, id: newId('it'), createdAt: now };
+    if (!isReal) putMockItem(saved);
+    const d = diffItem(prev, saved);
+    if (d.changed.length > 0) await writeLog(boardId, taskId, saved.id, actionOf(prev, saved, d.changed), prev ? d.before : null, d.after, reason.trim());
+    return saved;
+  }, [isReal, writeLog]);
+
+  const addTaskItems = useCallback(async (boardId: string, taskId: string, rows: { title: string; subject: string; plannedAt: string | null }[], startSort: number): Promise<void> => {
+    const clean = rows.map((r) => ({ ...r, title: r.title.trim(), subject: r.subject.trim() })).filter((r) => r.title || r.subject);
+    if (clean.length === 0) throw new Error('Hãy nhập ít nhất một đầu việc.');
+    const bodies = clean.map((r, i) => ({ taskId, boardId, title: r.title || r.subject, subject: r.subject, plannedAt: r.plannedAt, status: 'todo' as ItemStatus, result: '', note: '', startedAt: null, doneAt: null, sort: startSort + i, attachments: [], deletedAt: null }));
+    const made: TaskSubItem[] = isReal ? await itemsApi.insertItems(bodies) : bodies.map((b) => ({ ...b, id: newId('it'), createdAt: new Date().toISOString() }));
+    if (!isReal) made.forEach(putMockItem);
+    for (const it of made) await writeLog(boardId, taskId, it.id, 'tao_dau_viec', null, { title: it.title, subject: it.subject, plannedAt: it.plannedAt, status: it.status }, '');
+  }, [isReal, writeLog]);
+
+  const setTaskItemDeleted = useCallback(async (boardId: string, item: TaskSubItem, deleted: boolean, reason = ''): Promise<void> => {
+    const { id, createdAt, ...rest } = item;
+    const body = { ...rest, deletedAt: deleted ? new Date().toISOString() : null };
+    const saved = isReal ? await itemsApi.updateItem(id, body) : { ...item, ...body };
+    if (!isReal) putMockItem(saved);
+    void createdAt;
+    await writeLog(boardId, item.taskId, id, deleted ? 'xoa' : 'khoi_phuc', { title: item.title, subject: item.subject, status: item.status }, null, reason.trim());
+  }, [isReal, writeLog]);
+
+  const reorderTaskItems = useCallback(async (_boardId: string, taskId: string, ordered: TaskSubItem[]): Promise<void> => {
+    const order = ordered.map((it, i) => ({ id: it.id, sort: i }));
+    if (isReal) await itemsApi.setItemOrder(order);
+    else mockItems.current.set(taskId, ordered.map((it, i) => ({ ...it, sort: i })));
+  }, [isReal]);
+
+  const addTaskNote = useCallback(async (boardId: string, taskId: string, itemId: string | null, noteText: string): Promise<void> => {
+    if (!noteText.trim()) throw new Error('Hãy nhập nội dung ghi chú.');
+    await writeLog(boardId, taskId, itemId, 'ghi_chu', null, null, noteText.trim());
+  }, [writeLog]);
+
+  const setTaskProgress = useCallback(async (boardId: string, taskId: string, progress: TaskProgress): Promise<void> => {
+    const prev = boardsRef.current.find((b) => b.id === boardId)?.tasks.find((t) => t.id === taskId);
+    const completedAt = progress === 'done' ? new Date().toISOString() : null;
+    let kept = true;
+    if (isReal) kept = await api.updateTaskProgress(taskId, progress, completedAt);
+    patch(boardId, (b) => ({ ...b, tasks: b.tasks.map((t) => (t.id === taskId ? { ...t, progress, completedAt: kept ? completedAt : (t.completedAt ?? null) } : t)) }));
+    if (prev && (prev.progress ?? 'todo') !== progress) {
+      // Nhật ký của việc tổng: máy chủ chưa chạy SQL cập nhật thì bỏ qua, không làm hỏng việc đổi trạng thái.
+      try { await writeLog(boardId, taskId, null, 'doi_trang_thai_tong', { progress: prev.progress ?? 'todo' }, { progress }, ''); } catch { /* chưa có bảng nhật ký */ }
+    }
+  }, [isReal, patch, writeLog]);
 
   const ensurePersonalBoard = useCallback(async (): Promise<BoardData> => {
     const have = boards.find((b) => b.settings.personal && !b.deletedAt && (b.access ?? 'owner') === 'owner');
@@ -1025,6 +1141,6 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     rateCard, addComment, deleteOwnComment, setCommentStatus, deleteComment, setTeacherStars,
     inviteCollaborator, changeCollaboratorRole, removeCollaborator, leaveBoard,
     createBoard, duplicateBoard, updateMeta, addCard, setCardLayout, setStatus, setGrade, vote, deleteCard, moveCards, loadRosterNames, reassignCard, findCardByCode, findCardsByName, saveCardByCode, clearSubmissions, updateCardAttachments, removeStoredAttachments,
-    setRoster, setSettings, saveLesson, removeLesson, saveTask, removeTask, regenerateLink, changeJoinCode, setJoinEnabled, resolveJoinCode, setTaskProgress, ensurePersonalBoard, rollRecurring, loadAttendance, addAttendanceSession, removeAttendanceSession, setAttendancePresent, addResource, removeResource, updateResource, reorderResources, assignToBoards, setProgram, setArchived, setTrashed, deleteForever, setTemplate, loadActivity,
+    setRoster, setSettings, saveLesson, removeLesson, saveTask, removeTask, regenerateLink, changeJoinCode, setJoinEnabled, resolveJoinCode, setTaskProgress, loadTaskItems, loadItemSummaries, saveTaskItem, addTaskItems, setTaskItemDeleted, reorderTaskItems, addTaskNote, ensurePersonalBoard, rollRecurring, loadAttendance, addAttendanceSession, removeAttendanceSession, setAttendancePresent, addResource, removeResource, updateResource, reorderResources, assignToBoards, setProgram, setArchived, setTrashed, deleteForever, setTemplate, loadActivity,
   };
 }

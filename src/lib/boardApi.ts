@@ -5,7 +5,7 @@ import type {
   AttendanceSession, CardComment, ActivityEntry, Attachment, BoardAccess, BoardData, CollabRole, Collaborator, CardLayoutPatch, CardLocation, VennRegion, BoardMode, CardStatus, LinkMode, Lesson, PinnedResource, PollOption, ResourceKind, RosterMember, SubmissionCard, TaskItem, TaskKind,
 } from '../types/board';
 import { linkToAttachment } from './embeds';
-import type { BoardSettings } from '../types/board';
+import type { BoardSettings, RepeatRule, TaskProgress } from '../types/board';
 import type { BoardTemplate } from '../data/boardTemplates';
 import { parseSettings } from './boardSettings';
 import { supabase } from './supabase';
@@ -45,6 +45,7 @@ interface TaskDb {
   attachments?: Attachment[] | null; needs_evidence?: boolean | null; ack_only?: boolean | null;
   progress?: string | null; priority?: string | null; assignee_emails?: string[] | null;
   repeat_rule?: string | null; series_id?: string | null;
+  category?: string | null; start_at?: string | null; report_due_at?: string | null; completed_at?: string | null; repeat_until?: string | null;
 }
 interface LessonDb { id: string; board_id?: string; title: string; description: string | null; sort?: number; starts_at?: string | null; ends_at?: string | null }
 
@@ -54,11 +55,12 @@ function toTask(t: TaskDb): TaskItem {
     instructions: t.instructions ?? '', assignedAt: t.assigned_at ?? null, dueAt: t.due_at ?? null, allowLate: !!t.allow_late,
     targetUnits: t.target_units ?? [],
     attachments: t.attachments ?? [], needsEvidence: !!t.needs_evidence, ackOnly: !!t.ack_only,
-    progress: t.progress === 'doing' || t.progress === 'done' ? t.progress : 'todo',
+    progress: (['doing', 'waiting', 'postponed', 'cancelled', 'done'] as const).find((p) => p === t.progress) ?? 'todo',
     priority: t.priority === 'high' || t.priority === 'low' ? t.priority : 'normal',
     assigneeEmails: t.assignee_emails ?? [],
-    repeat: t.repeat_rule === 'weekly' || t.repeat_rule === 'monthly' ? t.repeat_rule : 'none',
+    repeat: (['daily', 'weekdays', 'weekly', 'monthly', 'quarterly', 'semester', 'yearly'] as const).find((r) => r === t.repeat_rule) ?? 'none',
     seriesId: t.series_id ?? undefined,
+    category: t.category ?? undefined, startAt: t.start_at ?? null, reportDueAt: t.report_due_at ?? null, completedAt: t.completed_at ?? null, repeatUntil: t.repeat_until ?? null,
   };
 }
 function toLesson(l: LessonDb): Lesson {
@@ -563,8 +565,9 @@ export interface TaskInput {
   attachments?: Attachment[]; needsEvidence?: boolean; ackOnly?: boolean;
   /** Tệp và liên kết MỚI chọn khi giao việc; kho lưu trữ chuẩn bị rồi ghép vào attachments trước khi gửi lên máy chủ. */
   files?: File[]; links?: string[];
-  progress?: 'todo' | 'doing' | 'done'; priority?: 'high' | 'normal' | 'low'; assigneeEmails?: string[];
-  repeat?: 'none' | 'weekly' | 'monthly'; seriesId?: string;
+  progress?: TaskProgress; priority?: 'high' | 'normal' | 'low'; assigneeEmails?: string[];
+  repeat?: RepeatRule; seriesId?: string;
+  category?: string; startAt?: string | null; reportDueAt?: string | null; completedAt?: string | null; repeatUntil?: string | null;
 }
 
 const lessonRow = (i: LessonInput) => ({ title: i.title, description: i.description, starts_at: i.startsAt, ends_at: i.endsAt });
@@ -575,6 +578,9 @@ const taskRow = (i: TaskInput) => ({
   progress: i.progress ?? 'todo', priority: i.priority ?? 'normal',
   assignee_emails: (i.assigneeEmails ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean),
   repeat_rule: i.repeat ?? 'none', series_id: i.seriesId ?? null,
+  // Cột mới (Đợt A) chỉ gửi khi có giá trị: máy chủ chưa chạy SQL cập nhật thì các chức năng cũ vẫn lưu bình thường.
+  ...(i.category ? { category: i.category } : {}), ...(i.startAt ? { start_at: i.startAt } : {}), ...(i.reportDueAt ? { report_due_at: i.reportDueAt } : {}),
+  ...(i.completedAt ? { completed_at: i.completedAt } : {}), ...(i.repeatUntil ? { repeat_until: i.repeatUntil } : {}),
 });
 
 export async function createLesson(boardId: string, input: LessonInput, sort: number): Promise<Lesson> {
@@ -628,9 +634,16 @@ export async function deleteAttendanceSession(boardId: string, day: string): Pro
 }
 
 /** Đổi cột Kanban của một việc riêng. */
-export async function updateTaskProgress(id: string, progress: 'todo' | 'doing' | 'done'): Promise<void> {
-  const { error } = await db().from('board_tasks').update({ progress }).eq('id', id);
-  if (error) fail('Không đổi được trạng thái việc', error.message);
+/** Đổi trạng thái việc; trả về true nếu đã ghi được cả ngày hoàn thành thực tế (máy chủ chưa chạy SQL cập nhật thì vẫn đổi trạng thái được, chỉ thiếu ngày). */
+export async function updateTaskProgress(id: string, progress: TaskProgress, completedAt: string | null = null): Promise<boolean> {
+  const { error } = await db().from('board_tasks').update({ progress, completed_at: completedAt }).eq('id', id);
+  if (!error) return true;
+  if (/completed_at|column/i.test(error.message)) {
+    const retry = await db().from('board_tasks').update({ progress }).eq('id', id);
+    if (retry.error) fail('Không đổi được trạng thái việc', retry.error.message);
+    return false;
+  }
+  fail('Không đổi được trạng thái việc', error.message);
 }
 
 /** Một việc được giao cho tôi ở bảng của người khác (hàm my_tasks của máy chủ). */

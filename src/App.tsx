@@ -167,8 +167,9 @@ export default function App() {
       )}
       <div className="lg:flex">
       {teacherNav && <NavRail variant="rail" active={activePage} onGo={go} onArchive={() => setArchiveOpen(true)} storedCount={storedCount} hasBoard={!!board} />}
-      <div className="min-w-0 flex-1">
-      {renderBody()}
+      {/* Cột nội dung cao ít nhất bằng màn hình: nội dung ngắn thì chân trang vẫn nằm sát đáy trang. */}
+      <div className="flex min-h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col">
+      <div className="flex-1">{renderBody()}</div>
 
       {/* Chân trang mỏng một hàng: nền xanh đêm chuyển sắc cùng tông với màu chính, chữ sáng; trên điện thoại gọn thành hai dòng. */}
       <footer className="bg-gradient-to-r from-[#0a1730] via-[#0f2a5c] to-[#0b4fd0] px-4 pb-[88px] pt-2.5 text-sm text-white/80 print:hidden sm:pb-3 sm:pt-3">

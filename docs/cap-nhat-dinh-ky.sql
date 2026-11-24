@@ -9,6 +9,6 @@
 alter table public.board_tasks add column if not exists repeat_rule text not null default 'none';
 alter table public.board_tasks add column if not exists series_id uuid;
 
-do $$ begin
-  alter table public.board_tasks add constraint board_tasks_repeat_chk check (repeat_rule in ('none','weekly','monthly'));
-exception when duplicate_object then null; end $$;
+-- Cho phép lặp hằng ngày và các ngày thứ 2–6 (bỏ ràng buộc cũ rồi tạo lại; chạy lại nhiều lần vẫn an toàn).
+alter table public.board_tasks drop constraint if exists board_tasks_repeat_chk;
+alter table public.board_tasks add constraint board_tasks_repeat_chk check (repeat_rule in ('none','daily','weekdays','weekly','monthly','quarterly','semester','yearly'));

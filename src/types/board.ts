@@ -101,6 +101,49 @@ export interface Attachment {
   driveId?: string;
   /** true = tệp đã chuyển hẳn sang Drive của giáo viên và không còn trên hệ thống (url trỏ tới Drive). */
   archived?: boolean;
+  /** Phân loại minh chứng của đầu việc (ví dụ "Biên bản kiểm tra"). */
+  group?: string;
+}
+
+/** Quy tắc lặp của việc định kỳ: hằng ngày, thứ 2–6, tuần, tháng, quý, học kỳ (6 tháng), năm. */
+export type RepeatRule = 'none' | 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'quarterly' | 'semester' | 'yearly';
+
+/** Trạng thái việc riêng / việc tổng: chưa làm, đang làm, chờ bổ sung, hoãn, đã hủy, hoàn thành. */
+export type TaskProgress = 'todo' | 'doing' | 'waiting' | 'postponed' | 'cancelled' | 'done';
+
+/** Trạng thái một đầu việc thành phần. */
+export type ItemStatus = 'todo' | 'scheduled' | 'doing' | 'waiting' | 'done' | 'postponed' | 'cancelled';
+
+/** Đầu việc thành phần của một công việc tổng (ví dụ: kiểm tra từng giáo viên). */
+export interface TaskSubItem {
+  id: string;
+  taskId: string;
+  boardId: string;
+  title: string;
+  subject: string;
+  plannedAt: string | null;
+  status: ItemStatus;
+  result: string;
+  note: string;
+  startedAt: string | null;
+  doneAt: string | null;
+  sort: number;
+  attachments: Attachment[];
+  deletedAt: string | null;
+  createdAt: string;
+}
+
+/** Một dòng nhật ký tiến độ (chỉ thêm, không sửa). */
+export interface TaskLog {
+  id: string;
+  taskId: string;
+  itemId: string | null;
+  actor: string;
+  action: string;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  note: string;
+  createdAt: string;
 }
 
 /** Bài tập hoặc yêu cầu của một bài học; bài nộp gắn vào đây. */
@@ -125,12 +168,19 @@ export interface TaskItem {
   /** true = chỉ cần bấm "Tôi đã đọc" (công việc chỉ đọc, không nộp gì). */
   ackOnly?: boolean;
   /** Việc riêng: Cần làm / Đang làm / Xong (cột Kanban). Việc của tổ tính theo bài nộp, không dùng trường này. */
-  progress?: 'todo' | 'doing' | 'done';
+  progress?: TaskProgress;
   priority?: 'high' | 'normal' | 'low';
+  /** Nhóm công việc (mã trong lib/taskPlan). */
+  category?: string;
+  /** Ngày bắt đầu, hạn báo cáo / nộp, ngày hoàn thành thực tế, ngày kết thúc lặp. */
+  startAt?: string | null;
+  reportDueAt?: string | null;
+  completedAt?: string | null;
+  repeatUntil?: string | null;
   /** Giao riêng cho các Gmail này (chữ thường). Rỗng = cả tổ / theo đơn vị. Chỉ chủ bảng thấy, khách không nhận trường này. */
   assigneeEmails?: string[];
   /** Việc định kỳ: kỳ mới tự sinh khi tổ trưởng mở bảng. Chỉ kỳ mới nhất của chuỗi còn mang quy tắc lặp. */
-  repeat?: 'none' | 'weekly' | 'monthly';
+  repeat?: RepeatRule;
   /** Mã chuỗi định kỳ (mã của việc đầu tiên) để gom báo cáo theo kỳ. */
   seriesId?: string;
 }
