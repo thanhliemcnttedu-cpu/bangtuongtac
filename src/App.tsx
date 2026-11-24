@@ -12,6 +12,7 @@ import { useBoardStore } from './hooks/useBoardStore';
 import { AccountMenu } from './components/AccountMenu';
 import { BoardWorkspace } from './components/BoardWorkspace';
 import { LoginScreen } from './components/LoginScreen';
+import { NotificationBell } from './components/NotificationBell';
 
 // Nạp khi cần (chia nhỏ gói mã để trang mở nhanh).
 const ReportsPage = lazy(() => import('./components/ReportsPage').then((m) => ({ default: m.ReportsPage })));
@@ -40,6 +41,8 @@ export default function App() {
   // Trang "Công việc của tôi" (gom việc từ mọi bảng).
   const [myTasks, setMyTasks] = useState(() => new URLSearchParams(window.location.search).get('p') === 'my');
   const [reports, setReports] = useState(false);
+  // Bấm một thông báo trên chuông: mở "Công việc của tôi" và chọn đúng việc (n đổi để mở lại cùng một việc).
+  const [focusTask, setFocusTask] = useState<{ key: string; n: number } | null>(null);
   // Hỗ trợ: kiểm tra hệ thống + hướng dẫn nhanh; biểu ngữ hiện khi máy chủ còn thiếu phần cập nhật.
   const [help, setHelp] = useState<null | 'check' | 'guide' | 'drive'>(null);
   const [missingParts, setMissingParts] = useState(0);
@@ -116,7 +119,7 @@ export default function App() {
   const renderBody = () => {
     if (demoLogin) return <LoginScreen error="" onLogin={() => setDemoLogin(false)} onJoinCode={joinByCode} onOpenLink={openToken} />;
     if (showReports) return <Suspense fallback={<p className="p-10 text-center text-ink-2" role="status">Đang tải…</p>}><ReportsPage boards={owned} currentId={board?.id} /></Suspense>;
-    if (showMy) return <Suspense fallback={<p className="p-10 text-center text-ink-2" role="status">Đang tải…</p>}><MyTasksPage store={store} myEmail={accounts.current?.email ?? ''} onOpenBoard={pick} /></Suspense>;
+    if (showMy) return <Suspense fallback={<p className="p-10 text-center text-ink-2" role="status">Đang tải…</p>}><MyTasksPage store={store} myEmail={accounts.current?.email ?? ''} onOpenBoard={pick} focusTask={focusTask} /></Suspense>;
     if (showHome && !store.loading) return <Dashboard boards={navBoards} currentId={board?.id} canCreate={canCreate} onOpen={pick} onCreate={() => setCreating(true)}
       onArchive={async (ids) => { for (const id of ids) await store.setArchived(id, true); }} onTrash={async (ids) => { for (const id of ids) await store.setTrashed(id, true); }} />;
     if (board) return <BoardWorkspace key={board.id} board={board} store={store} role={effectiveRole} onSelectBoard={setActiveId} myEmail={accounts.current?.email ?? ''} openDrive={driveRequest} onOpenDriveHandled={() => setDriveRequest(false)} />;
@@ -144,6 +147,7 @@ export default function App() {
           {teacherNav && <BoardSwitcher boards={navBoards} currentId={showHome || showMy || showReports ? undefined : board?.id} onSelect={pick} />}
 
           <div className="ml-auto flex items-center gap-2">
+            {teacherNav && !store.loading && <NotificationBell store={store} myEmail={accounts.current?.email ?? ''} onOpen={(key) => { setFocusTask((f) => ({ key, n: (f?.n ?? 0) + 1 })); go('my'); }} />}
             {canCreate && !store.linkToken && !demoLogin && (
               <button type="button" onClick={() => setArchiveOpen(true)} className="btn-ghost relative" aria-label="Bảng đã đóng và thùng rác">
                 <Archive className="h-4 w-4" aria-hidden />

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DragEvent, FormEvent } from 'react';
 import {
-  AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle, Columns3, ExternalLink, ListChecks, Loader2, Paperclip, Pencil, Plus, Repeat, Search, Send, Share2, SquarePlus, Trash2,
+  AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle, Columns3, ExternalLink, ListChecks, Loader2, Paperclip, Pencil, Plus, Repeat, BarChart3, Search, Send, Share2, SquarePlus, Trash2,
 } from 'lucide-react';
 import type { RepeatRule, TaskItem, TaskProgress, TaskSubItem } from '../types/board';
 import type { BoardStore } from '../hooks/useBoardStore';
@@ -16,6 +16,7 @@ import { CATEGORIES, ITEM_STATUS, PROGRESS_META, PROGRESS_ORDER, categoryOf, fmt
 import { MyTaskForm } from './MyTaskForm';
 import { TaskDetailModal, itemInputOf } from './TaskDetailModal';
 import { TaskDocs } from './TaskDocs';
+import { TaskStats } from './TaskStats';
 import { ShareTasksModal } from './ShareTasksModal';
 import { renderRich } from '../lib/richText';
 
@@ -23,6 +24,8 @@ interface Props {
   store: BoardStore;
   myEmail: string;
   onOpenBoard: (boardId: string) => void;
+  /** Mở sẵn một việc (khi bấm thông báo trên chuông). */
+  focusTask?: { key: string; n: number } | null;
 }
 
 const KIND_TABS: { id: MyKind | 'all'; label: string }[] = [
@@ -51,14 +54,14 @@ const closed = (s: MyStatus): boolean => s === 'done' || s === 'cancelled';
  * "Công việc của tôi": bảng điều khiển (thẻ thống kê bấm được, việc cần quan tâm, tiến độ tuần), danh sách phân cấp mở rộng
  * (công việc tổng → đầu việc con → ghi chú, tài liệu), Kanban và lịch tuần. Mọi chế độ dùng chung một nguồn dữ liệu.
  */
-export function MyTasksPage({ store, myEmail, onOpenBoard }: Props) {
+export function MyTasksPage({ store, myEmail, onOpenBoard, focusTask }: Props) {
   const [assigned, setAssigned] = useState<AssignedTask[]>([]);
   const [loadingAssigned, setLoadingAssigned] = useState(false);
   const [kind, setKind] = useState<MyKind | 'all'>('all');
   const [focus, setFocus] = useState<Focus>('all');
   const [category, setCategory] = useState<string>('all');
   const [query, setQuery] = useState('');
-  const [view, setView] = useState<'list' | 'kanban' | 'week'>('list');
+  const [view, setView] = useState<'list' | 'kanban' | 'week' | 'stats'>('list');
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const [now, setNow] = useState(() => Date.now());
   const [error, setError] = useState('');
@@ -135,6 +138,14 @@ export function MyTasksPage({ store, myEmail, onOpenBoard }: Props) {
     .sort((a, b) => (a.status === 'overdue' ? 0 : 1) - (b.status === 'overdue' ? 0 : 1) || Date.parse(a.dueAt ?? '') - Date.parse(b.dueAt ?? '')).slice(0, 3),
   // eslint-disable-next-line react-hooks/exhaustive-deps
   [base, now]);
+
+  // Bấm thông báo trên chuông: về danh sách, bỏ bộ lọc, mở đúng việc và cuộn tới.
+  useEffect(() => {
+    if (!focusTask) return;
+    setView('list'); setFocus('all'); setCategory('all'); setQuery(''); setKind('all'); setOpenKey(focusTask.key);
+    const t = window.setTimeout(() => document.getElementById(`task-${focusTask.key}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 150);
+    return () => window.clearTimeout(t);
+  }, [focusTask]);
 
   const run = async (fn: () => Promise<void>): Promise<void> => { setError(''); try { await fn(); } catch (e) { setError(e instanceof Error ? e.message : 'Không thực hiện được.'); } };
   const saved = (msg: string): void => { setNow(Date.now()); setNotice(msg); void refreshItems(); window.setTimeout(() => setNotice(''), 4000); };
@@ -286,7 +297,7 @@ export function MyTasksPage({ store, myEmail, onOpenBoard }: Props) {
           <button type="button" onClick={() => setFormOpen(true)} className="btn-primary max-lg:min-h-[44px]"><SquarePlus className="h-4 w-4" aria-hidden /> Thêm việc</button>
           <button type="button" onClick={() => setShareOpen(true)} className="btn-ghost max-lg:min-h-[44px]" aria-label="Chia sẻ Công việc của tôi"><Share2 className="h-4 w-4" aria-hidden /> <span className="hidden sm:inline">Chia sẻ</span>{personalShare && <span className="ml-1 h-2 w-2 rounded-full bg-emerald-500" title="Đang chia sẻ" aria-hidden />}</button>
           <div className="flex rounded-full border-[1.5px] border-brand-200 bg-white p-0.5" role="group" aria-label="Cách xem">
-            {([['list', 'Danh sách', ListChecks], ['kanban', 'Kanban', Columns3], ['week', 'Lịch tuần', CalendarDays]] as const).map(([id, label, Icon]) => (
+            {([['list', 'Danh sách', ListChecks], ['kanban', 'Kanban', Columns3], ['week', 'Lịch tuần', CalendarDays], ['stats', 'Thống kê', BarChart3]] as const).map(([id, label, Icon]) => (
               <button key={id} type="button" aria-pressed={view === id} onClick={() => setView(id)} className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold max-lg:min-h-[44px] max-lg:min-w-[44px] max-lg:justify-center ${view === id ? 'bg-brand-600 text-white' : 'text-ink-2 hover:bg-brand-50'}`}><Icon className="h-4 w-4" aria-hidden /> <span className="hidden sm:inline">{label}</span></button>
             ))}
           </div>
@@ -366,6 +377,8 @@ export function MyTasksPage({ store, myEmail, onOpenBoard }: Props) {
           {personal.length === 0 && <p className="text-sm text-ink-2 md:col-span-2 xl:col-span-5">Kanban chỉ gồm việc riêng. Bấm “Thêm việc” để tạo.</p>}
         </section>
       )}
+
+      {view === 'stats' && <TaskStats tasks={base} items={items} now={now} />}
 
       {view === 'week' && (
         <section aria-label="Lịch tuần">

@@ -37,6 +37,8 @@ export interface MyTask {
   /** Tài liệu, liên kết đính kèm và kiểu lặp của việc. */
   attachments?: Attachment[];
   repeat?: RepeatRule;
+  /** Mã chuỗi của việc lặp (gom các lượt để thống kê). */
+  seriesId?: string;
 }
 
 const dueMs = (iso: string | null): number | null => { const t = iso ? Date.parse(iso) : NaN; return Number.isNaN(t) ? null : t; };
@@ -68,7 +70,7 @@ export function buildMyTasks(boards: BoardData[], myEmail: string, assigned: Ass
     if (b.deletedAt || b.archivedAt) continue;
     seenBoards.add(b.id);
     const mine = (b.access ?? 'owner') === 'owner';
-    const base = (t: TaskItem) => ({ boardId: b.id, boardTitle: b.title, shareToken: b.shareToken, taskId: t.id, label: t.label, instructions: t.instructions ?? '', dueAt: t.dueAt ?? null, priority: t.priority ?? 'normal', external: false, needsEvidence: t.needsEvidence, ackOnly: t.ackOnly, attachments: t.attachments ?? [], repeat: t.repeat ?? 'none', category: t.category, startAt: t.startAt ?? null, reportDueAt: t.reportDueAt ?? null, completedAt: t.completedAt ?? null });
+    const base = (t: TaskItem) => ({ boardId: b.id, boardTitle: b.title, shareToken: b.shareToken, taskId: t.id, label: t.label, instructions: t.instructions ?? '', dueAt: t.dueAt ?? null, priority: t.priority ?? 'normal', external: false, needsEvidence: t.needsEvidence, ackOnly: t.ackOnly, attachments: t.attachments ?? [], repeat: t.repeat ?? 'none', category: t.category, seriesId: t.seriesId, startAt: t.startAt ?? null, reportDueAt: t.reportDueAt ?? null, completedAt: t.completedAt ?? null });
     if (b.settings.personal && mine) {
       for (const t of b.tasks) out.push({ ...base(t), key: `p-${t.id}`, kind: 'personal', progress: t.progress ?? 'todo', status: personalStatus(t.progress ?? 'todo', t.dueAt ?? null, now) });
       continue;
