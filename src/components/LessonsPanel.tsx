@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { renderRich } from '../lib/richText';
 import type { DragEvent } from 'react';
 import {
@@ -87,17 +87,57 @@ function siteHost(r: PinnedResource): string | null {
  * (nhiều trang hiện đại chỉ có SVG, dịch vụ của Google không đọc được SVG và trả về hình quả địa cầu mặc định), rồi dịch vụ favicon của Google;
  * không có cái nào thì dùng biểu tượng loại tài liệu. Ảnh nhỏ 16px từ Google bị coi là hình mặc định vì Google luôn trả cỡ đó khi không tìm thấy.
  */
-function SiteIcon({ host: origin, fallback: Fallback }: { host: string; fallback: LucideIcon }) {
+function SiteIcon({ host: origin, fallback: Fallback, size = 'sm' }: { host: string; fallback?: LucideIcon; size?: 'sm' | 'lg' }) {
   const [i, setI] = useState(0);
   const domain = new URL(origin).hostname.replace(/^www\./, '');
-  const sources = [`${origin}/favicon.svg`, `${origin}/favicon.ico`, `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`];
-  if (i >= sources.length) return <Fallback className="h-6 w-6" aria-hidden />;
+  const sources = [`${origin}/favicon.svg`, `${origin}/favicon.ico`, `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=${size === 'lg' ? 128 : 64}`];
+  if (i >= sources.length) return Fallback ? <Fallback className="h-6 w-6" aria-hidden /> : null;
   const google = i === sources.length - 1;
   return (
     <img key={i} src={sources[i]} alt="" loading="lazy" referrerPolicy="no-referrer"
       onError={() => setI(i + 1)}
       onLoad={(e) => { if (google && e.currentTarget.naturalWidth <= 16) setI(i + 1); }}
-      className="h-9 w-9 rounded-lg bg-white object-contain" />
+      className={size === 'lg' ? 'h-24 w-24 object-contain drop-shadow-sm sm:h-28 sm:w-28' : 'h-9 w-9 rounded-lg bg-white object-contain'} />
+  );
+}
+
+/**
+ * Khung giữa thẻ khi thẻ chưa có mô tả, bước hay ảnh: logo lớn của trang web để học sinh nhìn là nhận ra ngay phần mềm, trang web;
+ * không lấy được logo (hoặc không phải liên kết) thì hiện biểu tượng loại tài liệu cỡ lớn, để mọi thẻ cùng một khuôn.
+ */
+function SiteHero({ origin, Icon, href, soft, tint }: { origin: string | null; Icon: LucideIcon; href?: string; soft?: string; tint?: string }) {
+  const [failed, setFailed] = useState(false);
+  const host = origin ? new URL(origin).hostname.replace(/^www\./, '') : '';
+  const logo = origin && !failed;
+  const body = (
+    <>
+      {logo
+        ? <SiteLogoProbe origin={origin} onFail={() => setFailed(true)} />
+        : <span className="flex h-24 w-24 items-center justify-center rounded-3xl bg-white/80 ring-1 ring-brand-100 sm:h-28 sm:w-28" style={{ color: tint ?? '#1668f2' }}><Icon className="h-12 w-12 sm:h-14 sm:w-14" aria-hidden /></span>}
+      {host && <span className="mt-2 max-w-full truncate text-xs font-bold text-ink-2">{host}</span>}
+    </>
+  );
+  const cls = 'mx-3 mb-3 flex min-h-[10rem] flex-1 flex-col items-center justify-center rounded-2xl p-4 ring-1 ring-brand-100';
+  const st = { background: soft ?? 'linear-gradient(160deg,#f3f8ff,#e8f1ff)' };
+  return href
+    ? <a href={href} target="_blank" rel="noopener noreferrer" aria-label={`Mở ${host || 'liên kết'}`} className={`${cls} transition hover:ring-brand-300`} style={st}>{body}</a>
+    : <div className={cls} style={st}>{body}</div>;
+}
+
+/** Như SiteIcon cỡ lớn nhưng báo lại khi mọi nguồn đều không có logo. */
+function SiteLogoProbe({ origin, onFail }: { origin: string; onFail: () => void }) {
+  const [i, setI] = useState(0);
+  const [low, setLow] = useState(false);
+  const domain = new URL(origin).hostname.replace(/^www\./, '');
+  const sources = [`${origin}/favicon.svg`, `${origin}/favicon.ico`, `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`];
+  useEffect(() => { if (i >= sources.length) onFail(); // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [i]);
+  if (i >= sources.length) return null;
+  const google = i === sources.length - 1;
+  return (
+    <img key={i} src={sources[i]} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setI(i + 1)}
+      onLoad={(e) => { const w = e.currentTarget.naturalWidth; if (google && w <= 16) setI(i + 1); else setLow(w > 0 && w < 64); }}
+      className={`object-contain drop-shadow-sm ${low ? 'h-16 w-16' : 'h-24 w-24 sm:h-28 sm:w-28'}`} />
   );
 }
 
@@ -125,7 +165,7 @@ function MaterialCard({ r, canManage, onOpen, onDelete, onEdit, drag }: { r: Pin
   const photos = atts.filter((a) => a.type === 'image' && a.url && !a.driveId).slice(0, 3);
   return (
     <li onDragOver={drag?.onDragOver} onDrop={drag?.onDrop}
-      className={`relative flex flex-col overflow-hidden rounded-2xl border bg-white shadow-soft transition duration-200 hover:-translate-y-0.5 hover:shadow-lift ${drag?.over ? 'border-brand-500 ring-4 ring-brand-200' : 'border-teal2-100'} ${drag?.dragging ? 'opacity-40' : ''}`}>
+      className={`relative flex min-h-[19.5rem] flex-col overflow-hidden rounded-2xl border bg-white shadow-soft transition duration-200 hover:-translate-y-0.5 hover:shadow-lift ${drag?.over ? 'border-brand-500 ring-4 ring-brand-200' : 'border-teal2-100'} ${drag?.dragging ? 'opacity-40' : ''}`}>
       <span className="h-1.5 w-full" style={{ background: col?.bar ?? KIND_BAR[r.kind] }} aria-hidden />
       <button type="button" onClick={onOpen} className={`flex items-start gap-3 p-3 text-left ${drag ? 'pr-44' : 'pr-16'}`}>
         <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${col ? '' : k.tone}`} style={col ? { background: col.soft, color: col.text } : undefined}>{host ? <SiteIcon host={host} fallback={Icon} /> : <Icon className="h-6 w-6" aria-hidden />}</span>
@@ -134,6 +174,10 @@ function MaterialCard({ r, canManage, onOpen, onDelete, onEdit, drag }: { r: Pin
           <span className="block text-xs text-ink-2">{k.label}{r.sizeLabel ? ` · ${r.sizeLabel}` : ''}{atts.length > 1 ? ` · ${atts.length} đính kèm` : ''}</span>
         </span>
       </button>
+      {!r.description && !(r.steps && r.steps.length > 0) && photos.length === 0 && (
+        <SiteHero origin={host} Icon={Icon} soft={col?.soft} tint={col?.text}
+          href={(() => { const f = actions.find((x) => (x.type === 'link' || x.type === 'embed') && !x.driveId); return f?.url ?? (legacyLink || undefined); })()} />
+      )}
       <div className="flex flex-col gap-2.5 px-3 pb-3">
         {r.badge && <span className="chip w-fit" style={{ background: col?.soft ?? '#e3eeff', color: col?.text ?? '#0b4fd0', boxShadow: 'none' }}>{r.badge}</span>}
         {r.description && <p className="text-sm leading-relaxed text-ink-2">{renderMarkup(r.description)}</p>}
