@@ -7,6 +7,7 @@ import type { LucideIcon } from 'lucide-react';
 import type { Attachment, BoardData, Lesson, PinnedResource, ResourceKind, TaskItem } from '../types/board';
 import { KIND_LABEL, URGENCY_TEXT, countdown, formatDateTime, groupTasks, taskPhase, taskProgress, timeElapsed, urgencyOf, wordsFor } from '../lib/lessons';
 import { MaterialReader } from './MaterialReader';
+import { TaskDocs } from './TaskDocs';
 import { docKindOf, formatSize } from '../lib/media';
 import { colorOf } from '../lib/cardColors';
 import { renderMarkup } from '../lib/markup';
@@ -238,7 +239,6 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
     const mayPost = canSubmit && !canManage && phase !== 'scheduled' && !(phase === 'overdue' && !t.allowLate);
     const targets = t.targetUnits ?? [];
     const team = board.settings.scope === 'team';
-    const docs = t.attachments ?? [];
     return (
       <li key={t.id} className={`rounded-2xl border-2 border-l-[10px] bg-white p-3 transition duration-200 hover:-translate-y-0.5 hover:shadow-soft ${kid ? 'sm:p-4' : ''} ${pal.task}`}>
         <div className="flex flex-wrap items-start justify-between gap-2">
@@ -251,14 +251,7 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
               <span className={`${kid ? 'text-lg' : 'text-sm'} font-extrabold`}>{t.label}</span>
             </p>
             {t.instructions && <p className={`mt-1 ${kid ? 'text-base text-ink' : 'text-sm text-ink-2'}`}>{t.instructions}</p>}
-            {docs.length > 0 && (
-              <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Tài liệu và liên kết của công việc">
-                {docs.map((a, i) => (a.url ? (
-                  <li key={`${a.url}-${i}`}><a href={a.url} target="_blank" rel="noopener noreferrer" className="chip bg-white text-brand-800 ring-brand-200 hover:bg-brand-50">
-                    {a.type === 'link' || a.type === 'embed' ? <Link2 className="h-3.5 w-3.5" aria-hidden /> : <FileText className="h-3.5 w-3.5" aria-hidden />} {a.label || a.name}</a></li>
-                ) : null))}
-              </ul>
-            )}
+            <TaskDocs task={t} />
           </div>
           <PhaseChip task={t} now={now} />
         </div>

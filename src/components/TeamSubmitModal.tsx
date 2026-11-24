@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ClipboardEvent, FormEvent } from 'react';
-import { CheckCircle2, FileText, Link2, Send } from 'lucide-react';
+import { CheckCircle2, Send } from 'lucide-react';
 import type { BoardData, SubmissionCard } from '../types/board';
 import { usePostDraft } from '../hooks/usePostDraft';
 import type { PostDraft } from '../hooks/usePostDraft';
@@ -9,6 +9,7 @@ import { normalize } from '../lib/boardLogic';
 import { checkSubmit, countdown, formatDateTime, taskPhase } from '../lib/lessons';
 import { ModalShell } from './ModalShell';
 import { AttachmentPicker } from './attach/AttachmentPicker';
+import { TaskDocs } from './TaskDocs';
 
 interface Props {
   board: BoardData;
@@ -46,7 +47,6 @@ export function TeamSubmitModal({ board, roster, initialName = '', initialTaskId
   const ack = !!task?.ackOnly;
   const timing = task ? checkSubmit({ ...task, targetUnits: [] }, '', now) : null;
   const picked = roster.find((m) => normalize(m.name) === normalize(draft.authorName));
-  const docs = task?.attachments ?? [];
 
   const pickName = (value: string): void => {
     set('authorName', value);
@@ -115,14 +115,7 @@ export function TeamSubmitModal({ board, roster, initialName = '', initialTaskId
           <div className="space-y-1.5 rounded-2xl bg-brand-50/70 p-3 text-sm" aria-live="polite">
             <p className="text-base font-extrabold text-ink">{task.label}</p>
             {task.instructions && <p className="whitespace-pre-line text-ink">{task.instructions}</p>}
-            {docs.length > 0 && (
-              <ul className="flex flex-wrap gap-1.5" aria-label="Tài liệu và liên kết">
-                {docs.map((a, i) => (a.url ? (
-                  <li key={`${a.url}-${i}`}><a href={a.url} target="_blank" rel="noopener noreferrer" className="chip bg-white text-brand-800 ring-brand-200 hover:bg-brand-50">
-                    {a.type === 'link' || a.type === 'embed' ? <Link2 className="h-3.5 w-3.5" aria-hidden /> : <FileText className="h-3.5 w-3.5" aria-hidden />} {a.label || a.name}</a></li>
-                ) : null))}
-              </ul>
-            )}
+            <TaskDocs task={task} className="" />
             {task.dueAt && <p className="text-xs text-ink-2">Hạn: <b>{formatDateTime(task.dueAt)}</b> ({countdown(task.dueAt, now)})</p>}
             {timing && !timing.ok && <p className="text-xs font-bold text-rose-700">{timing.reason}</p>}
             {timing?.ok && timing.late && <p className="text-xs font-bold text-amber-800">Đã quá hạn: bài nộp sẽ được ghi là “Nộp muộn”.</p>}

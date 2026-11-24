@@ -53,6 +53,9 @@ const TOOLS: { id: Tool | 'file'; label: string; Icon: LucideIcon }[] = [
   { id: 'location', label: 'Vị trí', Icon: MapPin },
 ];
 
+/** Kiểu chung của các ô công cụ đính kèm. */
+const TILE = 'flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-2xl border-[1.5px] border-brand-200 bg-white px-1 py-2 text-[11px] font-bold leading-tight text-brand-800 transition duration-150 hover:-translate-y-0.5 hover:border-brand-400 hover:bg-brand-50 sm:text-xs [@media(min-height:800px)_and_(min-width:640px)]:min-h-[84px] [@media(min-height:800px)_and_(min-width:640px)]:text-sm';
+
 const TYPE_LABEL: Record<string, string> = { image: 'Ảnh', video: 'Video', audio: 'Âm thanh', file: 'Tệp' };
 
 function FileRow({ file, onRemove }: { file: File; onRemove: () => void }) {
@@ -97,8 +100,7 @@ export function AttachmentPicker({ files, links, poll, location, onLocation, err
 
   const pick = (id: Tool | 'file'): void => {
     setMsg('');
-    if (id === 'file') inputRef.current?.click();
-    else setTool(id);
+    if (id !== 'file') setTool(id);
   };
 
   const pasteFromClipboard = async (): Promise<void> => {
@@ -129,11 +131,6 @@ export function AttachmentPicker({ files, links, poll, location, onLocation, err
     const text = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
     onIngest(Array.from(e.dataTransfer.files), text);
   };
-
-  const hidden = (
-    <input ref={inputRef} type="file" multiple className="sr-only" tabIndex={-1} accept={ACCEPT_ATTR}
-      onChange={(e) => { const list = Array.from(e.target.files ?? []); if (list.length) onAddFiles(list); e.target.value = ''; }} />
-  );
 
   let panel: React.ReactNode = null;
   const mindmap = tool === 'mindmap' ? <MindMapEditor title="Sơ đồ tư duy của em" rootText="Ý chính" onDone={take} onClose={() => setTool(null)} /> : null;
@@ -189,7 +186,6 @@ export function AttachmentPicker({ files, links, poll, location, onLocation, err
   return (
     <div onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={onDrop}
       className={`rounded-2xl border-2 border-dashed p-3 transition duration-150 ${dragging ? 'border-brand-600 bg-brand-50' : 'border-brand-200 bg-brand-50/40'}`}>
-      {hidden}
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <span className="field-label !mb-0">{label}{required ? ' *' : ''} <span className="font-normal text-ink-2">({count}/{MAX_ATTACHMENTS}{required ? '' : ', không bắt buộc'})</span></span>
         <button type="button" onClick={() => void pasteFromClipboard()} className="btn-ghost btn-sm"><ClipboardPaste className="h-3.5 w-3.5" aria-hidden /> Dán từ bộ nhớ tạm</button>
@@ -202,10 +198,20 @@ export function AttachmentPicker({ files, links, poll, location, onLocation, err
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
             {TOOLS.filter((t) => t.id === 'file' || !hideTools.includes(t.id)).map(({ id, label, Icon }) => {
               const disabled = full && id !== 'poll';
+              const icon = <Icon className="h-5 w-5 [@media(min-height:800px)_and_(min-width:640px)]:h-7 [@media(min-height:800px)_and_(min-width:640px)]:w-7" aria-hidden />;
+              if (id === 'file') {
+                return (
+                  <label key={id} className={`${TILE} cursor-pointer focus-within:ring-2 focus-within:ring-brand-500 ${full ? 'pointer-events-none opacity-40' : ''}`}>
+                    <input ref={inputRef} type="file" multiple className="sr-only" accept={ACCEPT_ATTR} disabled={full} aria-label="Tải nhiều tệp"
+                      onChange={(e) => { const list = Array.from(e.target.files ?? []); if (list.length) onAddFiles(list); e.target.value = ''; }} />
+                    {icon}
+                    <span className="text-center">{label}</span>
+                  </label>
+                );
+              }
               return (
-                <button key={id} type="button" disabled={(disabled && id !== 'location') || (id === 'poll' && !!poll)} onClick={() => pick(id)}
-                  className="flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-2xl border-[1.5px] border-brand-200 bg-white px-1 py-2 text-[11px] font-bold leading-tight text-brand-800 transition duration-150 hover:-translate-y-0.5 hover:border-brand-400 hover:bg-brand-50 disabled:opacity-40 sm:text-xs [@media(min-height:800px)_and_(min-width:640px)]:min-h-[84px] [@media(min-height:800px)_and_(min-width:640px)]:text-sm">
-                  <Icon className="h-5 w-5 [@media(min-height:800px)_and_(min-width:640px)]:h-7 [@media(min-height:800px)_and_(min-width:640px)]:w-7" aria-hidden />
+                <button key={id} type="button" disabled={(disabled && id !== 'location') || (id === 'poll' && !!poll)} onClick={() => pick(id)} className={`${TILE} disabled:opacity-40`}>
+                  {icon}
                   <span className="text-center">{label}</span>
                 </button>
               );

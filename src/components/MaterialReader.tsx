@@ -12,9 +12,9 @@ const SCALES = [0.85, 1, 1.2, 1.45, 1.8];
  * nút to dễ chạm, chữ to có thể phóng thêm, mỗi lúc chỉ một tệp, chỉ một thanh cuộn,
  * nút "Quay lại" luôn ở góc trên bên trái và nút "Tệp trước / Tệp sau" ở dưới cùng.
  */
-export function MaterialReader({ resource, onClose }: { resource: PinnedResource; onClose: () => void }) {
+export function MaterialReader({ resource, startIndex = 0, onClose }: { resource: PinnedResource; /** Mở sẵn ở tệp thứ mấy (từ 0). */ startIndex?: number; onClose: () => void }) {
   const files = resource.attachments ?? [];
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(startIndex);
   const [scale, setScale] = useState(1);
   const body = useRef<HTMLDivElement>(null);
   const href = safeHref(resource.url);
@@ -23,14 +23,15 @@ export function MaterialReader({ resource, onClose }: { resource: PinnedResource
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose();
+      // Nằm trong hộp nộp bài thì Esc chỉ đóng màn đọc, không đóng luôn hộp bên dưới (nghe ở giai đoạn bắt sớm rồi chặn lan truyền).
+      if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
       if (multi && e.key === 'ArrowRight') setIndex((i) => Math.min(files.length - 1, i + 1));
       if (multi && e.key === 'ArrowLeft') setIndex((i) => Math.max(0, i - 1));
     };
-    window.addEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden'; // chỉ cuộn trong màn đọc
-    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+    return () => { window.removeEventListener('keydown', onKey, true); document.body.style.overflow = prev; };
   }, [onClose, multi, files.length]);
 
   // Đổi tệp thì cuộn về đầu trang.
