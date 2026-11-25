@@ -54,7 +54,7 @@ export function NavRail({ active, onGo, onArchive, storedCount, hasBoard, varian
   return (
     <>
       {more && <button type="button" aria-label="Đóng mục Thêm" onClick={() => setMore(false)} className="fixed inset-0 z-[29] bg-ink/20 lg:hidden" />}
-      <nav aria-label="Điều hướng chính" onKeyDown={(e) => { if (e.key === 'Escape') setMore(false); }} className="fixed inset-x-0 bottom-0 z-30 flex gap-1 border-t border-brand-200/70 bg-white/95 px-2 pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-md lg:hidden print:hidden">
+      <nav aria-label="Điều hướng chính" onKeyDown={(e) => { if (e.key === 'Escape') setMore(false); }} className="bottom-nav fixed inset-x-0 bottom-0 z-30 flex gap-1 border-t border-brand-200/70 bg-white/95 px-2 pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-md lg:hidden print:hidden">
         {main.map(({ id, label, Icon }) => (
           <button key={id} type="button" aria-current={active === id ? 'page' : undefined} aria-label={label} disabled={id === 'board' && !hasBoard} onClick={pick(() => onGo(id))} className={`${item(active === id && !more)} disabled:opacity-40`}>
             <Icon className="h-5 w-5" aria-hidden /><span className="whitespace-nowrap text-[11px]">{id === 'my' ? 'Việc' : label}</span>

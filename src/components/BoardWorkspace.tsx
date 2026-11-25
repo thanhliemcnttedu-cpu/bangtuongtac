@@ -399,7 +399,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
             </div>
           </div>
           <div className="relative mt-4 flex flex-wrap items-center gap-2 border-t border-brand-100 pt-4">
-            <button type="button" onClick={() => { setShareTab('students'); setModal('share'); }} className="btn-primary"><Share2 className="h-4 w-4" aria-hidden /> Chia sẻ & QR</button>
+            {canView && <button type="button" onClick={() => { setShareTab('students'); setModal('share'); }} className="btn-primary"><Share2 className="h-4 w-4" aria-hidden /> Chia sẻ & QR</button>}
             <button type="button" disabled={slideItems.length === 0} onClick={() => setSlideStart(slideItems[0]?.card.id ?? null)} className="btn-ghost max-sm:!hidden"><Presentation className="h-4 w-4" aria-hidden /> Trình chiếu</button>
             {canManage && <button type="button" onClick={menuActions.onSettings} title="Cài đặt bảng" className="btn-ghost max-sm:!hidden"><Settings className="h-4 w-4" aria-hidden /> Cài đặt bảng</button>}
             {isOwner && <button type="button" onClick={menuActions.onTrash} className="btn-ghost max-sm:!hidden hover:!border-rose-300 hover:!bg-rose-50 hover:!text-rose-700"><Trash2 className="h-4 w-4" aria-hidden /> Xóa bảng</button>}

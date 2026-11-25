@@ -1,5 +1,5 @@
 import { DRIVE_MAX_BYTES, gatewayOf } from '../lib/drive';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ClipboardEvent, FormEvent } from 'react';
 import { Send } from 'lucide-react';
 import type { BoardData } from '../types/board';
@@ -44,6 +44,12 @@ export function QuickPostModal({ board, initialName = '', initialUnit = '', init
   }, gatewayOf(board.settings) ? { maxFile: DRIVE_MAX_BYTES, maxTotal: DRIVE_MAX_BYTES } : undefined); // có cổng Drive: tệp tới 1 GB
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
+  const [upload, setUpload] = useState<{ done: number; total: number } | null>(null);
+  useEffect(() => {
+    const on = (e: Event): void => setUpload((e as CustomEvent<{ done: number; total: number }>).detail);
+    window.addEventListener('bt:upload', on);
+    return () => window.removeEventListener('bt:upload', on);
+  }, []);
 
   const now = Date.now();
   const picked = roster.find((m) => normalize(m.name) === normalize(draft.authorName));
@@ -222,7 +228,8 @@ export function QuickPostModal({ board, initialName = '', initialUnit = '', init
         {/* Trên điện thoại nút Nộp bài dính ở đáy hộp: em không phải cuộn xuống tận cuối mới tìm thấy. */}
         <div className="sticky bottom-0 z-10 -mx-5 -mb-5 flex justify-end gap-2 border-t border-brand-100 bg-white/95 px-5 py-3 backdrop-blur max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:static lg:col-span-2 lg:m-0 lg:border-0 lg:bg-transparent lg:p-0 lg:pt-1">
           <button type="button" onClick={onClose} className={isClass ? 'btn-ghost !min-h-[54px] !px-6 text-base' : 'btn-ghost'}>Hủy</button>
-          <button type="submit" disabled={busy} className={isClass ? 'btn-primary !min-h-[54px] !px-8 text-lg' : 'btn-primary'}><Send className="h-4 w-4" aria-hidden /> {busy ? 'Đang gửi…' : 'Nộp bài'}</button>
+          <button type="submit" disabled={busy} className={isClass ? 'btn-primary !min-h-[54px] !px-8 text-lg' : 'btn-primary'}><Send className="h-4 w-4" aria-hidden /> {busy ? (upload && upload.total > 0 && upload.done < upload.total ? `Đang tải tệp ${upload.done + 1}/${upload.total}…` : 'Đang gửi…') : 'Nộp bài'}</button>
+          {busy && upload && upload.total > 1 && <progress className="h-2 w-full accent-brand-600" value={upload.done} max={upload.total} aria-label="Tiến độ tải tệp" />}
         </div>
       </form>
     </ModalShell>

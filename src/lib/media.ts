@@ -88,7 +88,11 @@ export function docKindOf(a: { mime?: string; name: string }): DocKind {
 /** Trả về thông báo lỗi tiếng Việt, hoặc null nếu tệp hợp lệ. */
 export function validateFile(file: File, allowArchive = false, maxBytes?: number): string | null {
   const mime = baseMime(file);
-  if (!ALLOWED_MIME.includes(mime) && !(allowArchive && ARCHIVE_MIME.includes(mime))) return `Loại tệp "${mime || 'không rõ'}" chưa được hỗ trợ. Dùng ảnh, video, âm thanh, PDF, Word, Excel, PowerPoint hoặc văn bản.`;
+  if (!ALLOWED_MIME.includes(mime) && !(allowArchive && ARCHIVE_MIME.includes(mime))) {
+    const ext = file.name.match(/\.([A-Za-z0-9]+)$/)?.[1]?.toLowerCase();
+    return `Chưa nhận được ${ext ? `tệp đuôi .${ext}` : 'tệp không có đuôi tên'}. Hãy dùng ảnh, video, âm thanh, PDF, Word, Excel, PowerPoint hoặc văn bản.`;
+  }
+  if (file.size === 0) return 'Tệp này trống (0 byte). Hãy mở kiểm tra rồi chọn lại tệp khác.';
   const limit = maxBytes ?? (mime.startsWith('image/') ? MAX_IMAGE_BYTES : MAX_FILE_BYTES);
   if (file.size > limit) return `Tệp ${formatSize(file.size)} vượt giới hạn ${formatSize(limit)}. Tệp lớn hơn: kết nối cổng Google Drive (Thêm → Lưu lên Google Drive của tôi) để nhận tệp tới 1 GB, hoặc tải lên Drive / YouTube rồi dán liên kết vào ô “Liên kết”.`;
   return null;

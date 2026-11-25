@@ -286,8 +286,8 @@ function PptxViewer({ attachment }: { attachment: Attachment }) {
       const buf = await fetchBuffer(url);
       const { init } = await import('pptx-preview');
       if (!alive) return;
-      const width = Math.max(280, box.clientWidth);
-      const previewer = init(box, { width, height: Math.round((width * 9) / 16), mode: 'slide' });
+      const width = Math.max(280, box.clientWidth - 18);
+      const previewer = init(box, { width, height: Math.round((width * 9) / 16), mode: 'list' });
       destroy = () => previewer.destroy();
       await previewer.preview(buf);
       if (alive) setState('ready');

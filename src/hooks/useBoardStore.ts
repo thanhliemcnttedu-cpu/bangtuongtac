@@ -239,7 +239,11 @@ async function prepareAttachments(
   /** Có cổng Drive thì tệp đi thẳng vào Drive của giáo viên (lỗi cổng thì quay về kho Supabase để học sinh vẫn nộp được). */
   drive?: { cfg: GatewayConfig; folder: string[]; author: string; /** all = mọi tệp vào Drive (bài nộp); big = chỉ tệp lớn hơn giới hạn của kho (tài liệu giáo viên) */ mode: 'all' | 'big' },
 ): Promise<Attachment[]> {
-  const files = await Promise.all(input.files.map(async (raw): Promise<Attachment> => {
+  // Báo tiến độ theo số tệp đã tải xong để biểu mẫu hiển thị "Đang tải tệp 2/5".
+  let done = 0;
+  const report = (): void => { window.dispatchEvent(new CustomEvent('bt:upload', { detail: { done, total: input.files.length } })); };
+  if (input.files.length > 0) report();
+  const one = async (raw: File): Promise<Attachment> => {
     const file = await compressImage(raw);
     const problem = validateFile(file, allowArchive, drive ? DRIVE_MAX_BYTES : undefined);
     if (problem) throw new Error(`${raw.name}: ${problem}`);
@@ -258,7 +262,8 @@ async function prepareAttachments(
       return { ...base, url: up.url };
     }
     return { ...base, url: URL.createObjectURL(file) };
-  }));
+  };
+  const files = await Promise.all(input.files.map(async (raw) => { const a = await one(raw); done += 1; report(); return a; }));
   return [...files, ...input.links.map((l) => linkToAttachment(l))];
 }
 

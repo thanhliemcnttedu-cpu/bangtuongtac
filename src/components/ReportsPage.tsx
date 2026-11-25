@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { Download, Printer } from 'lucide-react';
+import { buildXlsx } from '../lib/xlsxWrite';
 import type { BoardData } from '../types/board';
 import { buildRows, computeKpis, rosterMatcher, summarizeByUnit } from '../lib/boardLogic';
 import { taskProgress } from '../lib/lessons';
@@ -108,6 +110,19 @@ export function ReportsPage({ boards, currentId }: Props) {
 
   if (!board || !data) return <main className="mx-auto max-w-3xl p-10 text-center text-ink-2">Chưa có bảng nào để báo cáo.</main>;
   const { k } = data;
+  const exportXlsx = (): void => {
+    const blob = buildXlsx([
+      { name: 'Tổng hợp', widths: [34, 18], rows: [['Chỉ số', 'Giá trị'], ['Bảng', board.title], ['Ngày xuất', new Date().toLocaleString('vi-VN')], ['Tổng người', k.total], ['Đã hoàn thành', k.done], ['Chờ duyệt / đang làm', k.waiting], ['Chưa nộp', k.notSubmitted], ['Khác (cần sửa…)', data.other], ['Tỉ lệ hoàn thành (%)', k.completionPct], ['Bài nộp muộn', data.lateTotal]] },
+      { name: 'Theo nhóm', widths: [28, 12, 14, 12, 10], rows: [['Nhóm', 'Hoàn thành', 'Chờ / đang làm', 'Chưa nộp', 'Tổng'], ...data.units.map((u) => [u.unit, u.done, u.waiting, u.notSubmitted, u.total])] },
+      { name: 'Cần nhắc', widths: [32, 22, 32, 18], rows: [['Chưa nộp nhiều việc nhất', 'Số việc', 'Nộp muộn nhiều nhất', 'Số bài'], ...Array.from({ length: Math.max(data.miss.length, data.late.length) }, (_, i) => [data.miss[i]?.name ?? '', data.miss[i]?.n ?? '', data.late[i]?.name ?? '', data.late[i]?.n ?? ''])] },
+      { name: 'Theo ngày', widths: [14, 14], rows: [['Ngày', 'Số bài nộp'], ...data.days.map((d) => [d.label, d.n])] },
+    ]);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `bao-cao-${board.title.replace(/[\\/:*?"<>|]+/g, '_').slice(0, 60)}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+  };
   const card = 'rounded-2xl border-[1.5px] border-brand-100 bg-white p-4';
   const kpi = (label: string, value: string, color: string) => <p className={`${card} text-center`}><b className="block text-3xl font-extrabold" style={{ color }}>{value}</b><span className="text-xs font-bold text-ink-2">{label}</span></p>;
 
@@ -115,8 +130,11 @@ export function ReportsPage({ boards, currentId }: Props) {
     <main className="mx-auto w-full max-w-[min(100%,1400px)] space-y-4 px-4 py-5 pb-28 sm:px-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div><h1 className="text-2xl font-extrabold">Báo cáo</h1><p className="text-sm text-ink-2">Tình hình nộp bài và hoàn thành của một bảng.</p></div>
-        <div className="min-w-[220px]"><label htmlFor="rp-board" className="field-label">Bảng</label>
+        <div className="flex flex-wrap items-end gap-2"><div className="min-w-[220px]"><label htmlFor="rp-board" className="field-label">Bảng</label>
           <select id="rp-board" className="input" value={board.id} onChange={(e) => setId(e.target.value)}>{list.map((b) => <option key={b.id} value={b.id}>{b.title}</option>)}</select></div>
+          <button type="button" onClick={exportXlsx} className="btn-primary max-lg:min-h-[44px] print:hidden"><Download className="h-4 w-4" aria-hidden /> Xuất Excel</button>
+          <button type="button" onClick={() => window.print()} className="btn-ghost max-lg:min-h-[44px] print:hidden"><Printer className="h-4 w-4" aria-hidden /> In / Lưu PDF</button>
+        </div>
       </header>
 
       <section aria-label="Số liệu chính" className="grid grid-cols-2 gap-3 md:grid-cols-5">

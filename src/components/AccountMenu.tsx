@@ -51,7 +51,7 @@ export function AccountMenu({ accounts, current, isReal, error, role, onSwitch, 
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="menu"
         className="flex min-h-[44px] items-center gap-2 rounded-full border-[1.5px] border-brand-200 bg-white py-1 pl-1 pr-3 transition duration-200 hover:border-brand-400">
         {current ? <Avatar account={current} /> : <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-brand-700"><UserPlus className="h-4 w-4" aria-hidden /></span>}
-        <span className="hidden max-w-[160px] truncate text-sm font-bold sm:block">{current ? current.name : 'Đăng nhập'}</span>
+        <span className="hidden max-w-[160px] truncate text-sm font-bold lg:block">{current ? current.name : 'Đăng nhập'}</span>
         <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} aria-hidden />
       </button>
 

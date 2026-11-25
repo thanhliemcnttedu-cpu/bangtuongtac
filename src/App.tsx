@@ -16,6 +16,8 @@ import { NotificationBell } from './components/NotificationBell';
 
 // Nạp khi cần (chia nhỏ gói mã để trang mở nhanh).
 const ReportsPage = lazy(() => import('./components/ReportsPage').then((m) => ({ default: m.ReportsPage })));
+/** Dòng tác giả và số điện thoại ở chân trang. Đang TẠM ẨN trong thời gian chạy thử; đổi thành true để hiện lại. */
+const SHOW_AUTHOR: boolean = false;
 const ProfilePage = lazy(() => import('./components/ProfilePage').then((m) => ({ default: m.ProfilePage })));
 const SchedulePage = lazy(() => import('./components/SchedulePage').then((m) => ({ default: m.SchedulePage })));
 const MyTasksPage = lazy(() => import('./components/MyTasksPage').then((m) => ({ default: m.MyTasksPage })));
@@ -150,10 +152,10 @@ export default function App() {
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-30 border-b border-brand-200/70 bg-white/85 pt-[env(safe-area-inset-top)] backdrop-blur-md">
-        <div className="mx-auto flex w-full max-w-[min(100%,2800px)] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 max-sm:flex-nowrap max-sm:gap-x-2 max-sm:px-3 max-sm:py-1.5 sm:px-6 2xl:px-10">
+        <div className="mx-auto flex w-full max-w-[min(100%,2800px)] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 max-sm:flex-nowrap max-sm:gap-x-2 max-sm:px-3 max-sm:py-1.5 max-xl:flex-nowrap max-xl:gap-x-2 sm:px-6 2xl:px-10">
           <div className="flex items-center gap-2">
             <Logo className="h-11 w-11 max-sm:h-9 max-sm:w-9" />
-            <span className={`text-base font-extrabold uppercase tracking-tight ${teacherNav ? 'max-sm:sr-only' : 'max-sm:whitespace-nowrap max-sm:text-sm'}`}>Bảng tương tác</span>
+            <span className={`text-base font-extrabold uppercase tracking-tight ${teacherNav ? 'max-xl:sr-only' : 'max-sm:whitespace-nowrap max-sm:text-sm'}`}>Bảng tương tác</span>
           </div>
 
           {teacherNav && <BoardSwitcher boards={navBoards} currentId={showHome || showMy || showReports ? undefined : board?.id} onSelect={pick} />}
@@ -167,7 +169,7 @@ export default function App() {
               </button>
             )}
             {canCreate && !store.linkToken && !demoLogin && (
-              <button type="button" onClick={() => setCreating(true)} className={`btn-ghost ${teacherNav ? 'max-sm:!hidden' : ''}`}><Plus className="h-4 w-4" aria-hidden /><span className="hidden sm:inline">Tạo bảng</span></button>
+              <button type="button" onClick={() => setCreating(true)} className={`btn-ghost ${teacherNav ? 'max-sm:!hidden' : ''}`}><Plus className="h-4 w-4" aria-hidden /><span className="hidden xl:inline">Tạo bảng</span></button>
             )}
             <AccountMenu accounts={accounts.accounts} current={accounts.current} isReal={accounts.isReal} error={accounts.error} role={role}
               onSwitch={(a) => void accounts.switchTo(a)} onAddAnother={() => void accounts.addAnother()} onLogout={() => void accounts.logout()} onRoleChange={setRole} />
@@ -190,12 +192,14 @@ export default function App() {
       {/* Chân trang mỏng một hàng: nền xanh đêm chuyển sắc cùng tông với màu chính, chữ sáng; trên điện thoại gọn thành hai dòng. */}
       <footer className="bg-gradient-to-r from-[#0a1730] via-[#0f2a5c] to-[#0b4fd0] px-4 pb-[88px] pt-2.5 text-sm text-white/80 max-sm:px-3 max-sm:pt-2 max-sm:text-xs print:hidden sm:pb-3 sm:pt-3">
         <div className="mx-auto flex max-w-[min(100%,2800px)] flex-wrap items-center justify-center gap-x-4 gap-y-1 sm:justify-between 2xl:px-6">
-          <p className="flex flex-wrap items-center justify-center gap-x-2">
-            <span><span className="max-sm:hidden">Phát triển bởi </span><b className="font-extrabold text-white">Nguyễn Thanh Liêm</b></span>
-            <a href="tel:0888358363" className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full bg-white/10 px-3 font-bold text-white ring-1 ring-white/20 transition hover:bg-white/20" aria-label="Gọi số 0888 358 363">
-              <Phone className="h-4 w-4" aria-hidden /> 0888 358 363
-            </a>
-          </p>
+          {SHOW_AUTHOR && (
+            <p className="flex flex-wrap items-center justify-center gap-x-2">
+              <span><span className="max-sm:hidden">Phát triển bởi </span><b className="font-extrabold text-white">Nguyễn Thanh Liêm</b></span>
+              <a href="tel:0888358363" className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full bg-white/10 px-3 font-bold text-white ring-1 ring-white/20 transition hover:bg-white/20" aria-label="Gọi số 0888 358 363">
+                <Phone className="h-4 w-4" aria-hidden /> 0888 358 363
+              </a>
+            </p>
+          )}
           <p className="flex flex-wrap items-center justify-center gap-x-3 text-xs">
             {teacherNav && <button type="button" onClick={() => setHelp('guide')} className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-2 font-bold text-white hover:bg-white/10"><HelpCircle className="h-4 w-4" aria-hidden /> Hướng dẫn<span className="hidden sm:inline">&nbsp;nhanh và kiểm tra hệ thống</span></button>}
             <span className="text-white/60">v{__APP_VERSION__}{__BUILD_COMMIT__ ? ` (${__BUILD_COMMIT__})` : ''}<span className="max-sm:hidden"> · <time dateTime={__BUILD_TIME__}>{buildStamp()}</time></span></span>

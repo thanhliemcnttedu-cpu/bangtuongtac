@@ -40,12 +40,12 @@ export function BoardSwitcher({ boards, currentId, onSelect }: Props) {
   const CurIcon = current ? (isShared(current) ? Share2 : current.mode === 'classroom' ? School : Users) : School;
 
   return (
-    <div ref={box} className="relative min-w-0 flex-1 sm:w-auto sm:flex-none sm:min-w-[300px] sm:max-w-[min(46vw,560px)]">
+    <div ref={box} className="relative min-w-0 flex-1 xl:w-auto xl:flex-none xl:min-w-[300px] xl:max-w-[min(46vw,560px)]">
       <button type="button" aria-haspopup="listbox" aria-expanded={open} onClick={() => { setOpen(!open); setQ(''); }}
         className="btn-ghost !min-h-[52px] w-full !justify-start !gap-3 !rounded-2xl !px-4 text-left max-sm:!min-h-[44px] max-sm:!gap-1.5 max-sm:!px-3">
         <CurIcon className="h-5 w-5 shrink-0 text-brand-600 max-sm:hidden" aria-hidden />
         <span className="min-w-0 flex-1">
-          <span className="block text-[11px] font-bold uppercase leading-none tracking-wide text-ink-3 max-sm:hidden">Đang xem · {boards.length} bảng</span>
+          <span className="block text-[11px] font-bold uppercase leading-none tracking-wide text-ink-3 max-sm:hidden bs-label">Đang xem · {boards.length} bảng</span>
           <span className="mt-0.5 block truncate text-base font-extrabold leading-tight text-ink max-sm:mt-0 max-sm:text-sm">{current?.title ?? 'Chọn bảng'}</span>
         </span>
         <ChevronDown className={`h-5 w-5 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />

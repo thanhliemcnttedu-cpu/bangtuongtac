@@ -218,3 +218,14 @@ article.rounded-3xl::after {
   .lesson-desc { font-size: 1rem !important; line-height: 1.45; }
   .lesson-desc [style] { font-size: inherit !important; }
 }
+
+/* Nhãn nhỏ vẫn đọc được ở mọi khổ (cỡ chữ gốc co theo màn hình có lúc xuống dưới 11px). */
+.chip { font-size: max(.75rem, 11.5px); }
+/* Điện thoại xoay ngang (màn hình thấp): đầu trang và thanh dưới mỏng lại để còn chỗ cho nội dung. */
+@media (max-height: 500px) and (max-width: 1023px) {
+  header .bs-label { display: none; }
+  header .btn-ghost { min-height: 44px !important; }
+  header > div { padding-top: .25rem; padding-bottom: .25rem; }
+  .bottom-nav { padding-top: 2px !important; }
+  .bottom-nav > button { flex-direction: row !important; gap: .4rem; min-height: 40px; padding-top: 0 !important; padding-bottom: 0 !important; }
+}

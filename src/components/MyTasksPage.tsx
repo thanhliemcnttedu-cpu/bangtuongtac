@@ -362,7 +362,7 @@ export function MyTasksPage({ store, myEmail, onOpenBoard, focusTask }: Props) {
       </div>
 
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Lọc theo nguồn">
-        {KIND_TABS.map((k) => <button key={k.id} type="button" aria-pressed={kind === k.id} onClick={() => setKind(k.id)} className={`chip cursor-pointer !px-3 !py-1.5 text-sm max-lg:!min-h-[44px] ${kind === k.id ? 'bg-brand-600 text-white ring-brand-600' : 'bg-white text-ink-2 ring-brand-200 hover:bg-brand-50'}`}>{k.label} ({k.id === 'all' ? all.length : all.filter((t) => t.kind === k.id).length})</button>)}
+        {KIND_TABS.filter((k) => all.some((t) => t.kind !== 'personal') && (k.id === 'all' || all.some((t) => t.kind === k.id))).map((k) => <button key={k.id} type="button" aria-pressed={kind === k.id} onClick={() => setKind(k.id)} className={`chip cursor-pointer !px-3 !py-1.5 text-sm max-lg:!min-h-[44px] ${kind === k.id ? 'bg-brand-600 text-white ring-brand-600' : 'bg-white text-ink-2 ring-brand-200 hover:bg-brand-50'}`}>{k.label} ({k.id === 'all' ? all.length : all.filter((t) => t.kind === k.id).length})</button>)}
       </div>
 
       {loadingAssigned && <p className="flex items-center gap-2 text-sm text-ink-2" role="status"><Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Đang lấy việc người khác giao…</p>}
