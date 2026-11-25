@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSlideCursor } from '../hooks/useSlideCursor';
 import { CheckCheck, ChevronLeft, ChevronRight, Download, ExternalLink, Maximize, Star, X } from 'lucide-react';
 import type { BoardData, BoardRow, CardStatus } from '../types/board';
 import { formatDateTime } from '../lib/format';
@@ -26,16 +27,9 @@ interface Props {
 
 /** Trình chiếu từng bài như slide: chữ lớn, ít thanh thừa; ← → để chuyển bài, Esc để thoát. */
 export function SlidePresentationModal({ items, startCardId, board, canManage, onSetStatus, onVote, feedback, onClose }: Props) {
-  const [index, setIndex] = useState(() => Math.max(0, items.findIndex((i) => i.card.id === startCardId)));
+  const { item, index: safeIndex, total, go, goTo } = useSlideCursor(items, board, startCardId);
   const [zipMsg, setZipMsg] = useState('');
-  useEffect(() => setZipMsg(''), [index]);
-  const total = items.length;
-  const safeIndex = Math.min(index, Math.max(0, total - 1));
-  const item = items[safeIndex];
-
-  const go = useCallback((delta: number) => {
-    setIndex((i) => Math.min(total - 1, Math.max(0, i + delta)));
-  }, [total]);
+  useEffect(() => setZipMsg(''), [item?.card.id]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -43,13 +37,13 @@ export function SlidePresentationModal({ items, startCardId, board, canManage, o
       if (e.key !== 'Escape' && e.target instanceof HTMLElement && e.target.matches('input, textarea, select')) return;
       if (e.key === 'ArrowRight' || e.key === 'PageDown') go(1);
       else if (e.key === 'ArrowLeft' || e.key === 'PageUp') go(-1);
-      else if (e.key === 'Home') setIndex(0);
-      else if (e.key === 'End') setIndex(total - 1);
+      else if (e.key === 'Home') goTo(0);
+      else if (e.key === 'End') goTo(total - 1);
       else if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [go, onClose, total]);
+  }, [go, goTo, onClose, total]);
 
   if (!item) return null;
   const { card } = item;

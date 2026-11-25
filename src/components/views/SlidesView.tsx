@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { useSlideCursor } from '../../hooks/useSlideCursor';
 import { ChevronLeft, ChevronRight, Maximize } from 'lucide-react';
 import { renderRich } from '../../lib/richText';
 import { StatusBadge } from '../StatusBadge';
@@ -15,10 +16,7 @@ import type { LayoutViewProps } from './viewTypes';
  * trang đang xem bên phải; ← → để chuyển, nút Toàn màn hình mở chế độ trình chiếu cỡ lớn.
  */
 export function SlidesView({ rows, board, onOpen, onVote, feedback }: LayoutViewProps) {
-  const items = withCards(rows);
-  const [index, setIndex] = useState(0);
-  const safe = Math.min(index, Math.max(0, items.length - 1));
-  const item = items[safe];
+  const { list: items, item, index: safe, go, goTo } = useSlideCursor(withCards(rows), board);
 
   // Giữ trang đang xem trong tầm mắt khi chuyển bằng phím.
   useEffect(() => {
@@ -30,7 +28,6 @@ export function SlidesView({ rows, board, onOpen, onVote, feedback }: LayoutView
   const taskLabel = board.tasks.find((t) => t.id === card.taskId)?.label ?? '';
   const media = card.attachments.filter((a) => a.type !== 'link');
   const links = card.attachments.filter((a) => a.type === 'link');
-  const go = (d: number): void => setIndex((i) => Math.min(items.length - 1, Math.max(0, i + d)));
 
   return (
     <div className="grid gap-4 lg:grid-cols-[240px_1fr]" tabIndex={0} aria-label="Thuyết trình"
@@ -41,7 +38,7 @@ export function SlidesView({ rows, board, onOpen, onVote, feedback }: LayoutView
       <ol className="flex gap-2 overflow-x-auto pb-2 lg:max-h-[70vh] lg:flex-col lg:overflow-y-auto lg:overflow-x-hidden" aria-label="Danh sách trang chiếu">
         {items.map((r, i) => (
           <li key={r.card.id} id={`slide-thumb-${i}`} className="shrink-0 lg:shrink">
-            <button type="button" onClick={() => setIndex(i)} aria-current={i === safe}
+            <button type="button" onClick={() => goTo(i)} aria-current={i === safe}
               className={`flex w-40 items-center gap-2 rounded-2xl border-2 bg-white p-1.5 text-left transition duration-150 lg:w-full ${i === safe ? 'border-brand-600 shadow-soft' : 'border-brand-100 hover:border-brand-300'}`}>
               <span className="w-8 shrink-0 text-center text-xs font-extrabold text-ink-2">{i + 1}</span>
               <AttachmentThumb attachment={r.card.attachments[0] ?? null} className="h-10 w-14 shrink-0 overflow-hidden rounded-lg" />
