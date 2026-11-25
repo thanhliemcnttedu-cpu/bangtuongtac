@@ -150,24 +150,24 @@ export default function App() {
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-30 border-b border-brand-200/70 bg-white/85 pt-[env(safe-area-inset-top)] backdrop-blur-md">
-        <div className="mx-auto flex w-full max-w-[min(100%,2800px)] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 sm:px-6 2xl:px-10">
+        <div className="mx-auto flex w-full max-w-[min(100%,2800px)] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 max-sm:flex-nowrap max-sm:gap-x-2 max-sm:px-3 max-sm:py-1.5 sm:px-6 2xl:px-10">
           <div className="flex items-center gap-2">
-            <Logo className="h-11 w-11" />
-            <span className="text-base font-extrabold uppercase tracking-tight">Bảng tương tác</span>
+            <Logo className="h-11 w-11 max-sm:h-9 max-sm:w-9" />
+            <span className={`text-base font-extrabold uppercase tracking-tight ${teacherNav ? 'max-sm:sr-only' : 'max-sm:whitespace-nowrap max-sm:text-sm'}`}>Bảng tương tác</span>
           </div>
 
           {teacherNav && <BoardSwitcher boards={navBoards} currentId={showHome || showMy || showReports ? undefined : board?.id} onSelect={pick} />}
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2 max-sm:gap-1.5">
             {teacherNav && !store.loading && <NotificationBell store={store} myEmail={accounts.current?.email ?? ''} onOpen={(key) => { setFocusTask((f) => ({ key, n: (f?.n ?? 0) + 1 })); go('my'); }} />}
             {canCreate && !store.linkToken && !demoLogin && (
-              <button type="button" onClick={() => setArchiveOpen(true)} className="btn-ghost relative" aria-label="Bảng đã đóng và thùng rác">
+              <button type="button" onClick={() => setArchiveOpen(true)} className={`btn-ghost relative ${teacherNav ? 'max-sm:!hidden' : ''}`} aria-label="Bảng đã đóng và thùng rác">
                 <Archive className="h-4 w-4" aria-hidden />
                 {storedCount > 0 && <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-600 px-1 text-[11px] font-extrabold text-white">{storedCount}</span>}
               </button>
             )}
             {canCreate && !store.linkToken && !demoLogin && (
-              <button type="button" onClick={() => setCreating(true)} className="btn-ghost"><Plus className="h-4 w-4" aria-hidden /><span className="hidden sm:inline">Tạo bảng</span></button>
+              <button type="button" onClick={() => setCreating(true)} className={`btn-ghost ${teacherNav ? 'max-sm:!hidden' : ''}`}><Plus className="h-4 w-4" aria-hidden /><span className="hidden sm:inline">Tạo bảng</span></button>
             )}
             <AccountMenu accounts={accounts.accounts} current={accounts.current} isReal={accounts.isReal} error={accounts.error} role={role}
               onSwitch={(a) => void accounts.switchTo(a)} onAddAnother={() => void accounts.addAnother()} onLogout={() => void accounts.logout()} onRoleChange={setRole} />
@@ -188,23 +188,23 @@ export default function App() {
       <div className="flex-1">{renderBody()}</div>
 
       {/* Chân trang mỏng một hàng: nền xanh đêm chuyển sắc cùng tông với màu chính, chữ sáng; trên điện thoại gọn thành hai dòng. */}
-      <footer className="bg-gradient-to-r from-[#0a1730] via-[#0f2a5c] to-[#0b4fd0] px-4 pb-[88px] pt-2.5 text-sm text-white/80 print:hidden sm:pb-3 sm:pt-3">
+      <footer className="bg-gradient-to-r from-[#0a1730] via-[#0f2a5c] to-[#0b4fd0] px-4 pb-[88px] pt-2.5 text-sm text-white/80 max-sm:px-3 max-sm:pt-2 max-sm:text-xs print:hidden sm:pb-3 sm:pt-3">
         <div className="mx-auto flex max-w-[min(100%,2800px)] flex-wrap items-center justify-center gap-x-4 gap-y-1 sm:justify-between 2xl:px-6">
           <p className="flex flex-wrap items-center justify-center gap-x-2">
-            <span>Phát triển bởi <b className="font-extrabold text-white">Nguyễn Thanh Liêm</b></span>
+            <span><span className="max-sm:hidden">Phát triển bởi </span><b className="font-extrabold text-white">Nguyễn Thanh Liêm</b></span>
             <a href="tel:0888358363" className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full bg-white/10 px-3 font-bold text-white ring-1 ring-white/20 transition hover:bg-white/20" aria-label="Gọi số 0888 358 363">
               <Phone className="h-4 w-4" aria-hidden /> 0888 358 363
             </a>
           </p>
           <p className="flex flex-wrap items-center justify-center gap-x-3 text-xs">
             {teacherNav && <button type="button" onClick={() => setHelp('guide')} className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-2 font-bold text-white hover:bg-white/10"><HelpCircle className="h-4 w-4" aria-hidden /> Hướng dẫn<span className="hidden sm:inline">&nbsp;nhanh và kiểm tra hệ thống</span></button>}
-            <span className="text-white/60">v{__APP_VERSION__}{__BUILD_COMMIT__ ? ` (${__BUILD_COMMIT__})` : ''} · <time dateTime={__BUILD_TIME__}>{buildStamp()}</time></span>
+            <span className="text-white/60">v{__APP_VERSION__}{__BUILD_COMMIT__ ? ` (${__BUILD_COMMIT__})` : ''}<span className="max-sm:hidden"> · <time dateTime={__BUILD_TIME__}>{buildStamp()}</time></span></span>
           </p>
         </div>
       </footer>
       </div>
       </div>
-      {teacherNav && <NavRail variant="bar" active={activePage} onGo={go} onArchive={() => setArchiveOpen(true)} storedCount={storedCount} hasBoard={!!board} />}
+      {teacherNav && <NavRail variant="bar" onCreate={canCreate && !store.linkToken && !demoLogin ? () => setCreating(true) : undefined} active={activePage} onGo={go} onArchive={() => setArchiveOpen(true)} storedCount={storedCount} hasBoard={!!board} />}
 
       <Suspense fallback={null}>
       {help && <SystemHelpModal isReal={accounts.isReal} initialTab={help} hasBoard={!!board && (board.access ?? 'owner') !== 'guest'} onOpenDrive={() => { setHelp(null); setMyTasks(false); setReports(false); setHome(false); setDriveRequest(true); }} onResult={setMissingParts} onClose={() => setHelp(null)} />}

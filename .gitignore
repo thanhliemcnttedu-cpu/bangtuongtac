@@ -4,3 +4,6 @@ dist
 .env.local
 .claude-flow
 .swarm
+
+# Tệp tạm do Supabase CLI tạo
+supabase/.temp/

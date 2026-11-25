@@ -40,20 +40,20 @@ export function BoardSwitcher({ boards, currentId, onSelect }: Props) {
   const CurIcon = current ? (isShared(current) ? Share2 : current.mode === 'classroom' ? School : Users) : School;
 
   return (
-    <div ref={box} className="relative order-3 w-full sm:order-none sm:w-auto sm:min-w-[300px] sm:max-w-[min(46vw,560px)]">
+    <div ref={box} className="relative min-w-0 flex-1 sm:w-auto sm:flex-none sm:min-w-[300px] sm:max-w-[min(46vw,560px)]">
       <button type="button" aria-haspopup="listbox" aria-expanded={open} onClick={() => { setOpen(!open); setQ(''); }}
-        className="btn-ghost !min-h-[52px] w-full !justify-start !gap-3 !rounded-2xl !px-4 text-left">
-        <CurIcon className="h-5 w-5 shrink-0 text-brand-600" aria-hidden />
+        className="btn-ghost !min-h-[52px] w-full !justify-start !gap-3 !rounded-2xl !px-4 text-left max-sm:!min-h-[44px] max-sm:!gap-1.5 max-sm:!px-3">
+        <CurIcon className="h-5 w-5 shrink-0 text-brand-600 max-sm:hidden" aria-hidden />
         <span className="min-w-0 flex-1">
-          <span className="block text-[11px] font-bold uppercase leading-none tracking-wide text-ink-3">Đang xem · {boards.length} bảng</span>
-          <span className="mt-0.5 block truncate text-base font-extrabold leading-tight text-ink">{current?.title ?? 'Chọn bảng'}</span>
+          <span className="block text-[11px] font-bold uppercase leading-none tracking-wide text-ink-3 max-sm:hidden">Đang xem · {boards.length} bảng</span>
+          <span className="mt-0.5 block truncate text-base font-extrabold leading-tight text-ink max-sm:mt-0 max-sm:text-sm">{current?.title ?? 'Chọn bảng'}</span>
         </span>
         <ChevronDown className={`h-5 w-5 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
       </button>
 
       {open && (
         <div role="listbox" aria-label="Danh sách bảng"
-          className="pop-in fixed inset-x-3 top-24 z-40 max-h-[70vh] overflow-y-auto rounded-3xl border border-brand-200 bg-white p-3 shadow-lift sm:absolute sm:inset-x-auto sm:left-0 sm:top-full sm:mt-2 sm:w-[min(92vw,520px)]">
+          className="pop-in fixed inset-x-3 top-24 z-40 max-sm:top-16 max-h-[70vh] overflow-y-auto rounded-3xl border border-brand-200 bg-white p-3 shadow-lift sm:absolute sm:inset-x-auto sm:left-0 sm:top-full sm:mt-2 sm:w-[min(92vw,520px)]">
           {boards.length > 5 && (
             <div className="relative mb-2">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-3" aria-hidden />

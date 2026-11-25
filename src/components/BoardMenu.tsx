@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Activity, Archive, ArchiveRestore, BookmarkCheck, BookmarkPlus, ClipboardList, CloudUpload, Copy, Download, Eraser, Info,
-  Award, CalendarCheck, ListChecks, Maximize, Medal, Trophy, MoreHorizontal, Printer, Settings, Trash2, Users,
+  Award, CalendarCheck, ListChecks, Maximize, Medal, Trophy, MoreHorizontal, Plus, Presentation, Printer, Settings, Trash2, Users,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { BoardData } from '../types/board';
@@ -23,6 +23,9 @@ export interface BoardMenuActions {
   onShareTeachers: () => void;
   /** Lưu bản sao bảng và tệp bài nộp lên Google Drive của giáo viên. */
   onDrive: () => void;
+  /** Trình chiếu và thêm bài nộp: trên điện thoại hai việc này nằm trong menu cho gọn. */
+  onSlides?: () => void;
+  onAddPost?: () => void;
   /** Lớp tập huấn: mở công cụ điểm danh / chứng nhận / triển lãm / tổng kết. */
   onTraining?: (tab: 'attendance' | 'certificate' | 'showcase' | 'summary') => void;
 }
@@ -74,6 +77,8 @@ export function BoardMenu({ board, canManage, isOwner, canView, actions }: Props
   ] : [];
 
   const general: Item[] = [
+    ...(actions.onAddPost ? [{ label: 'Thêm bài nộp', Icon: Plus, run: actions.onAddPost }] : []),
+    ...(actions.onSlides ? [{ label: 'Trình chiếu', Icon: Presentation, run: actions.onSlides }] : []),
     { label: 'Chi tiết bảng', Icon: Info, run: actions.onDetails },
     ...(canView ? [{ label: 'Giáo viên cùng bảng', Icon: Users, run: actions.onShareTeachers }] : []),
     ...(isOwner ? [{ label: board.isTemplate ? 'Bỏ đánh dấu mẫu' : 'Đánh dấu là mẫu', Icon: board.isTemplate ? BookmarkCheck : BookmarkPlus, run: actions.onToggleTemplate }] : []),

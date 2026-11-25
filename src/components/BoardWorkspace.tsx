@@ -104,6 +104,13 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
   const [shareTab, setShareTab] = useState<'students' | 'teachers'>('students');
   const [modal, setModal] = useState<'post' | 'share' | 'roster' | 'resource' | 'duplicate' | 'activity' | 'gradebook' | 'details' | 'lesson' | 'task' | 'task-share' | 'task-report' | 'period' | 'training' | 'material' | 'drive' | 'edit-mine' | 'confirm-card' | 'confirm-cards' | 'confirm-lesson' | 'confirm-task' | 'confirm-material' | 'confirm-clear' | 'confirm-trash' | 'confirm-archive' | null>(null);
   const [slideStart, setSlideStart] = useState<string | null>(null);
+  // Điện thoại: cuộn xuống thì nút "Nộp bài" thu thành nút tròn để bớt che nội dung.
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const on = (): void => setScrolled(window.scrollY > 240);
+    on(); window.addEventListener('scroll', on, { passive: true });
+    return () => window.removeEventListener('scroll', on);
+  }, []);
   // Đối tượng đang soạn trong các hộp Bài học / Bài tập / Tài liệu.
   const [editLesson, setEditLesson] = useState<Lesson | undefined>();
   const [editTask, setEditTask] = useState<TaskItem | undefined>();
@@ -361,19 +368,19 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
         <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[min(560px,70vh)] bg-cover bg-center bg-no-repeat"
           style={{ backgroundImage: `url("${board.settings.bgImage}")`, WebkitMaskImage: 'linear-gradient(#000 45%, transparent)', maskImage: 'linear-gradient(#000 45%, transparent)' }} />
       )}
-      <main className="relative mx-auto w-full max-w-[min(100%,2800px)] space-y-5 px-4 py-5 pb-28 sm:px-6 2xl:px-10">
+      <main className="relative mx-auto w-full max-w-[min(100%,2800px)] space-y-5 px-4 py-5 pb-28 max-sm:space-y-3 max-sm:px-3 max-sm:py-3 sm:px-6 2xl:px-10">
         <header className="relative z-20 rounded-3xl border-[1.5px] border-brand-200 bg-white/90 p-4 shadow-soft backdrop-blur-md sm:p-6">
           {/* Quầng sáng trang trí được cắt trong khung riêng, để khung tiêu đề không cần overflow-hidden (nếu không, trình đơn "Thêm" bị cắt mất). */}
           <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-3xl" aria-hidden><div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-gradient-to-br from-brand-200/70 to-teal2-100/70 blur-2xl" /></div>
           <div className="relative flex flex-wrap items-start justify-between gap-4">
-            <div className="flex min-w-0 flex-1 items-start gap-4">
-              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-teal2-600 text-white shadow-glow sm:h-16 sm:w-16">
+            <div className="flex min-w-0 flex-1 items-start gap-4 max-sm:gap-2.5">
+              <span className="flex h-14 w-14 max-sm:h-10 max-sm:w-10 max-sm:rounded-xl shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-teal2-600 text-white shadow-glow sm:h-16 sm:w-16">
                 <BoardIcon className="h-7 w-7 sm:h-8 sm:w-8" aria-hidden />
               </span>
               <div className="min-w-0">
                 {board.program && <p className="mb-0.5 text-xs font-extrabold uppercase tracking-wide text-violet-700">{board.program}</p>}
                 <h1 className="text-[clamp(1.35rem,2.8vw,2.1rem)] font-extrabold leading-tight tracking-tight" style={titleCss(board.settings.titleStyle)}>{board.title}</h1>
-                {board.subtitle && <p className="mt-1 text-sm text-ink-2">{board.subtitle}</p>}
+                {board.subtitle && <p className="mt-1 break-words text-sm text-ink-2 [overflow-wrap:anywhere]">{board.subtitle}</p>}
                 <div className="mt-2 flex flex-wrap gap-2">
                   <span className="chip bg-brand-100 text-brand-800 ring-brand-200">{board.mode === 'classroom' ? 'Chế độ Lớp học' : 'Chế độ Tập huấn'}</span>
                   <span className={`chip ${board.linkMode === 'guest_post' ? 'bg-emerald-100 text-emerald-800 ring-emerald-200' : board.linkMode === 'locked' ? 'bg-rose-100 text-rose-800 ring-rose-200' : 'bg-slate-100 text-slate-700 ring-slate-200'}`}>
@@ -393,10 +400,10 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
           </div>
           <div className="relative mt-4 flex flex-wrap items-center gap-2 border-t border-brand-100 pt-4">
             <button type="button" onClick={() => { setShareTab('students'); setModal('share'); }} className="btn-primary"><Share2 className="h-4 w-4" aria-hidden /> Chia sẻ & QR</button>
-            <button type="button" disabled={slideItems.length === 0} onClick={() => setSlideStart(slideItems[0]?.card.id ?? null)} className="btn-ghost"><Presentation className="h-4 w-4" aria-hidden /> Trình chiếu</button>
-            {canManage && <button type="button" onClick={menuActions.onSettings} title="Cài đặt bảng" className="btn-ghost"><Settings className="h-4 w-4" aria-hidden /> Cài đặt bảng</button>}
-            {isOwner && <button type="button" onClick={menuActions.onTrash} className="btn-ghost hover:!border-rose-300 hover:!bg-rose-50 hover:!text-rose-700"><Trash2 className="h-4 w-4" aria-hidden /> Xóa bảng</button>}
-            <span className="ml-auto"><BoardMenu board={board} canManage={canManage} isOwner={isOwner} canView={canView} actions={menuActions} /></span>
+            <button type="button" disabled={slideItems.length === 0} onClick={() => setSlideStart(slideItems[0]?.card.id ?? null)} className="btn-ghost max-sm:!hidden"><Presentation className="h-4 w-4" aria-hidden /> Trình chiếu</button>
+            {canManage && <button type="button" onClick={menuActions.onSettings} title="Cài đặt bảng" className="btn-ghost max-sm:!hidden"><Settings className="h-4 w-4" aria-hidden /> Cài đặt bảng</button>}
+            {isOwner && <button type="button" onClick={menuActions.onTrash} className="btn-ghost max-sm:!hidden hover:!border-rose-300 hover:!bg-rose-50 hover:!text-rose-700"><Trash2 className="h-4 w-4" aria-hidden /> Xóa bảng</button>}
+            <span className="ml-auto"><BoardMenu board={board} canManage={canManage} isOwner={isOwner} canView={canView} actions={{ ...menuActions, onSlides: slideItems.length > 0 ? () => setSlideStart(slideItems[0]?.card.id ?? null) : undefined, onAddPost: canManage && showFab ? () => { setPostTask(undefined); setModal('post'); } : undefined }} /></span>
           </div>
         </header>
 
@@ -512,15 +519,15 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
 
       {showFab && role === 'guest' && !fabLocked && (
         <button type="button" onClick={() => { setEditCodePick(undefined); setModal('edit-mine'); }}
-          className="btn-ghost fixed bottom-[calc(max(1.25rem,env(safe-area-inset-bottom))+4.5rem)] right-5 z-[19] !min-h-[44px] bg-white/95 text-sm shadow-soft sm:right-8">
+          className={`btn-ghost fixed bottom-[calc(max(1.25rem,env(safe-area-inset-bottom))+4.5rem)] right-5 z-[19] !min-h-[44px] bg-white/95 text-sm shadow-soft sm:right-8 ${scrolled ? 'max-sm:!hidden' : ''}`}>
           <KeyRound className="h-4 w-4" aria-hidden /> Sửa bài đã nộp
         </button>
       )}
       {showFab && (
         <button type="button" disabled={fabLocked} onClick={() => { setPostTask(undefined); setModal('post'); }} aria-label={fabLocked ? 'Bảng đã khóa nộp bài' : 'Thêm bài nộp'}
-          className={`btn-primary fixed ${canManage ? 'max-lg:bottom-[calc(5.2rem+env(safe-area-inset-bottom))] lg:bottom-5' : 'bottom-[max(1.25rem,env(safe-area-inset-bottom))]'} right-5 z-[19] !min-h-[60px] !gap-2 !px-6 text-base sm:right-8`}>
+          className={`btn-primary fixed ${canManage ? 'max-sm:!hidden max-lg:bottom-[calc(5.2rem+env(safe-area-inset-bottom))] lg:bottom-5' : 'bottom-[max(1.25rem,env(safe-area-inset-bottom))]'} right-5 z-[19] !min-h-[60px] !gap-2 !px-6 text-base sm:right-8 ${scrolled && !fabLocked ? 'max-sm:!w-[60px] max-sm:!px-0' : ''}`}>
           {fabLocked ? <Lock className="h-6 w-6" aria-hidden /> : <Plus className="h-7 w-7" strokeWidth={3} aria-hidden />}
-          <span>{fabLocked ? 'Đã khóa nộp bài' : 'Nộp bài'}</span>
+          <span className={scrolled && !fabLocked ? 'max-sm:sr-only' : ''}>{fabLocked ? 'Đã khóa nộp bài' : 'Nộp bài'}</span>
         </button>
       )}
 

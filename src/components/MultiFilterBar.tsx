@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { taskTitle } from '../lib/lessons';
-import { Rows3, Search, Trash2, X } from 'lucide-react';
+import { Rows3, Search, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import type { BoardData, CardStatus, FilterState, ProgressFilter, TimeFilter, ViewMode } from '../types/board';
 import { normalize } from '../lib/boardLogic';
 import { LayoutMenu } from './LayoutMenu';
@@ -56,6 +56,9 @@ const TIME_OPTIONS: { value: TimeFilter; label: string }[] = [
 export function MultiFilterBar({
   board, filters, view, resultCount, onChange, onViewChange, onClear, isFiltered, allowedViews, deletableCount, onDeleteShown, bulk }: Props) {
   const [focused, setFocused] = useState(false);
+  // Điện thoại: các ô lọc ẩn sau nút "Bộ lọc" (kèm số điều kiện đang chọn) để không chiếm cả màn hình.
+  const [openFilters, setOpenFilters] = useState(false);
+  const activeCount = [filters.title, filters.taskId, filters.progress !== 'all', filters.time !== 'all'].filter(Boolean).length;
 
   const titles = useMemo(() => [...new Set(board.cards.map((c) => c.title))], [board.cards]);
 
@@ -69,10 +72,10 @@ export function MultiFilterBar({
   }, [filters.search, board.roster]);
 
   return (
-    <section aria-label="Tìm kiếm và bộ lọc" className="rounded-3xl border border-brand-200/80 bg-white/90 p-3 shadow-soft sm:p-4">
+    <section aria-label="Tìm kiếm và bộ lọc" className="rounded-3xl border border-brand-200/80 bg-white/90 p-3 shadow-soft max-sm:p-2.5 sm:p-4">
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-[220px] flex-1">
+          <div className="relative min-w-[220px] flex-1 max-sm:min-w-full">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-3" aria-hidden />
             <input
               type="search"
@@ -103,10 +106,13 @@ export function MultiFilterBar({
             )}
           </div>
 
+          <button type="button" onClick={() => setOpenFilters((v) => !v)} aria-expanded={openFilters} className="btn-ghost sm:!hidden">
+            <SlidersHorizontal className="h-4 w-4" aria-hidden /> Bộ lọc{activeCount > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-600 px-1 text-[11px] font-extrabold text-white">{activeCount}</span>}
+          </button>
           <LayoutMenu view={view} allowed={allowedViews} onChange={onViewChange} />
         </div>
 
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        <div className={`grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5 ${openFilters ? '' : 'max-sm:hidden'}`}>
           <select aria-label="Lọc theo tên bài" value={filters.title} onChange={(e) => onChange({ title: e.target.value })} className="input">
             <option value="">Tất cả tên bài</option>
             {titles.map((t) => <option key={t} value={t}>{t}</option>)}

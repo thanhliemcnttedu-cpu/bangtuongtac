@@ -52,7 +52,31 @@ export function SubmissionTableView({ rows, board, canManage, onOpen, onSetStatu
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      {/* Điện thoại: mỗi người một thẻ, không phải cuộn ngang. */}
+      <ul className="divide-y divide-brand-100 sm:hidden" aria-label="Danh sách bài nộp">
+        {rows.length === 0 && <li className="px-3 py-8 text-center text-sm text-ink-2">Không có dòng nào phù hợp bộ lọc.</li>}
+        {rows.map((r, i) => (
+          <li key={r.member.id} className={`space-y-1.5 p-3 ${r.card && selection?.ids.has(r.card.id) ? 'bg-amber-50' : ''}`}>
+            <div className="flex items-start gap-2">
+              {pickable && r.card && <label className="flex h-11 w-8 shrink-0 items-center"><input type="checkbox" className="h-5 w-5 accent-amber-600" checked={selection?.ids.has(r.card.id) ?? false} onChange={() => selection?.toggle(r.card!.id)} aria-label={`Chọn bài của ${r.member.name}`} /></label>}
+              <div className="min-w-0 flex-1">
+                <p className="break-words font-bold">{i + 1}. {r.member.name}</p>
+                <p className="text-xs text-ink-2">{r.member.unit || '—'}{r.card ? ` · ${formatDateTime(r.card.resubmittedAt ?? r.card.submittedAt)}` : ''}{canManage && r.card?.grade !== undefined ? ` · Điểm ${String(r.card.grade).replace('.', ',')}` : ''}</p>
+              </div>
+              <span className="flex shrink-0 flex-col items-end gap-1"><StatusBadge progress={r.progress} />{r.card?.late && <span className="chip bg-orange-100 text-orange-900 ring-orange-200">Nộp muộn</span>}</span>
+            </div>
+            {r.card && (
+              <div className="flex flex-wrap gap-1.5">
+                <button type="button" onClick={() => onOpen(r.card!.id)} className="btn-ghost btn-sm"><Eye className="h-3.5 w-3.5" aria-hidden /> Xem nhanh</button>
+                {canManage && r.card.status === 'pending' && <button type="button" onClick={() => onSetStatus(r.card!.id, 'approved')} className="btn btn-sm bg-emerald-600 text-white"><CheckCheck className="h-3.5 w-3.5" aria-hidden /> Duyệt</button>}
+                {canManage && <button type="button" aria-pressed={r.card.status === 'featured'} onClick={() => onSetStatus(r.card!.id, r.card!.status === 'featured' ? 'approved' : 'featured')} className={`btn btn-sm ${r.card.status === 'featured' ? 'bg-yellow-400 text-ink' : 'border-[1.5px] border-yellow-300 bg-white text-yellow-800'}`}><Star className={`h-3.5 w-3.5 ${r.card.status === 'featured' ? 'fill-current' : ''}`} aria-hidden /> Tiêu biểu</button>}
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      <div className="overflow-x-auto max-sm:hidden">
         <table className="w-full min-w-[760px] text-left text-sm">
           <thead className="bg-brand-50 text-xs uppercase tracking-wide text-ink-2">
             <tr>

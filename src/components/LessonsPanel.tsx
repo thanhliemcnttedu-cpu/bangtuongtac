@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { renderRich } from '../lib/richText';
 import type { DragEvent } from 'react';
 import {
-  BarChart3, BookOpen, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, Eye, FileText, GripVertical, Image as ImageIcon, Link2, ListChecks, Mic, Network, Paperclip, Pencil, Plus, Presentation,
+  BarChart3, BookOpen, MoreHorizontal, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, Download, ExternalLink, Eye, FileText, GripVertical, Image as ImageIcon, Link2, ListChecks, Mic, Network, Paperclip, Pencil, Plus, Presentation,
   QrCode, Sparkles, Trash2, Users, Video, X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -156,6 +156,8 @@ function MaterialCard({ r, canManage, onOpen, onDelete, onEdit, drag }: { r: Pin
   const Icon = k.icon;
   const host = siteHost(r);
   const col = colorOf(r.color);
+  // Điện thoại / máy tính bảng dọc: các nút sắp xếp, sửa, gỡ gom vào một nút "⋯" để không đè lên tên tài liệu.
+  const [menu, setMenu] = useState(false);
   const atts = r.attachments ?? [];
   const actions = atts.filter((a) => a.url);
   const legacyLink = atts.length === 0 && r.url && r.url !== '#' ? r.url : '';
@@ -166,9 +168,9 @@ function MaterialCard({ r, canManage, onOpen, onDelete, onEdit, drag }: { r: Pin
   const photos = atts.filter((a) => a.type === 'image' && a.url && !a.driveId).slice(0, 3);
   return (
     <li onDragOver={drag?.onDragOver} onDrop={drag?.onDrop}
-      className={`relative flex min-h-[19.5rem] flex-col overflow-hidden rounded-2xl border bg-white shadow-soft transition duration-200 hover:-translate-y-0.5 hover:shadow-lift ${drag?.over ? 'border-brand-500 ring-4 ring-brand-200' : 'border-teal2-100'} ${drag?.dragging ? 'opacity-40' : ''}`}>
+      className={`relative flex min-h-[19.5rem] max-sm:min-h-0 flex-col overflow-hidden rounded-2xl border bg-white shadow-soft transition duration-200 hover:-translate-y-0.5 hover:shadow-lift ${drag?.over ? 'border-brand-500 ring-4 ring-brand-200' : 'border-teal2-100'} ${drag?.dragging ? 'opacity-40' : ''}`}>
       <span className="h-1.5 w-full" style={{ background: col?.bar ?? KIND_BAR[r.kind] }} aria-hidden />
-      <button type="button" onClick={onOpen} className={`flex items-start gap-3 p-3 text-left ${drag ? 'pr-44' : 'pr-16'}`}>
+      <button type="button" onClick={onOpen} className={`flex items-start gap-3 p-3 text-left max-lg:pr-14 ${drag ? 'lg:pr-44' : 'lg:pr-16'}`}>
         <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${col ? '' : k.tone}`} style={col ? { background: col.soft, color: col.text } : undefined}>{host ? <SiteIcon host={host} fallback={Icon} /> : <Icon className="h-6 w-6" aria-hidden />}</span>
         <span className="min-w-0">
           <span className="block text-base font-extrabold leading-snug">{r.title}</span>
@@ -217,7 +219,26 @@ function MaterialCard({ r, canManage, onOpen, onDelete, onEdit, drag }: { r: Pin
         )}
       </div>
       {canManage && (
-        <span className="absolute right-1.5 top-3 flex items-center gap-0.5">
+        <button type="button" onClick={() => setMenu((v) => !v)} aria-expanded={menu} aria-haspopup="menu" aria-label={`Tùy chọn tài liệu ${r.title}`}
+          className="absolute right-1.5 top-3 flex h-11 w-11 items-center justify-center rounded-full text-ink-2 hover:bg-brand-50 lg:hidden">
+          <MoreHorizontal className="h-5 w-5" aria-hidden />
+        </button>
+      )}
+      {canManage && menu && (
+        <div role="menu" aria-label="Tùy chọn tài liệu" onKeyDown={(e) => { if (e.key === 'Escape') setMenu(false); }} className="pop-in absolute right-2 top-14 z-10 w-52 rounded-2xl border border-brand-200 bg-white p-1 shadow-lift lg:hidden">
+          {[
+            ...(drag ? [{ label: 'Đưa lên trước', Icon: ChevronLeft, run: drag.onPrev, off: !drag.canPrev }, { label: 'Đưa ra sau', Icon: ChevronRight, run: drag.onNext, off: !drag.canNext }] : []),
+            { label: 'Sửa tài liệu', Icon: Pencil, run: onEdit, off: false },
+            { label: 'Gỡ tài liệu', Icon: X, run: onDelete, off: false },
+          ].map((m) => (
+            <button key={m.label} type="button" role="menuitem" disabled={m.off} onClick={() => { setMenu(false); m.run(); }} className="flex min-h-[44px] w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-bold hover:bg-brand-50 disabled:opacity-40">
+              <m.Icon className="h-4 w-4" aria-hidden /> {m.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {canManage && (
+        <span className="absolute right-1.5 top-3 flex items-center gap-0.5 max-lg:hidden">
           {drag && (
             <>
               <span draggable onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', r.id); const li = (e.currentTarget as HTMLElement).closest('li'); if (li) e.dataTransfer.setDragImage(li, 24, 24); drag.onDragStart(); }} onDragEnd={drag.onDragEnd}
@@ -323,6 +344,7 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
   const [open, setOpen] = useState(true);
   const [viewing, setViewing] = useState<PinnedResource | null>(null);
   const [closedLessons, setClosedLessons] = useState<Record<string, boolean>>({});
+  const [addOpen, setAddOpen] = useState(false); // điện thoại: mở thêm các nút giao bài, tài liệu, sơ đồ
   // Kéo thả đổi thứ tự tài liệu: mã tài liệu đang kéo và thẻ đang được rê tới.
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
@@ -404,7 +426,7 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
 
   return (
     <section aria-label={w.panel} className="overflow-hidden rounded-3xl border-[1.5px] border-teal2-100 bg-gradient-to-br from-white/90 to-teal2-50/80 shadow-soft backdrop-blur-md">
-      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left sm:px-5">
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left max-sm:gap-2 max-sm:px-3 sm:px-5">
         <span className="flex items-center gap-2">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal2-600 text-white"><BookOpen className="h-5 w-5" aria-hidden /></span>
           <span>
@@ -415,14 +437,14 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
           </span>
         </span>
         <span className="btn-ghost btn-sm pointer-events-none">
-          {open ? 'Thu gọn' : 'Mở rộng'}
+          <span className="max-sm:sr-only">{open ? 'Thu gọn' : 'Mở rộng'}</span>
           <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} aria-hidden />
         </span>
       </button>
 
       <div className={`grid transition-all duration-300 ease-out ${open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
         <div className="overflow-hidden">
-          <div className="space-y-4 px-4 pb-4 sm:px-5">
+          <div className="space-y-4 px-4 pb-4 max-sm:space-y-3 max-sm:px-2 max-sm:pb-2 sm:px-5">
             {board.goals && <p className="rounded-2xl bg-white/80 p-3 text-sm leading-relaxed text-ink-2">{board.goals}</p>}
 
             {canManage && (
@@ -437,9 +459,12 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
                 ) : (
                   <>
                     <button type="button" onClick={actions.onAddLesson} className="btn-primary btn-sm"><Plus className="h-3.5 w-3.5" aria-hidden /> Thêm {w.lessonLower}</button>
+                    <button type="button" onClick={() => setAddOpen((v) => !v)} aria-expanded={addOpen} className="btn-ghost btn-sm sm:!hidden"><MoreHorizontal className="h-4 w-4" aria-hidden /> Thêm khác</button>
+                    <span className={`contents ${addOpen ? '' : 'max-sm:hidden'}`}>
                     <button type="button" onClick={() => actions.onAddTask(null)} className="btn-ghost btn-sm"><ListChecks className="h-3.5 w-3.5" aria-hidden /> Giao bài tập / yêu cầu</button>
                     <button type="button" onClick={() => actions.onAddMaterial(null)} className="btn-ghost btn-sm"><Paperclip className="h-3.5 w-3.5" aria-hidden /> Thêm tài liệu</button>
                     <button type="button" onClick={() => actions.onAddMaterial(null, { mindmap: true })} className="btn-ghost btn-sm"><Network className="h-3.5 w-3.5" aria-hidden /> Tạo sơ đồ tư duy</button>
+                    </span>
                   </>
                 )}
               </div>
@@ -481,7 +506,7 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
               const mats = board.pinned.filter((r) => r.lessonId === lesson.id);
               const collapsed = !!closedLessons[lesson.id];
               return (
-                <article key={lesson.id} style={{ ['--bar' as string]: pal.bar }} className={`rounded-3xl border-2 p-3 pt-4 sm:p-4 sm:pt-5 ${pal.box}`}>
+                <article key={lesson.id} style={{ ['--bar' as string]: pal.bar }} className={`rounded-3xl border-2 p-3 pt-4 max-sm:rounded-2xl max-sm:border max-sm:p-2 max-sm:pt-3 sm:p-4 sm:pt-5 ${pal.box}`}>
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <button type="button" aria-expanded={!collapsed} onClick={() => setClosedLessons((m) => ({ ...m, [lesson.id]: !collapsed }))} className="flex min-w-0 items-start gap-2 text-left">
                       {!(board.settings.scope === 'lesson' && board.lessons.length === 1) && <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base font-extrabold text-white shadow-soft ${pal.num}`} aria-hidden>{idx + 1}</span>}
@@ -492,7 +517,7 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
                           <span className="mt-0.5 flex items-center gap-1 text-xs text-ink-2"><CalendarClock className="h-3.5 w-3.5" aria-hidden /> {formatDateTime(lesson.startsAt)}{lesson.endsAt ? ` – ${formatDateTime(lesson.endsAt)}` : ''}</span>
                         )}
                         {/* Mục đích / nội dung của bài: chữ to, đậm, màu theo bài để học sinh nhìn là biết hôm nay học gì. */}
-                        {lesson.description && <span className={`mt-1.5 block rounded-xl bg-white/80 px-3 py-1.5 font-bold leading-snug ring-1 ring-black/5 ${kid ? 'text-xl' : 'text-lg'} ${pal.text}`}>{renderRich(lesson.description)}</span>}
+                        {lesson.description && <span className={`lesson-desc mt-1.5 block rounded-xl bg-white/80 px-3 py-1.5 font-bold leading-snug ring-1 ring-black/5 ${kid ? 'text-xl' : 'text-lg'} ${pal.text}`}>{renderRich(lesson.description)}</span>}
                       </span>
                     </button>
                     {canManage && (

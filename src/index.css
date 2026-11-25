@@ -207,3 +207,14 @@ article.rounded-3xl::after {
 .docx-host .docx-wrapper { background: transparent !important; padding: 16px 12px !important; }
 .docx-host .docx-wrapper > section.docx { margin-bottom: 18px !important; box-shadow: 0 10px 30px -12px rgba(22,104,242,.35), 0 0 0 1px rgba(22,104,242,.12) !important; }
 .reader .viewer-fit { max-height: none; overflow: visible; }
+
+/* ===== Điện thoại: gọn và rõ thứ bậc ===== */
+@media (max-width: 639px) {
+  /* Nút phụ phẳng hơn (bỏ mép 3D) để nút chính nổi bật. */
+  .btn-ghost, .btn-ghost:hover:not(:disabled) { box-shadow: 0 1px 2px rgba(22,104,242,.14); transform: none; }
+  .btn-ghost:active:not(:disabled) { transform: translateY(1px); box-shadow: inset 0 1px 3px rgba(22,104,242,.2); }
+  .btn-primary, .btn-primary:hover:not(:disabled) { --edge-h: 3px; }
+  /* Mô tả buổi học: giữ màu và đậm của giáo viên nhưng không để cỡ chữ lớn chiếm cả màn hình. */
+  .lesson-desc { font-size: 1rem !important; line-height: 1.45; }
+  .lesson-desc [style] { font-size: inherit !important; }
+}
