@@ -16,6 +16,7 @@ import { NotificationBell } from './components/NotificationBell';
 
 // Nạp khi cần (chia nhỏ gói mã để trang mở nhanh).
 const ReportsPage = lazy(() => import('./components/ReportsPage').then((m) => ({ default: m.ReportsPage })));
+const ProfilePage = lazy(() => import('./components/ProfilePage').then((m) => ({ default: m.ProfilePage })));
 const SchedulePage = lazy(() => import('./components/SchedulePage').then((m) => ({ default: m.SchedulePage })));
 const MyTasksPage = lazy(() => import('./components/MyTasksPage').then((m) => ({ default: m.MyTasksPage })));
 const SystemHelpModal = lazy(() => import('./components/SystemHelpModal').then((m) => ({ default: m.SystemHelpModal })));
@@ -44,6 +45,8 @@ export default function App() {
   const [reports, setReports] = useState(false);
   // Trang "Lịch": thời khóa biểu và lịch công tác.
   const [schedule, setSchedule] = useState(false);
+  // Trang "Hồ sơ": kho hồ sơ chuyên môn cá nhân.
+  const [profile, setProfile] = useState(false);
   // Bấm một thông báo trên chuông: mở "Công việc của tôi" và chọn đúng việc (n đổi để mở lại cùng một việc).
   const [focusTask, setFocusTask] = useState<{ key: string; n: number } | null>(null);
   // Hỗ trợ: kiểm tra hệ thống + hướng dẫn nhanh; biểu ngữ hiện khi máy chủ còn thiếu phần cập nhật.
@@ -84,13 +87,14 @@ export default function App() {
   const teacherNav = canCreate && !store.linkToken && !demoLogin && effectiveRole !== 'guest' && effectiveRole !== 'viewonly';
   const showMy = teacherNav && myTasks;
   const showSchedule = teacherNav && !showMy && schedule;
-  const showReports = teacherNav && !showMy && !showSchedule && reports;
-  const showHome = teacherNav && !showMy && !showSchedule && !showReports && (home ?? ownCount >= 4);
-  const activePage: NavPage = showMy ? 'my' : showSchedule ? 'schedule' : showReports ? 'reports' : showHome ? 'home' : 'board';
-  const go = (p: NavPage): void => { setMyTasks(p === 'my'); setSchedule(p === 'schedule'); setReports(p === 'reports'); if (p === 'home') setHome(true); if (p === 'board') setHome(false); };
+  const showProfile = teacherNav && !showMy && !showSchedule && profile;
+  const showReports = teacherNav && !showMy && !showSchedule && !showProfile && reports;
+  const showHome = teacherNav && !showMy && !showSchedule && !showProfile && !showReports && (home ?? ownCount >= 4);
+  const activePage: NavPage = showMy ? 'my' : showSchedule ? 'schedule' : showProfile ? 'profile' : showReports ? 'reports' : showHome ? 'home' : 'board';
+  const go = (p: NavPage): void => { setMyTasks(p === 'my'); setSchedule(p === 'schedule'); setProfile(p === 'profile'); setReports(p === 'reports'); if (p === 'home') setHome(true); if (p === 'board') setHome(false); };
   // Mật độ giao diện: giáo viên dùng bản gọn, học sinh và khách giữ bản to thân thiện.
   useEffect(() => { document.documentElement.dataset.density = teacherNav ? 'compact' : 'comfortable'; }, [teacherNav]);
-  const pick = (id: string): void => { setActiveId(id); setHome(false); setMyTasks(false); setSchedule(false); setReports(false); };
+  const pick = (id: string): void => { setActiveId(id); setHome(false); setMyTasks(false); setSchedule(false); setProfile(false); setReports(false); };
 
   const createBoard = async (title: string, template: BoardTemplate, extras: { lessonTitle?: string; program?: string }): Promise<void> => {
     const b = await store.createBoard(title, template, extras);
@@ -98,6 +102,7 @@ export default function App() {
     setHome(false);
     setMyTasks(false);
     setSchedule(false);
+    setProfile(false);
     setReports(false);
     setRole('owner');
     setCreating(false);
@@ -124,6 +129,7 @@ export default function App() {
   const renderBody = () => {
     if (demoLogin) return <LoginScreen error="" onLogin={() => setDemoLogin(false)} onJoinCode={joinByCode} onOpenLink={openToken} />;
     if (showReports) return <Suspense fallback={<p className="p-10 text-center text-ink-2" role="status">Đang tải…</p>}><ReportsPage boards={owned} currentId={board?.id} /></Suspense>;
+    if (showProfile) return <Suspense fallback={<p className="p-10 text-center text-ink-2" role="status">Đang tải…</p>}><ProfilePage store={store} /></Suspense>;
     if (showSchedule) return <Suspense fallback={<p className="p-10 text-center text-ink-2" role="status">Đang tải…</p>}><SchedulePage store={store} onOpenTask={(key) => { setFocusTask((f) => ({ key, n: (f?.n ?? 0) + 1 })); go('my'); }} /></Suspense>;
     if (showMy) return <Suspense fallback={<p className="p-10 text-center text-ink-2" role="status">Đang tải…</p>}><MyTasksPage store={store} myEmail={accounts.current?.email ?? ''} onOpenBoard={pick} focusTask={focusTask} /></Suspense>;
     if (showHome && !store.loading) return <Dashboard boards={navBoards} currentId={board?.id} canCreate={canCreate} onOpen={pick} onCreate={() => setCreating(true)}

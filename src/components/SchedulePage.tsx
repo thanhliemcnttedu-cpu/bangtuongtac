@@ -64,6 +64,8 @@ export function SchedulePage({ store, onOpenTask }: { store: BoardStore; onOpenT
   const run = async (fn: () => Promise<void>): Promise<void> => { setError(''); try { await fn(); } catch (e) { setError(e instanceof Error ? e.message : 'Không thực hiện được.'); } };
   const ensureBoard = async (): Promise<string> => boardId ?? (await store.ensurePersonalBoard()).id;
   const tasks = personal?.tasks ?? [];
+  /** Bảng việc riêng phải có trước khi tải giáo án lên (tệp đi theo mã bảng). */
+  const openNew = async (then: () => void): Promise<void> => { await run(async () => { if (!boardId) await store.ensurePersonalBoard(); then(); }); };
 
   const onImport = async (meta: { name: string; schoolYear: string; term: string }, list: EntryData[]): Promise<void> => {
     const bid = await ensureBoard();
@@ -143,7 +145,7 @@ export function SchedulePage({ store, onOpenTask }: { store: BoardStore; onOpenT
         <>
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" onClick={() => setImporting(true)} className="btn-primary max-lg:min-h-[44px]"><FileSpreadsheet className="h-4 w-4" aria-hidden /> Nhập từ Excel</button>
-            <button type="button" onClick={() => setEditEntry('new')} className="btn-ghost max-lg:min-h-[44px]"><Plus className="h-4 w-4" aria-hidden /> Thêm tiết</button>
+            <button type="button" onClick={() => void openNew(() => setEditEntry('new'))} className="btn-ghost max-lg:min-h-[44px]"><Plus className="h-4 w-4" aria-hidden /> Thêm tiết</button>
             {entries.length > 0 && <button type="button" onClick={() => download(buildExport(entries), `thoi-khoa-bieu-${(active?.schoolYear || 'hien-tai').replace(/\W+/g, '-')}.xlsx`)} className="btn-ghost max-lg:min-h-[44px]"><Download className="h-4 w-4" aria-hidden /> Xuất Excel</button>}
             {tts.length > 0 && (
               <span className="ml-auto flex flex-wrap items-center gap-2">
@@ -176,7 +178,7 @@ export function SchedulePage({ store, onOpenTask }: { store: BoardStore; onOpenT
       )}
 
       {tab === 'events' && (
-        <EventsView events={events} tasks={tasks} anchor={anchor} setAnchor={setAnchor} onAdd={() => setEventForm({})} onEdit={(e) => setEventForm({ event: e })}
+        <EventsView events={events} tasks={tasks} anchor={anchor} setAnchor={setAnchor} onAdd={() => void openNew(() => setEventForm({}))} onEdit={(e) => setEventForm({ event: e })}
           onOpenTask={(id) => onOpenTask(`p-${id}`)} onMakeTask={makeTaskFor} />
       )}
 

@@ -25,7 +25,7 @@ export function TaskDocs({ task, className = 'mt-2' }: { task: TaskItem; classNa
           if (!viewable(a)) {
             return (
               <li key={`${a.url}-${i}`}>
-                <a href={a.url} target="_blank" rel="noopener noreferrer" className="chip bg-white text-brand-800 ring-brand-200 hover:bg-brand-50"><Link2 className="h-3.5 w-3.5" aria-hidden /> {name}</a>
+                <a href={a.url} target="_blank" rel="noopener noreferrer" className="chip bg-white text-brand-800 ring-brand-200 hover:bg-brand-50 max-lg:!min-h-[44px] max-lg:px-3 max-lg:text-sm"><Link2 className="h-3.5 w-3.5" aria-hidden /> {name}</a>
               </li>
             );
           }
@@ -33,7 +33,7 @@ export function TaskDocs({ task, className = 'mt-2' }: { task: TaskItem; classNa
           return (
             <li key={`${a.url}-${i}`}>
               <button type="button" onClick={() => setStart(at)} title="Xem ngay trong trang" aria-label={`Xem ${name}`}
-                className="chip min-h-[32px] bg-white text-brand-800 ring-brand-200 hover:bg-brand-50 max-lg:min-h-[44px] max-lg:px-3 max-lg:text-sm">
+                className="chip min-h-[32px] bg-white text-brand-800 ring-brand-200 hover:bg-brand-50 max-lg:!min-h-[44px] max-lg:px-3 max-lg:text-sm">
                 <FileText className="h-3.5 w-3.5" aria-hidden /> {name} <Eye className="ml-0.5 h-3.5 w-3.5 text-brand-600" aria-hidden />
               </button>
             </li>
