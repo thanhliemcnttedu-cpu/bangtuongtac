@@ -5,6 +5,7 @@ import type {
   AttendanceSession, CardComment, ActivityEntry, Attachment, BoardAccess, BoardData, CollabRole, Collaborator, CardLayoutPatch, CardLocation, VennRegion, BoardMode, CardStatus, LinkMode, Lesson, PinnedResource, PollOption, ResourceKind, RosterMember, SubmissionCard, TaskItem, TaskKind,
 } from '../types/board';
 import { linkToAttachment } from './embeds';
+import { daysOf } from './recurrence';
 import type { BoardSettings, RepeatRule, TaskProgress, TaskSubItem } from '../types/board';
 import type { BoardTemplate } from '../data/boardTemplates';
 import { parseSettings } from './boardSettings';
@@ -60,7 +61,7 @@ function toTask(t: TaskDb): TaskItem {
     progress: (['doing', 'waiting', 'postponed', 'cancelled', 'done'] as const).find((p) => p === t.progress) ?? 'todo',
     priority: t.priority === 'high' || t.priority === 'low' ? t.priority : 'normal',
     assigneeEmails: t.assignee_emails ?? [],
-    repeat: (['daily', 'weekdays', 'weekly', 'monthly', 'quarterly', 'semester', 'yearly'] as const).find((r) => r === t.repeat_rule) ?? 'none',
+    repeat: daysOf(t.repeat_rule).length > 0 ? (t.repeat_rule as RepeatRule) : (['daily', 'weekdays', 'weekly', 'monthly', 'quarterly', 'semester', 'yearly'] as const).find((r) => r === t.repeat_rule) ?? 'none',
     seriesId: t.series_id ?? undefined,
     category: t.category ?? undefined, startAt: t.start_at ?? null, reportDueAt: t.report_due_at ?? null, completedAt: t.completed_at ?? null, repeatUntil: t.repeat_until ?? null,
   };
@@ -598,14 +599,15 @@ export async function deleteLesson(id: string): Promise<void> {
   const { error } = await db().from('board_lessons').delete().eq('id', id);
   if (error) fail('Không xóa được bài học', error.message);
 }
+const repeatHint = (m: string): string => (/board_tasks_repeat_chk/.test(m) ? 'Máy chủ chưa hỗ trợ lặp theo thứ đã chọn. Hãy chạy docs/cap-nhat-lap-chon-thu.sql trong Supabase (SQL Editor).' : m);
 export async function createTask(boardId: string, input: TaskInput, sort: number): Promise<TaskItem> {
   const { data, error } = await db().from('board_tasks').insert({ board_id: boardId, sort, ...taskRow(input) }).select('*').single();
-  if (error) fail('Không tạo được bài tập', error.message);
+  if (error) fail('Không tạo được bài tập', repeatHint(error.message));
   return toTask(data as TaskDb);
 }
 export async function updateTask(id: string, input: TaskInput): Promise<void> {
   const { error } = await db().from('board_tasks').update(taskRow(input)).eq('id', id);
-  if (error) fail('Không lưu được bài tập', error.message);
+  if (error) fail('Không lưu được bài tập', repeatHint(error.message));
 }
 /** Điểm danh: đọc mọi buổi của bảng (dòng name_key rỗng là dấu buổi). */
 export async function getAttendance(boardId: string): Promise<AttendanceSession[]> {

@@ -106,7 +106,9 @@ export interface Attachment {
 }
 
 /** Quy tắc lặp của việc định kỳ: hằng ngày, thứ 2–6, tuần, tháng, quý, học kỳ (6 tháng), năm. */
-export type RepeatRule = 'none' | 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'quarterly' | 'semester' | 'yearly';
+export type RepeatRule = 'none' | 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'quarterly' | 'semester' | 'yearly'
+  /** Lặp theo các thứ đã chọn: 'days:1234' = Thứ 2 đến Thứ 5 (1 = Thứ 2 … 7 = Chủ nhật). */
+  | `days:${string}`;
 
 /** Trạng thái việc riêng / việc tổng: chưa làm, đang làm, chờ bổ sung, hoãn, đã hủy, hoàn thành. */
 export type TaskProgress = 'todo' | 'doing' | 'waiting' | 'postponed' | 'cancelled' | 'done';

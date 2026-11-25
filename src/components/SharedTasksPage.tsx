@@ -10,8 +10,8 @@ import { renderRich } from '../lib/richText';
 import { ITEM_STATUS, PROGRESS_META, categoryOf, fmtDay, fmtTime, itemOverdue, itemStats } from '../lib/taskPlan';
 import { countdown, formatDateTime } from '../lib/lessons';
 import { TaskDocs } from './TaskDocs';
+import { repeatLabel } from '../lib/recurrence';
 
-const REPEAT_TEXT: Record<string, string> = { daily: 'Hằng ngày', weekdays: 'Thứ 2–6', weekly: 'Hằng tuần', monthly: 'Hằng tháng', quarterly: 'Hằng quý', semester: 'Hằng học kỳ', yearly: 'Hằng năm' };
 const STATUS_TEXT: Record<MyStatus, string> = { todo: 'Chưa làm', doing: 'Đang làm', waiting: 'Chờ bổ sung', postponed: 'Hoãn', cancelled: 'Đã hủy', done: 'Đã xong', overdue: 'Quá hạn' };
 const STATUS_CHIP: Record<MyStatus, string> = {
   todo: PROGRESS_META.todo.chip, doing: PROGRESS_META.doing.chip, waiting: PROGRESS_META.waiting.chip, postponed: PROGRESS_META.postponed.chip, cancelled: PROGRESS_META.cancelled.chip,
@@ -104,7 +104,7 @@ export default function SharedTasksPage({ shareKey }: { shareKey: string }) {
                     {cat && <span className="chip" style={{ background: cat.soft, color: cat.text, boxShadow: 'none' }}><cat.Icon className="h-3 w-3" aria-hidden /> {cat.label}</span>}
                     {st.all > 0 && <span className="chip bg-brand-50 text-brand-800 ring-brand-200"><ListChecks className="h-3 w-3" aria-hidden /> {st.done}/{st.valid} đầu việc · {st.pct}%</span>}
                     {docs.length > 0 && <span className="chip bg-brand-50 text-brand-800 ring-brand-200"><Paperclip className="h-3 w-3" aria-hidden /> {docs.length}</span>}
-                    {t.repeat && t.repeat !== 'none' && <span className="chip bg-violet-50 text-violet-800 ring-violet-200"><Repeat className="h-3 w-3" aria-hidden /> {REPEAT_TEXT[t.repeat]}</span>}
+                    {t.repeat && t.repeat !== 'none' && <span className="chip bg-violet-50 text-violet-800 ring-violet-200"><Repeat className="h-3 w-3" aria-hidden /> {repeatLabel(t.repeat)}</span>}
                   </span>
                   {st.all > 0 && <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-brand-100" aria-hidden><span className="block h-full rounded-full bg-gradient-to-r from-brand-500 to-teal2-500" style={{ width: `${st.pct}%` }} /></span>}
                 </span>

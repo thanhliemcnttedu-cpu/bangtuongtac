@@ -1,3 +1,4 @@
+import { repeatLabel } from './recurrence';
 import type { TaskSubItem } from '../types/board';
 import { startOfWeek } from './myTasks';
 import type { MyTask } from './myTasks';
@@ -84,7 +85,7 @@ export function buildCsv(tasks: MyTask[], items: TaskSubItem[], now: number): st
     const s = itemStats(its, now);
     const fmt = (iso: string | null | undefined): string => (iso ? `${fmtDay(iso)} ${fmtTime(iso)}` : '');
     return [t.label, categoryOf(t.category)?.label ?? '', STATUS_VI[t.status], fmt(t.startAt), fmt(t.dueAt), fmt(t.reportDueAt), fmt(t.completedAt),
-      isDone(t) ? (wasOnTime(t) ? 'Đúng hạn' : wasLate(t) ? 'Trễ hạn' : 'Chưa rõ') : '', t.repeat && t.repeat !== 'none' ? t.repeat : '', s.all > 0 ? `${s.done}/${s.valid}` : '', s.all > 0 ? String(s.overdue) : ''];
+      isDone(t) ? (wasOnTime(t) ? 'Đúng hạn' : wasLate(t) ? 'Trễ hạn' : 'Chưa rõ') : '', repeatLabel(t.repeat), s.all > 0 ? `${s.done}/${s.valid}` : '', s.all > 0 ? String(s.overdue) : ''];
   });
   void ITEM_STATUS;
   return '﻿' + [head, ...rows].map((r) => r.map(q).join(',')).join('\r\n');

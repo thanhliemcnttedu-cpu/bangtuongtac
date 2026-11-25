@@ -3,7 +3,8 @@ import type { DragEvent, FormEvent } from 'react';
 import {
   AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle, Columns3, ExternalLink, ListChecks, Loader2, Paperclip, Pencil, Plus, Repeat, BarChart3, Search, Send, Share2, SquarePlus, Trash2,
 } from 'lucide-react';
-import type { RepeatRule, TaskItem, TaskProgress, TaskSubItem } from '../types/board';
+import { repeatLabel } from '../lib/recurrence';
+import type { TaskItem, TaskProgress, TaskSubItem } from '../types/board';
 import type { BoardStore } from '../hooks/useBoardStore';
 import type { AssignedTask } from '../lib/boardApi';
 import { getMyAssigned } from '../lib/boardApi';
@@ -37,7 +38,6 @@ const STATUS_CHIP: Record<MyStatus, string> = {
   done: 'bg-emerald-100 text-emerald-900 ring-emerald-300', overdue: 'bg-rose-100 text-rose-900 ring-rose-300',
 };
 const STATUS_TEXT: Record<MyStatus, string> = { todo: 'Chưa làm', doing: 'Đang làm', waiting: 'Chờ bổ sung', postponed: 'Hoãn', cancelled: 'Đã hủy', done: 'Đã xong', overdue: 'Quá hạn' };
-const REPEAT_TEXT: Record<Exclude<RepeatRule, 'none'>, string> = { daily: 'Hằng ngày', weekdays: 'Thứ 2–6', weekly: 'Hằng tuần', monthly: 'Hằng tháng', quarterly: 'Hằng quý', semester: 'Hằng học kỳ', yearly: 'Hằng năm' };
 const PRIORITY_DOT = { high: 'bg-rose-500', normal: 'bg-sky-500', low: 'bg-slate-400' } as const;
 const PRIORITY_TEXT = { high: 'Cao', normal: 'Vừa', low: 'Thấp' } as const;
 /** Kanban việc riêng: năm cột (đã hủy không hiện ở Kanban, chỉ hiện ở danh sách). */
@@ -184,7 +184,7 @@ export function MyTasksPage({ store, myEmail, onOpenBoard, focusTask }: Props) {
     const mine = t.kind === 'personal';
     const manage = canItems(t);
     const docs = t.attachments ?? [];
-    const rep = t.repeat && t.repeat !== 'none' ? REPEAT_TEXT[t.repeat] : '';
+    const rep = repeatLabel(t.repeat);
     const sub = (itemsOf.get(t.taskId) ?? []).filter((i) => !i.deletedAt);
     const st = statsOf(t);
     const cat = categoryOf(t.category);

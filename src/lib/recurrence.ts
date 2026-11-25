@@ -2,10 +2,26 @@ import type { RepeatRule, TaskItem } from '../types/board';
 import { resetChecklist } from './checklist';
 import type { TaskInput } from './boardApi';
 
+export const DAY_NAMES = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'] as const;
+/** Các thứ đã chọn của quy tắc 'days:…' (1 = Thứ 2 … 7 = Chủ nhật); kiểu lặp khác trả về rỗng. */
+export function daysOf(rule: string | null | undefined): number[] {
+  const m = /^days:([1-7]{1,7})$/.exec(rule ?? '');
+  return m ? [...new Set(m[1].split('').map(Number))].sort((a, b) => a - b) : [];
+}
+const REPEAT_NAMES: Record<string, string> = { daily: 'Hằng ngày', weekdays: 'Thứ 2–6', weekly: 'Hằng tuần', monthly: 'Hằng tháng', quarterly: 'Hằng quý', semester: 'Hằng học kỳ', yearly: 'Hằng năm' };
+/** Nhãn ngắn của kiểu lặp để hiển thị trên thẻ công việc. */
+export function repeatLabel(rule: string | null | undefined): string {
+  const days = daysOf(rule);
+  if (days.length > 0) return days.map((d) => DAY_NAMES[d - 1]).join(', ');
+  return REPEAT_NAMES[rule ?? ''] ?? '';
+}
+
 /** Cộng một kỳ (7 ngày hoặc 1 tháng) vào mốc giờ. Cuối tháng thì lùi về ngày cuối của tháng sau (31/1 → 28/2). */
 export function addPeriod(iso: string, rule: Exclude<RepeatRule, 'none'>): string {
   const d = new Date(iso);
   if (rule === 'daily') { d.setDate(d.getDate() + 1); return d.toISOString(); }
+  const picked = daysOf(rule);
+  if (picked.length > 0) { do { d.setDate(d.getDate() + 1); } while (!picked.includes(((d.getDay() + 6) % 7) + 1)); return d.toISOString(); }
   if (rule === 'weekdays') { do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6); return d.toISOString(); }
   if (rule === 'weekly') { d.setDate(d.getDate() + 7); return d.toISOString(); }
   const day = d.getDate();

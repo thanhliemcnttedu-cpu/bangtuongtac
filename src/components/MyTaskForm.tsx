@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ClipboardEvent, DragEvent, FormEvent } from 'react';
 import { ClipboardPaste, FileText, Link2, ListChecks, Paperclip, Plus, Repeat, X } from 'lucide-react';
 import type { Attachment, RepeatRule, TaskItem } from '../types/board';
+import { RepeatSelect } from './RepeatSelect';
 import type { BoardStore } from '../hooks/useBoardStore';
 import type { TaskInput } from '../lib/boardApi';
 import { buildChecklist, splitChecklist } from '../lib/checklist';
@@ -29,16 +30,12 @@ const nextMonthDay = (day: number, h: number, m: number): string => { const d = 
 /** Mẫu việc thường gặp của giáo viên: điền sẵn tên, nhóm, danh sách việc nhỏ, lặp và giờ; giáo viên sửa lại theo trường mình. */
 const PRESETS: { label: string; title: string; category: string; items: string[]; repeat: RepeatRule; due: () => string }[] = [
   { label: 'Điểm danh lớp hằng ngày', title: 'Điểm danh lớp và báo cáo sĩ số', category: 'bao_cao', items: ['Điểm danh học sinh', 'Báo cáo số lượng học sinh có mặt'], repeat: 'weekdays', due: () => nextAt(7, 30) },
-  { label: 'Báo cáo bán trú', title: 'Báo cáo số lượng học sinh bán trú', category: 'bao_cao', items: ['Chốt số lượng bán trú', 'Gửi báo cáo cho nhà bếp / văn phòng'], repeat: 'weekdays', due: () => nextAt(8, 30) },
+  { label: 'Báo cáo bán trú', title: 'Báo cáo số lượng học sinh bán trú', category: 'bao_cao', items: ['Chốt số lượng bán trú', 'Gửi báo cáo cho nhà bếp / văn phòng'], repeat: 'days:1234', due: () => nextAt(8, 30) },
   { label: 'Thời khóa biểu tuần', title: 'Xem và chuẩn bị thời khóa biểu tuần', category: 'giang_day', items: ['Xem thời khóa biểu tuần mới', 'Chuẩn bị đồ dùng dạy học'], repeat: 'weekly', due: () => nextWeekday(0, 20, 0) },
   { label: 'Báo cáo tuần', title: 'Nộp báo cáo tuần', category: 'bao_cao', items: ['Tổng hợp số liệu trong tuần', 'Gửi báo cáo tuần'], repeat: 'weekly', due: () => nextWeekday(5, 16, 0) },
   { label: 'Báo cáo tháng', title: 'Nộp báo cáo tháng', category: 'bao_cao', items: ['Tổng hợp số liệu trong tháng', 'Gửi báo cáo tháng'], repeat: 'monthly', due: () => nextMonthDay(25, 16, 0) },
 ];
 
-const REPEAT_OPTIONS: [RepeatRule, string][] = [
-  ['none', 'Không lặp'], ['daily', 'Hằng ngày (cùng giờ)'], ['weekdays', 'Các ngày thứ 2 – thứ 6 (cùng giờ)'], ['weekly', 'Hằng tuần (cùng giờ)'], ['monthly', 'Hằng tháng (cùng ngày, giờ)'],
-  ['quarterly', 'Hằng quý (3 tháng)'], ['semester', 'Hằng học kỳ (6 tháng)'], ['yearly', 'Hằng năm'],
-];
 
 /**
  * Thêm hoặc sửa một công việc cho "Công việc của tôi": nhóm, ghi chú, danh sách việc nhỏ, tệp và liên kết kèm theo, các mốc thời gian
@@ -230,9 +227,7 @@ export function MyTaskForm({ store, editing, onClose, onSaved }: Props) {
             </div>
             <div>
               <label htmlFor="mf-repeat" className="field-label flex items-center gap-1"><Repeat className="h-4 w-4 text-brand-700" aria-hidden /> Lặp lại</label>
-              <select id="mf-repeat" className="input" value={due ? repeat : 'none'} disabled={!due} onChange={(e) => setRepeat(e.target.value as RepeatRule)}>
-                {REPEAT_OPTIONS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-              </select>
+              <RepeatSelect id="mf-repeat" value={repeat} due={due} onChange={setRepeat} />
               {due && repeat !== 'none' && (
                 <div className="mt-2">
                   <label htmlFor="mf-until" className="field-label">Ngày kết thúc lặp <span className="font-normal text-ink-2">(để trống = lặp mãi)</span></label>

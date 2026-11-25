@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { FileText, Link2, Paperclip, X } from 'lucide-react';
 import type { Attachment, BoardData, RepeatRule, TaskItem, TaskKind } from '../types/board';
+import { RepeatSelect } from './RepeatSelect';
 import { formatSize } from '../lib/media';
 import type { TaskInput } from '../lib/boardApi';
 import { KIND_LABEL, fromLocalInput, toLocalInput, unitsOf, wordsFor } from '../lib/lessons';
@@ -203,9 +204,7 @@ export function TaskModal({ board, task, defaultLessonId = null, otherBoards, on
           {team && (
             <div>
               <label htmlFor="tk-repeat" className="field-label">Lặp lại</label>
-              <select id="tk-repeat" className="input" value={dueAt ? repeat : 'none'} disabled={!dueAt} onChange={(e) => setRepeat(e.target.value as RepeatRule)}>
-                <option value="none">Không lặp</option><option value="daily">Hằng ngày (cùng giờ)</option><option value="weekdays">Các ngày thứ 2 – thứ 6 (cùng giờ)</option><option value="weekly">Hằng tuần (cùng giờ)</option><option value="monthly">Hằng tháng (cùng ngày, giờ)</option>
-              </select>
+              <RepeatSelect id="tk-repeat" value={repeat} due={dueAt} onChange={setRepeat} />
               <p className="mt-1 text-xs text-ink-2">{dueAt ? 'Hết hạn là kỳ mới tự xuất hiện khi tổ trưởng mở bảng.' : 'Cần đặt hạn nộp thì mới lặp được.'}</p>
             </div>
           )}
