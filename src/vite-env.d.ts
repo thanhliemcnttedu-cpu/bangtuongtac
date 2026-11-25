@@ -3,6 +3,8 @@
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL?: string;
   readonly VITE_SUPABASE_ANON_KEY?: string;
+  /** Khóa công khai VAPID cho nhắc việc đẩy (xem docs/HUONG-DAN-NHAC-VIEC-DAY.md). */
+  readonly VITE_VAPID_PUBLIC_KEY?: string;
 }
 interface ImportMeta {
   readonly env: ImportMetaEnv;

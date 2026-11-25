@@ -3,12 +3,14 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import './index.css';
 import { initButtonIcons, initFx } from './lib/fx';
+import { registerServiceWorker } from './lib/push';
 
 const SharedTasksPage = lazy(() => import('./components/SharedTasksPage'));
 // Link chia sẻ "Công việc của tôi": /v/<mã> mở trang chỉ xem, không qua ứng dụng đăng nhập.
 const shared = window.location.pathname.match(/^\/v\/([A-Za-z0-9_-]{16,64})\/?$/);
 
 initFx();
+registerServiceWorker();
 initButtonIcons();
 
 const root = document.getElementById('root');

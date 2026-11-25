@@ -7,6 +7,8 @@ import type { BoardStore } from '../hooks/useBoardStore';
 import { buildMyTasks } from '../lib/myTasks';
 import { SOON_OPTIONS, buildNotifications, loadPrefs, loadRead, loadShown, saveRead, savePrefs, saveShown } from '../lib/notifications';
 import type { Notif, NotifKind, NotifPrefs } from '../lib/notifications';
+import { disablePush, enablePush, getPushState, syncPushPrefs } from '../lib/push';
+import type { PushState } from '../lib/push';
 
 const KIND_ICON: Record<NotifKind, typeof Bell> = { overdue: AlertTriangle, today: AlarmClock, soon: CalendarClock, report: CalendarClock, items: ListChecks };
 const SEVERITY_TONE: Record<number, string> = { 3: 'bg-rose-50 text-rose-700', 2: 'bg-amber-50 text-amber-700', 1: 'bg-sky-50 text-sky-700' };
@@ -23,6 +25,9 @@ export function NotificationBell({ store, myEmail, onOpen }: { store: BoardStore
   const [now, setNow] = useState(() => Date.now());
   const [items, setItems] = useState<TaskSubItem[]>([]);
   const [perm, setPerm] = useState<NotificationPermission | 'unsupported'>(() => (typeof Notification === 'undefined' ? 'unsupported' : Notification.permission));
+  const [push, setPush] = useState<PushState>('off');
+  const [pushMsg, setPushMsg] = useState('');
+  const [pushBusy, setPushBusy] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<CSSProperties>({});
@@ -67,7 +72,12 @@ export function NotificationBell({ store, myEmail, onOpen }: { store: BoardStore
   }, [open]);
 
   const markRead = (ids: string[]): void => { const next = new Set(read); ids.forEach((i) => next.add(i)); setRead(next); saveRead(next); };
-  const updatePrefs = (p: Partial<NotifPrefs>): void => { const next = { ...prefs, ...p }; setPrefs(next); savePrefs(next); };
+  const updatePrefs = (p: Partial<NotifPrefs>): void => { const next = { ...prefs, ...p }; setPrefs(next); savePrefs(next); void syncPushPrefs(next); };
+  useEffect(() => { if (showSettings) void getPushState().then(setPush); }, [showSettings]);
+  const togglePush = async (on: boolean): Promise<void> => {
+    setPushBusy(true); setPushMsg('');
+    try { if (on) await enablePush(prefs); else await disablePush(); setPush(await getPushState()); } catch (e) { setPushMsg(e instanceof Error ? e.message : 'Không đổi được nhắc đẩy.'); } finally { setPushBusy(false); }
+  };
   const enableBrowser = async (): Promise<void> => {
     if (typeof Notification === 'undefined') return;
     const r = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
@@ -101,6 +111,11 @@ export function NotificationBell({ store, myEmail, onOpen }: { store: BoardStore
               {([['overdue', 'Cảnh báo việc quá hạn'], ['report', 'Nhắc hạn báo cáo / nộp'], ['items', 'Nhắc đầu việc quá hạn']] as const).map(([k, l]) => (
                 <label key={k} className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4 accent-brand-600" checked={prefs[k]} onChange={(e) => updatePrefs({ [k]: e.target.checked })} /> {l}</label>
               ))}
+              <div>
+                <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4 accent-brand-600" checked={push === 'on'} disabled={pushBusy || push === 'unsupported' || push === 'unconfigured' || push === 'denied'}
+                  onChange={(e) => void togglePush(e.target.checked)} /> Nhắc đẩy khi đã đóng trang</label>
+                <p className="mt-1 text-xs text-ink-2">{pushMsg || (push === 'unsupported' ? 'Trình duyệt này không hỗ trợ. Trên iPhone, hãy thêm phần mềm vào Màn hình chính trước.' : push === 'unconfigured' ? 'Chưa cấu hình nhắc đẩy trên máy chủ (xem docs/HUONG-DAN-NHAC-VIEC-DAY.md).' : push === 'denied' ? 'Bạn đã chặn thông báo cho trang này. Mở biểu tượng khóa cạnh địa chỉ trang để cho phép.' : 'Nhận nhắc việc sắp hoặc quá hạn ngay cả khi không mở phần mềm. Bật riêng cho từng thiết bị; có thể chậm tới 15 phút.')}</p>
+              </div>
               <div>
                 <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4 accent-brand-600" checked={prefs.browser && perm === 'granted'} disabled={perm === 'unsupported' || perm === 'denied'}
                   onChange={(e) => { if (e.target.checked) void enableBrowser(); else updatePrefs({ browser: false }); }} /> Hiện thông báo của trình duyệt</label>
