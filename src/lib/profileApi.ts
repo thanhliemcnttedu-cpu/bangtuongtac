@@ -1,3 +1,4 @@
+import { fetchAll } from './fetchAll';
 import { supabase } from './supabase';
 import type { Attachment } from '../types/board';
 import { buildXlsx } from './xlsxWrite';
@@ -47,7 +48,7 @@ const mem: ProfileDoc[] = [];
 
 export async function listProfileDocs(boardId: string): Promise<ProfileDoc[]> {
   if (!supabase) return mem.filter((d) => d.boardId === boardId);
-  const { data, error } = await db().from('profile_docs').select('*').eq('board_id', boardId).order('doc_date', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
+  const { data, error } = await fetchAll<unknown>((f, t) => db().from('profile_docs').select('*').eq('board_id', boardId).order('doc_date', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }).order('id').range(f, t));
   if (error) fail('Không tải được hồ sơ', error.message);
   return ((data ?? []) as Db[]).map(toDoc);
 }

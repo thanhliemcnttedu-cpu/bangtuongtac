@@ -25,14 +25,14 @@ export function AttachmentView({ attachment }: { attachment: Attachment }) {
     return <img src={url} alt={attachment.name} className="viewer-media max-h-[62vh] w-full rounded-3xl bg-brand-50 object-contain" />;
   }
   if (attachment.type === 'video' && url) {
-    return <video src={url} controls playsInline className="viewer-media max-h-[62vh] w-full rounded-3xl bg-ink" aria-label={attachment.name} />;
+    return <video src={url} controls playsInline preload="metadata" className="viewer-media max-h-[62vh] w-full rounded-3xl bg-ink" aria-label={attachment.name} />;
   }
   if (attachment.type === 'audio' && url) {
     return (
       <div className="flex w-full flex-col items-center gap-4 rounded-3xl bg-gradient-to-br from-teal2-500 to-brand-600 p-8 text-white">
         <Mic className="h-14 w-14" aria-hidden />
         <p className="max-w-full truncate text-lg font-bold">{attachment.name}</p>
-        <audio src={url} controls className="w-full" />
+        <audio src={url} controls preload="metadata" className="w-full" />
       </div>
     );
   }

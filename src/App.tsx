@@ -94,6 +94,10 @@ export default function App() {
   const showHome = teacherNav && !showMy && !showSchedule && !showProfile && !showReports && (home ?? ownCount >= 4);
   const activePage: NavPage = showMy ? 'my' : showSchedule ? 'schedule' : showProfile ? 'profile' : showReports ? 'reports' : showHome ? 'home' : 'board';
   const go = (p: NavPage): void => { setMyTasks(p === 'my'); setSchedule(p === 'schedule'); setProfile(p === 'profile'); setReports(p === 'reports'); if (p === 'home') setHome(true); if (p === 'board') setHome(false); };
+  // Chỉ bảng đang mở trên màn hình mới được hỏi dữ liệu mới liên tục.
+  const watched = activePage === 'board' ? board?.shareToken ?? '' : '';
+  const { watchBoard } = store;
+  useEffect(() => watchBoard(watched), [watched, watchBoard]);
   // Mật độ giao diện: giáo viên dùng bản gọn, học sinh và khách giữ bản to thân thiện.
   useEffect(() => { document.documentElement.dataset.density = teacherNav ? 'compact' : 'comfortable'; }, [teacherNav]);
   const pick = (id: string): void => { setActiveId(id); setHome(false); setMyTasks(false); setSchedule(false); setProfile(false); setReports(false); };

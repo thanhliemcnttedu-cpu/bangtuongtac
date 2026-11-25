@@ -1,6 +1,7 @@
 // Lớp nối CSDL Supabase (bảng khai báo trong docs/schema.sql).
 // Mọi hàm ném lỗi tiếng Việt khi Supabase từ chối (thường do RLS); App hiển thị lỗi đó cho người dùng.
 
+import { fetchAll } from './fetchAll';
 import type {
   AttendanceSession, CardComment, ActivityEntry, Attachment, BoardAccess, BoardData, CollabRole, Collaborator, CardLayoutPatch, CardLocation, VennRegion, BoardMode, CardStatus, LinkMode, Lesson, PinnedResource, PollOption, ResourceKind, RosterMember, SubmissionCard, TaskItem, TaskKind,
 } from '../types/board';
@@ -198,14 +199,14 @@ export async function loadMyBoards(myEmail: string): Promise<BoardData[]> {
   if (list.length === 0) return [];
   const ids = list.map((b) => b.id);
   const [cards, tasks, lessons, roster, votes, collabs, ratings, comments] = await Promise.all([
-    client.from('cards').select('*').in('board_id', ids).order('created_at', { ascending: false }),
-    client.from('board_tasks').select('*').in('board_id', ids).order('sort'),
-    client.from('board_lessons').select('*').in('board_id', ids).order('sort'),
-    client.from('board_roster').select('*').in('board_id', ids).order('name'),
-    client.from('card_votes').select('card_id, option_id'),
-    client.from('board_collaborators').select('*').in('board_id', ids),
-    client.from('card_ratings').select('card_id, stars'),
-    client.from('comments').select('*').in('board_id', ids).order('created_at').limit(3000),
+    fetchAll<unknown>((f, t) => client.from('cards').select('*').in('board_id', ids).order('created_at', { ascending: false }).order('id').range(f, t)),
+    fetchAll<unknown>((f, t) => client.from('board_tasks').select('*').in('board_id', ids).order('sort').order('id').range(f, t)),
+    fetchAll<unknown>((f, t) => client.from('board_lessons').select('*').in('board_id', ids).order('sort').order('id').range(f, t)),
+    fetchAll<unknown>((f, t) => client.from('board_roster').select('*').in('board_id', ids).order('name').order('id').range(f, t)),
+    fetchAll<unknown>((f, t) => client.from('card_votes').select('card_id, option_id').order('card_id').order('session_id').range(f, t)),
+    fetchAll<unknown>((f, t) => client.from('board_collaborators').select('*').in('board_id', ids).order('board_id').order('email').range(f, t)),
+    fetchAll<unknown>((f, t) => client.from('card_ratings').select('card_id, stars').order('card_id').order('session_id').range(f, t)),
+    fetchAll<unknown>((f, t) => client.from('comments').select('*').in('board_id', ids).order('created_at').order('id').range(f, t)),
   ]);
   if (cards.error) fail('Không tải được bài nộp', cards.error.message);
   if (tasks.error) fail('Không tải được nhiệm vụ', tasks.error.message);
@@ -228,7 +229,7 @@ export async function loadMyBoards(myEmail: string): Promise<BoardData[]> {
   const taskRows = (tasks.data ?? []) as (TaskDb & { board_id: string })[];
   const lessonRows = (lessons.data ?? []) as (LessonDb & { board_id: string })[];
   const rosterRows = (roster.data ?? []) as RosterDb[];
-  // Đếm phiếu ở trình duyệt (PostgREST không nhóm theo cột); đủ cho lớp học, giới hạn mặc định 1000 phiếu mỗi lần tải.
+  // Đếm phiếu ở trình duyệt (PostgREST không nhóm theo cột).
   const counts = new Map<string, number>();
   for (const v of (votes.data ?? []) as { card_id: string; option_id: string }[]) {
     const k = `${v.card_id}|${v.option_id}`;
@@ -611,7 +612,7 @@ export async function updateTask(id: string, input: TaskInput): Promise<void> {
 }
 /** Điểm danh: đọc mọi buổi của bảng (dòng name_key rỗng là dấu buổi). */
 export async function getAttendance(boardId: string): Promise<AttendanceSession[]> {
-  const { data, error } = await db().from('board_attendance').select('day,name_key,label').eq('board_id', boardId).order('day');
+  const { data, error } = await fetchAll<unknown>((f, t) => db().from('board_attendance').select('day,name_key,label').eq('board_id', boardId).order('day').order('name_key').range(f, t));
   if (error) fail('Không tải được điểm danh', error.message);
   const map = new Map<string, AttendanceSession>();
   for (const r of (data ?? []) as { day: string; name_key: string; label: string }[]) {

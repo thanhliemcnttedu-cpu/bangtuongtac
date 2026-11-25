@@ -12,6 +12,7 @@ import * as api from '../lib/boardApi';
 import { linkToAttachment } from '../lib/embeds';
 import { MAX_FILE_BYTES, attachmentTypeOf, baseMime, compressImage, docKindOf, formatSize, validateFile } from '../lib/media';
 import { removeStoredFiles, uploadAttachment } from '../lib/storage';
+import { pollDelay, tokensToCheck } from '../lib/pollPlan';
 import { DRIVE_MAX_BYTES, driveAttachment, gatewayDelete, gatewayOf, gatewaySend, getDrive, loadDefaultGateway } from '../lib/drive';
 import type { GatewayConfig } from '../lib/drive';
 import { ROOT_FOLDER, boardFolderName, safe } from '../lib/driveBackup';
@@ -125,6 +126,8 @@ export interface BoardStore {
   boards: BoardData[];
   loading: boolean;
   error: string;
+  /** Token của bảng đang mở trên màn hình ('' nếu đang ở trang khác): chỉ bảng này được hỏi dữ liệu mới thường xuyên. */
+  watchBoard: (token: string) => void;
   isReal: boolean;
   /** Token trong đường dẫn /b/<token> (khách mở link chia sẻ), nếu có. */
   linkToken: string | null;
@@ -345,6 +348,13 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
   boardsRef.current = boards;
   /** Dấu vân tay đã thấy của từng bảng (theo token). */
   const fpRef = useRef<Record<string, string | null>>({});
+  const watchedRef = useRef('');
+  const checkNowRef = useRef<() => void>(() => undefined);
+  const watchBoard = useCallback((token: string): void => {
+    if (watchedRef.current === token) return;
+    watchedRef.current = token;
+    if (token) checkNowRef.current();
+  }, []);
 
   const loadAll = useCallback(async (first: boolean): Promise<{ all: BoardData[]; missing: boolean }> => {
     if (first && userId) { try { await api.purgeTrash(); } catch { /* chưa có hàm dọn thùng rác: bỏ qua */ } }
@@ -372,7 +382,8 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     return () => { alive = false; };
   }, [isReal, loadAll]);
 
-  // Tự làm mới êm mỗi 5 giây: hỏi dấu vân tay (rất nhẹ), có đổi mới tải lại. Tạm nghỉ khi thẻ trình duyệt bị ẩn hoặc đang kéo thả.
+  // Tự làm mới êm: hỏi dấu vân tay (rất nhẹ), có đổi mới tải lại. Nhịp 5–8 giây khi đang có thay đổi, lâu im thì thưa dần (pollPlan).
+  // Tạm nghỉ khi thẻ trình duyệt bị ẩn hoặc đang kéo thả.
   useEffect(() => {
     if (!isReal) return;
     let stop = false;
@@ -380,18 +391,28 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     let down = false;
     let useFallback = false;
     let lastFull = Date.now();
+    const base = userId ? POLL_MS : POLL_GUEST_MS;
+    let lastChange = Date.now();
+    let lastTick = 0;
+    let lastSweep = 0;
     const refresh = async (): Promise<void> => {
       const { all } = await loadAll(false);
       if (!stop) setBoards((prev) => keepLocal(prev, all, !!userId));
       lastFull = Date.now();
     };
-    const tick = async (): Promise<void> => {
+    const tick = async (now = false): Promise<void> => {
       if (busy || stop || document.hidden || down) return;
+      // Hẹn giờ chạy đều theo nhịp gốc; chưa tới lượt (đang thưa nhịp) thì bỏ qua. Trừ 500ms vì hẹn giờ không đúng từng mili giây.
+      if (!now && Date.now() - lastTick < pollDelay(base, Date.now() - lastChange) - 500) return;
       busy = true;
+      lastTick = Date.now();
       try {
         if (useFallback) { if (Date.now() - lastFull >= POLL_FALLBACK_MS) await refresh(); return; }
-        const tokens = [...new Set([...(linkToken ? [linkToken] : []), ...boardsRef.current.filter((b) => !b.deletedAt).map((b) => b.shareToken)])].slice(0, 20);
+        const all = [...new Set([...(linkToken ? [linkToken] : []), ...boardsRef.current.filter((b) => !b.deletedAt).map((b) => b.shareToken)])].slice(0, 20);
+        // Mở bảng nào hỏi bảng đó; các bảng còn lại gom lại hỏi thưa.
+        const { tokens, sweep } = tokensToCheck(all, watchedRef.current || linkToken || '', Date.now() - lastSweep);
         if (tokens.length === 0) return;
+        if (sweep) lastSweep = Date.now();
         const fps = await Promise.all(tokens.map((t) => api.boardFingerprint(t, !!userId).then((f) => ({ f }), (e: unknown) => ({ e }))));
         let changed = false;
         let missingFn = false;
@@ -402,11 +423,13 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
           fpRef.current[t] = r.f;
         });
         if (missingFn && !changed) { useFallback = true; return; }
-        if (changed) await refresh();
+        if (changed) { lastChange = Date.now(); await refresh(); }
       } catch { /* mất mạng một lúc: lần sau thử lại */ } finally { busy = false; }
     };
-    const timer = window.setInterval(() => { void tick(); }, userId ? POLL_MS : POLL_GUEST_MS);
-    const onShow = (): void => { if (!document.hidden) void tick(); };
+    const timer = window.setInterval(() => { void tick(); }, base);
+    // Quay lại thẻ: hỏi ngay mọi bảng và trở về nhịp nhanh.
+    const onShow = (): void => { if (!document.hidden) { lastChange = Date.now(); lastSweep = 0; void tick(true); } };
+    checkNowRef.current = () => { lastChange = Date.now(); void tick(true); };
     window.addEventListener('focus', onShow);
     window.addEventListener('online', onShow);
     const onDown = (): void => { down = true; };
@@ -417,6 +440,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     document.addEventListener('pointercancel', onUp, true);
     return () => {
       stop = true;
+      checkNowRef.current = () => undefined;
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', onShow);
       window.removeEventListener('focus', onShow);
@@ -1151,7 +1175,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
   }, [isReal, actor, patch]);
 
   return {
-    boards: visibleBoards, loading, error, isReal, linkToken,
+    boards: visibleBoards, loading, error, isReal, linkToken, watchBoard,
     rateCard, addComment, deleteOwnComment, setCommentStatus, deleteComment, setTeacherStars,
     inviteCollaborator, changeCollaboratorRole, removeCollaborator, leaveBoard,
     createBoard, duplicateBoard, updateMeta, addCard, setCardLayout, setStatus, setGrade, vote, deleteCard, moveCards, loadRosterNames, reassignCard, findCardByCode, findCardsByName, saveCardByCode, clearSubmissions, updateCardAttachments, removeStoredAttachments,

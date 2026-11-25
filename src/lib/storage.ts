@@ -16,7 +16,11 @@ export interface UploadedFile {
 export async function uploadAttachment(boardId: string, file: File): Promise<UploadedFile> {
   if (!supabase) throw new Error('Chưa cấu hình Supabase (.env).');
   const path = `${boardId}/${crypto.randomUUID()}.${extensionOf(file)}`;
-  const { error } = await supabase.storage.from(BUCKET).upload(path, file, { contentType: baseMime(file), upsert: false });
+  const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
+    contentType: baseMime(file), upsert: false,
+    // Tên tệp ngẫu nhiên, không bao giờ ghi đè: cho trình duyệt giữ 7 ngày (mặc định 1 giờ) để đỡ tải lại.
+    cacheControl: '604800',
+  });
   if (error) throw new Error(`Không tải được tệp lên: ${error.message}`);
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
   return { url: data.publicUrl, path };

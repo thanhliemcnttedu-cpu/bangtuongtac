@@ -1,3 +1,4 @@
+import { fetchAll } from './fetchAll';
 import { supabase } from './supabase';
 import type { Attachment, ItemStatus, TaskLog, TaskSubItem } from '../types/board';
 
@@ -35,7 +36,7 @@ const toRow = (i: Omit<TaskSubItem, 'id' | 'createdAt'>) => ({
 /** Đọc mọi đầu việc (kể cả đã xóa mềm) của các công việc đã cho. */
 export async function listItems(taskIds: string[]): Promise<TaskSubItem[]> {
   if (taskIds.length === 0) return [];
-  const { data, error } = await db().from('task_items').select('*').in('task_id', taskIds).order('sort').order('created_at');
+  const { data, error } = await fetchAll<unknown>((f, t) => db().from('task_items').select('*').in('task_id', taskIds).order('sort').order('created_at').order('id').range(f, t));
   if (error) fail('Không tải được đầu việc', error.message);
   return ((data ?? []) as ItemDb[]).map(toItem);
 }
