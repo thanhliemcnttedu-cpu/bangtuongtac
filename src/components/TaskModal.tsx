@@ -55,7 +55,7 @@ export function TaskModal({ board, task, defaultLessonId = null, otherBoards, on
     };
     for (const m of board.roster) {
       for (const role of (m.role ?? '').split(',').map((x) => x.trim()).filter(Boolean)) add(role, assigneeKey(m));
-      if (m.homeroom?.trim()) add(`CN ${m.homeroom.trim()}`, assigneeKey(m));
+      if (m.homeroom?.trim()) add('Giáo viên chủ nhiệm', assigneeKey(m));
     }
     return list;
   }, [board.roster]);
@@ -115,7 +115,7 @@ export function TaskModal({ board, task, defaultLessonId = null, otherBoards, on
                   <li key={m.id}>
                     <label className="flex items-start gap-2 rounded-xl px-2 py-1 text-sm hover:bg-brand-50">
                       <input type="checkbox" className="mt-0.5 h-4 w-4 accent-brand-600" checked={people.includes(assigneeKey(m))} onChange={() => setPeople(toggle(people, assigneeKey(m)))} />
-                      <span className="min-w-0 break-words">{m.name}{m.role ? <span className="text-ink-2"> · {m.role}</span> : null}</span>
+                      <span className="min-w-0 break-words">{m.name}{m.role ? <span className="text-ink-2"> · {m.role}</span> : null}{m.homeroom ? <span className="text-ink-2"> · CN {m.homeroom}</span> : null}</span>
                     </label>
                   </li>
                 ))}

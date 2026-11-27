@@ -81,7 +81,7 @@ function TeacherGrading({ card, board, fb }: { card: SubmissionCard; board: Boar
     <Section title="Chấm bài (chỉ giáo viên)" tone="bg-teal2-50">
       <div className="space-y-3">
         <ReassignRow card={card} board={board} fb={fb} />
-        {card.editCode && <p className="rounded-xl bg-white/70 px-3 py-2 text-xs text-ink-2">Mã sửa bài của em này: <b className="select-all font-mono text-sm tracking-widest text-ink">{formatEditCode(card.editCode)}</b> (đọc cho em nếu em quên mã)</p>}
+        {card.editCode && <p className="rounded-xl bg-white/70 px-3 py-2 text-xs text-ink-2">{board.settings.scope === 'team' ? 'Mã sửa bài của người này' : 'Mã sửa bài của em này'}: <b className="select-all font-mono text-sm tracking-widest text-ink">{formatEditCode(card.editCode)}</b> {board.settings.scope === 'team' ? '(đọc cho đồng nghiệp nếu quên mã)' : '(đọc cho em nếu em quên mã)'}</p>}
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-sm font-bold">Sao</span>
           <StarsInput label="Số sao giáo viên chấm" value={card.teacherStars ?? 0} onChange={(n) => void fb.onTeacherStars(card.id, n === card.teacherStars ? null : n)} />

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, Circle, Eye, ListChecks, Pencil } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Circle, Eye, ListChecks, Pencil } from 'lucide-react';
 import type { BoardData, SubmissionCard, TaskItem } from '../types/board';
 import { formatDateTime, formatFull } from '../lib/format';
 import { statusOfTask } from '../lib/teamStatus';
@@ -46,6 +46,7 @@ export function TeamStatusPanel({ board, roster, mine, load, loadAssignees, onVi
   }, [board.id, board.tasks]);
   const [show, setShow] = useState<Show>('all');
   const [who, setWho] = useState('');
+  const [open, setOpen] = useState<string[]>([]);
   const loadRef = useRef(load);
   loadRef.current = load;
 
@@ -88,15 +89,24 @@ export function TeamStatusPanel({ board, roster, mine, load, loadAssignees, onVi
         const isMine = (m: MemberStatus): boolean => m.ids.some((id) => mine.has(id));
         const list = all.filter((m) => (!who || m.name === who)
           && (show === 'all' || (show === 'done' && !!m.row) || (show === 'missing' && !m.row) || (show === 'mine' && isMine(m))));
+        // Đang lọc hoặc chỉ có một việc thì mở sẵn; còn lại thu gọn để cả tổ 20 người không làm trang quá dài.
+        const forced = board.tasks.length === 1 || show !== 'all' || !!who;
+        const expanded = forced || open.includes(task.id);
         return (
           <article key={task.id} className="rounded-2xl border-[1.5px] border-brand-100 bg-white">
-            <header className="flex flex-wrap items-center justify-between gap-2 border-b border-brand-100 px-3 py-2">
-              <h3 className="min-w-0 break-words font-extrabold text-brand-800">{task.label}</h3>
+            <header className={`flex flex-wrap items-center justify-between gap-2 px-3 py-2 ${expanded ? 'border-b border-brand-100' : ''}`}>
+              <h3 className="min-w-0">
+                <button type="button" aria-expanded={expanded} disabled={forced} onClick={() => setOpen((o) => (o.includes(task.id) ? o.filter((x) => x !== task.id) : [...o, task.id]))}
+                  className="flex min-h-[44px] items-center gap-1.5 text-left font-extrabold text-brand-800">
+                  <ChevronRight className={`h-4 w-4 shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} aria-hidden />
+                  <span className="break-words">{task.label}</span>
+                </button>
+              </h3>
               <p className="text-sm font-bold text-ink-2">
                 {done}/{all.length} đã nộp{all.length > done ? ` · ${all.length - done} chưa nộp` : ''}{task.dueAt ? ` · Hạn ${formatDateTime(task.dueAt)}` : ''}
               </p>
             </header>
-            <ul className="divide-y divide-brand-100">
+            {expanded && <ul className="divide-y divide-brand-100">
               {list.length === 0 && <li className="px-3 py-3 text-sm text-ink-2">Không có ai phù hợp bộ lọc.</li>}
               {list.map((m) => {
                 const s = stateOf(m, task);
@@ -117,7 +127,7 @@ export function TeamStatusPanel({ board, roster, mine, load, loadAssignees, onVi
                   </li>
                 );
               })}
-            </ul>
+            </ul>}
           </article>
         );
       })}

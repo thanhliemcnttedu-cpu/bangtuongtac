@@ -116,7 +116,7 @@ Cảm ơn bạn.`,
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-bold">{d.member.name}{d.member.role ? <span className="ml-1.5 text-xs font-semibold text-indigo-700">{d.member.role}</span> : null}</span>
-                      <span className="block text-xs text-ink-2">{formatDateTime(d.card.submittedAt)}{d.card.attachments.length > 0 ? ` · ${d.card.attachments.length} tệp` : task.ackOnly ? ' · đã đọc' : ''}</span>
+                      <span className="block text-xs text-ink-2">{formatDateTime(d.card.submittedAt)}{d.card.resubmittedAt ? ` · nộp lại ${formatDateTime(d.card.resubmittedAt)}` : ''}{d.card.attachments.length > 0 ? ` · ${d.card.attachments.length} tệp` : task.ackOnly ? ' · đã đọc' : ''}</span>
                     </span>
                     <span className={`chip shrink-0 ${d.late ? 'bg-orange-100 text-orange-900 ring-orange-200' : 'bg-emerald-100 text-emerald-900 ring-emerald-200'}`}>{d.late ? 'Muộn' : 'Đúng hạn'}{d.minutesFromDue !== null ? ` · ${dueDiffText(d.minutesFromDue)}` : ''}</span>
                   </li>
