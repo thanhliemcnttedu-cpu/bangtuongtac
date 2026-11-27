@@ -44,7 +44,8 @@ export async function runSystemCheck(): Promise<CheckItem[]> {
     probe('join_code', 'Mã vào lớp 6 số (cột join_code)', () => db.from('boards').select('join_code,join_enabled').limit(0)),
     probe('join_rpc', 'Học sinh nhập mã ở trang chủ (hàm board_token_by_code)', () => db.rpc('board_token_by_code', { p_code: 'kiem-tra' })),
     probe('team_status', 'Thành viên tổ thấy ai đã nộp (chạy docs/cap-nhat-tien-do-to.sql)', () => db.rpc('get_team_status', { p_token: 'kiem-tra' })),
-    probe('roster_public','Học sinh chọn tên trong danh sách (hàm get_roster_public)', () => db.rpc('get_roster_public', { p_token: 'kiem-tra' })),
+    probe('team_profile', 'Hồ sơ thành viên tổ và lịch sử nộp (chạy docs/cap-nhat-to-chuyen-mon.sql)', () => db.from('board_roster').select('gender,birth_date,homeroom,teaching').limit(0)),
+    probe('roster_public', 'Học sinh chọn tên trong danh sách (hàm get_roster_public)', () => db.rpc('get_roster_public', { p_token: 'kiem-tra' })),
   ]);
   // Cổng Google Drive (nếu đã kết nối trên máy này): phiên bản 4 mới gửi được email và gói ZIP từ Drive.
   const gw = loadDefaultGateway();

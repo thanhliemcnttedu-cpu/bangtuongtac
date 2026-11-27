@@ -3,6 +3,7 @@
 
 import type { BoardData, Lesson, RosterMember, SubmissionCard, TaskItem } from '../types/board';
 import { classPart, normalize, rosterMatcher } from './boardLogic';
+import { isAssignee } from './teamRoster';
 
 /** scheduled: chưa đến giờ giao · open: đang nhận bài · soon: sắp hết hạn (≤ 24 giờ) · overdue: quá hạn. */
 export type TaskPhase = 'scheduled' | 'open' | 'soon' | 'overdue';
@@ -103,9 +104,9 @@ export function targetsUnit(t: TaskItem, unit: string): boolean {
 }
 
 /** Thành viên có thuộc đối tượng của việc không: có danh sách Gmail riêng thì theo Gmail, không thì theo tổ / đơn vị. */
-export function targetsMember(t: TaskItem, m: { unit: string; email?: string }): boolean {
-  const emails = t.assigneeEmails ?? [];
-  if (emails.length > 0) return !!m.email && emails.includes(m.email.trim().toLowerCase());
+export function targetsMember(t: TaskItem, m: { name?: string; unit: string; email?: string }): boolean {
+  const keys = t.assigneeEmails ?? [];
+  if (keys.length > 0) return isAssignee(keys, m);
   return targetsUnit(t, m.unit);
 }
 

@@ -30,7 +30,7 @@ interface CardDb {
   loc: CardLocation | null; pos: { x: number; y: number } | null; venn: VennRegion | null;
   teacher_stars: number | null; lesson_id?: string | null; late?: boolean | null;
   edit_token?: string | null;
-  resubmitted_at?: string | null; revisions?: number | null;
+  resubmitted_at?: string | null; revisions?: number | null; history?: { at: string; files: string[] }[] | null;
   attachments: Attachment[] | null; poll: { id: string; label: string }[] | null; grade: number | string | null;
   /** Trình bày thẻ tài liệu: { badge, color, steps }. */
   meta?: { badge?: string; color?: string; steps?: string[]; order?: number } | null;
@@ -71,8 +71,8 @@ function toTask(t: TaskDb): TaskItem {
 function toLesson(l: LessonDb): Lesson {
   return { id: l.id, title: l.title, description: l.description ?? '', startsAt: l.starts_at ?? null, endsAt: l.ends_at ?? null };
 }
-interface RosterDb { id: string; board_id: string; name: string; unit: string; started_working: boolean; role?: string | null; email?: string | null }
-const toRoster = (r: RosterDb): RosterMember => ({ id: r.id, name: r.name, unit: r.unit, startedWorking: r.started_working, role: r.role ?? '', email: r.email ?? '' });
+interface RosterDb { id: string; board_id: string; name: string; unit: string; started_working: boolean; role?: string | null; email?: string | null; gender?: string | null; birth_date?: string | null; homeroom?: string | null; teaching?: string | null }
+const toRoster = (r: RosterDb): RosterMember => ({ id: r.id, name: r.name, unit: r.unit, startedWorking: r.started_working, role: r.role ?? '', email: r.email ?? '', gender: r.gender ?? '', birthDate: r.birth_date ?? '', homeroom: r.homeroom ?? '', teaching: r.teaching ?? '' });
 interface RatingAgg { card_id: string; n: number; sum: number }
 /** Nhận xét: hàng của bảng comments (author_name, created_at) hoặc phần tử của get_board_public (author, at). */
 interface CommentDb { id: string; card_id: string; board_id?: string; author?: string; author_name?: string; body: string; at?: string; created_at?: string; status?: string }
@@ -144,6 +144,7 @@ function toSubmission(c: CardDb, boardId: string, votes: VoteCount[], ratings: R
     editCode: c.edit_token ?? undefined,
     resubmittedAt: c.resubmitted_at ?? undefined,
     revisions: c.revisions ? Number(c.revisions) : undefined,
+    history: c.history && c.history.length > 0 ? c.history : undefined,
     grade: c.grade === null || c.grade === undefined ? undefined : Number(c.grade),
     teacherStars: c.teacher_stars ?? undefined,
     ratingCount: rate ? Number(rate.n) : 0,
@@ -359,12 +360,20 @@ export async function deleteCardAsManager(cardId: string): Promise<void> {
 
 export async function replaceRoster(boardId: string, roster: RosterMember[]): Promise<RosterMember[]> {
   const client = db();
+  // Cột hồ sơ chỉ gửi khi có dữ liệu: máy chủ chưa chạy SQL đợt 1 thì danh sách thường vẫn lưu được.
+  const profile = roster.some((m) => m.gender || m.birthDate || m.homeroom || m.teaching);
+  // Hỏi cột trước khi xóa danh sách cũ, để thiếu cột thì không mất dữ liệu.
+  if (profile) {
+    const probe = await client.from('board_roster').select('gender,birth_date,homeroom,teaching').limit(0);
+    if (probe.error) fail('Chưa lưu được hồ sơ thành viên (cần chạy docs/cap-nhat-to-chuyen-mon.sql)', probe.error.message);
+  }
   const del = await client.from('board_roster').delete().eq('board_id', boardId);
   if (del.error) fail('Không cập nhật được danh sách', del.error.message);
   if (roster.length === 0) return [];
   const ins = await client
     .from('board_roster')
-    .insert(roster.map((m) => ({ board_id: boardId, name: m.name, unit: m.unit, started_working: false, role: m.role ?? '', email: (m.email ?? '').trim().toLowerCase() })))
+    .insert(roster.map((m) => ({ board_id: boardId, name: m.name, unit: m.unit, started_working: false, role: m.role ?? '', email: (m.email ?? '').trim().toLowerCase(),
+      ...(profile ? { gender: m.gender ?? '', birth_date: m.birthDate ?? '', homeroom: m.homeroom ?? '', teaching: m.teaching ?? '' } : {}) })))
     .select('*');
   if (ins.error) fail('Không lưu được danh sách', ins.error.message);
   return ((ins.data ?? []) as RosterDb[]).map(toRoster);
@@ -531,6 +540,12 @@ export async function getTeamStatus(token: string): Promise<TeamStatusRow[] | nu
   return ((data ?? []) as { id: string; task_id: string | null; author_name: string; group_name: string | null; status: TeamStatusRow['status']; late: boolean | null; created_at: string; resubmitted_at: string | null }[]).map((r) => ({
     id: r.id, taskId: r.task_id ?? '', author: r.author_name, unit: r.group_name ?? '', status: r.status, late: !!r.late, submittedAt: r.created_at, resubmittedAt: r.resubmitted_at ?? undefined,
   }));
+}
+
+/** Tên những người được giao riêng của từng việc (không có Gmail). Máy chủ chưa cập nhật thì coi như không giao riêng. */
+export async function getTaskAssignees(token: string): Promise<Record<string, string[]>> {
+  const { data, error } = await db().rpc('get_task_assignees', { p_token: token });
+  return error ? {} : ((data ?? {}) as Record<string, string[]>);
 }
 
 export interface CardEdit { title: string; body: string; authorName: string; unit: string; attachments: Attachment[] }

@@ -24,9 +24,11 @@ export interface MemberStatus {
 const when = (r: TeamStatusRow): string => r.resubmittedAt ?? r.submittedAt;
 
 /** Danh sách người phải nộp một việc kèm trạng thái; người ngoài danh sách đã nộp được xếp cuối. */
-export function statusOfTask(task: TaskItem, roster: Pick<RosterMember, 'name' | 'unit'>[], rows: TeamStatusRow[]): MemberStatus[] {
+export function statusOfTask(task: TaskItem, roster: Pick<RosterMember, 'name' | 'unit'>[], rows: TeamStatusRow[], assignees?: string[]): MemberStatus[] {
   const targets = task.targetUnits ?? [];
-  const expected = targets.length === 0 ? roster : roster.filter((m) => targets.includes(m.unit.trim()));
+  // Việc giao riêng: chỉ tính đúng những người được giao.
+  const expected = assignees ? roster.filter((m) => assignees.includes(m.name))
+    : targets.length === 0 ? roster : roster.filter((m) => targets.includes(m.unit.trim()));
   const byName = new Map<string, MemberStatus>();
   for (const m of expected) byName.set(normalizeName(m.name), { name: m.name, ids: [] });
   for (const r of rows) {

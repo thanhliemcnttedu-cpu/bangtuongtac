@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { CheckCheck, ClipboardCopy, Download, Eye, Star } from 'lucide-react';
 import type { BoardData, BoardRow } from '../types/board';
-import { PROGRESS_LABEL, formatDateTime } from '../lib/format';
+import { PROGRESS_LABEL, formatDateTime, formatFull } from '../lib/format';
 import { downloadCsv } from '../lib/csv';
 import { buildReport, reportFilename } from '../lib/report';
 import { StatusBadge } from './StatusBadge';
@@ -107,7 +107,7 @@ export function SubmissionTableView({ rows, board, canManage, onOpen, onSetStatu
                 </td>
                 <td className="px-3 py-2.5 text-ink-2">{r.member.unit || '—'}</td>
                 <td className="px-3 py-2.5"><StatusBadge progress={r.progress} />{r.card?.late && <span className="chip ml-1 bg-orange-100 text-orange-900 ring-orange-200">Nộp muộn</span>}</td>
-                <td className="px-3 py-2.5 text-ink-2">{r.card ? formatDateTime(r.card.resubmittedAt ?? r.card.submittedAt) : '—'}{r.card?.resubmittedAt && <span className="chip ml-1 bg-violet-100 text-violet-800 ring-violet-200" title={`Nộp đầu lúc ${formatDateTime(r.card.submittedAt)}`}>Bản nộp lại</span>}</td>
+                <td className="px-3 py-2.5 text-ink-2">{r.card ? (board.settings.scope === 'team' ? formatFull : formatDateTime)(r.card.resubmittedAt ?? r.card.submittedAt) : '—'}{r.card?.resubmittedAt && <span className="chip ml-1 bg-violet-100 text-violet-800 ring-violet-200" title={`Nộp đầu lúc ${formatDateTime(r.card.submittedAt)}`}>Bản nộp lại</span>}</td>
                 {canManage && <td className="px-3 py-2.5 font-extrabold">{r.card?.grade !== undefined ? String(r.card.grade).replace('.', ',') : <span className="font-normal text-ink-3">—</span>}</td>}
                 <td className="px-3 py-2.5">
                   <div className="flex justify-end gap-1.5">

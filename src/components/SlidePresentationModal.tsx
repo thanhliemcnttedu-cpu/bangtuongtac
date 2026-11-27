@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useSlideCursor } from '../hooks/useSlideCursor';
 import { CheckCheck, ChevronLeft, ChevronRight, ExternalLink, Maximize, Star, X } from 'lucide-react';
 import type { BoardData, BoardRow, CardStatus } from '../types/board';
-import { formatDateTime } from '../lib/format';
+import { formatFull } from '../lib/format';
 import { StatusBadge } from './StatusBadge';
 import { AttachmentView } from './AttachmentView';
 import { PollView } from './PollView';
@@ -101,7 +101,15 @@ export function SlidePresentationModal({ items, startCardId, board, canManage, o
           )}
           {feedback && <FeedbackPanel card={card} board={board} fb={feedback} />}
           {!feedback && card.teacherNote && <p className="rounded-2xl bg-amber-50 p-3 text-base text-amber-900">Nhận xét của giáo viên: {card.teacherNote}</p>}
-          <p className="text-sm text-ink-3">{card.resubmittedAt ? <>Nộp lại lúc <b>{formatDateTime(card.resubmittedAt)}</b> <span className="chip ml-1 bg-violet-100 text-violet-800 ring-violet-200">Bản nộp lại{(card.revisions ?? 1) > 1 ? ` lần ${card.revisions}` : ''}</span> · nộp đầu lúc {formatDateTime(card.submittedAt)}</> : <>Nộp lúc {formatDateTime(card.submittedAt)}</>}</p>
+          <p className="text-sm text-ink-3">{card.resubmittedAt ? <>Nộp lại lúc <b>{formatFull(card.resubmittedAt)}</b> <span className="chip ml-1 bg-violet-100 text-violet-800 ring-violet-200">Bản nộp lại{(card.revisions ?? 1) > 1 ? ` lần ${card.revisions}` : ''}</span> · nộp đầu lúc {formatFull(card.submittedAt)}</> : <>Nộp lúc {formatFull(card.submittedAt)}</>}</p>
+          {card.history && (
+            <details className="text-sm text-ink-2">
+              <summary className="cursor-pointer font-bold">Lịch sử nộp lại ({card.history.length})</summary>
+              <ol className="mt-1 space-y-1">
+                {card.history.map((h, i) => <li key={`${h.at}-${i}`}><b>Lần {i + 1}:</b> {formatFull(h.at)}{h.files.length > 0 ? ` · ${h.files.join(', ')}` : ''}</li>)}
+              </ol>
+            </details>
+          )}
         </div>
       </main>
 

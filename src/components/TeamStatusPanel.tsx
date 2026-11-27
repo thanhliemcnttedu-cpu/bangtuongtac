@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Circle, Eye, ListChecks, Pencil } from 'lucide-react';
 import type { BoardData, SubmissionCard, TaskItem } from '../types/board';
-import { formatDateTime } from '../lib/format';
+import { formatDateTime, formatFull } from '../lib/format';
 import { statusOfTask } from '../lib/teamStatus';
 import type { MemberStatus, TeamStatusRow } from '../lib/teamStatus';
 import { DownloadFiles } from './DownloadFiles';
@@ -13,6 +13,8 @@ interface Props {
   mine: ReadonlySet<string>;
   /** Hỏi máy chủ ai đã nộp; null = máy chủ chưa có hàm này. */
   load: () => Promise<TeamStatusRow[] | null>;
+  /** Tên người được giao riêng theo từng việc. */
+  loadAssignees: () => Promise<Record<string, string[]>>;
   onView: (card: SubmissionCard) => void;
   onEdit: (cardId: string) => void;
 }
@@ -32,8 +34,16 @@ function stateOf(m: MemberStatus, task: TaskItem): { text: string; tone: string 
 }
 
 /** Thành viên mở link tổ là thấy ngay từng việc: ai đã nộp, ai chưa, lúc nào; được phép thì xem và tải tệp. */
-export function TeamStatusPanel({ board, roster, mine, load, onView, onEdit }: Props) {
+export function TeamStatusPanel({ board, roster, mine, load, loadAssignees, onView, onEdit }: Props) {
   const [rows, setRows] = useState<TeamStatusRow[] | null>(null);
+  const [assignees, setAssignees] = useState<Record<string, string[]>>({});
+  const assigneesRef = useRef(loadAssignees);
+  assigneesRef.current = loadAssignees;
+  useEffect(() => {
+    let alive = true;
+    void assigneesRef.current().then((a) => { if (alive) setAssignees(a); }, () => undefined);
+    return () => { alive = false; };
+  }, [board.id, board.tasks]);
   const [show, setShow] = useState<Show>('all');
   const [who, setWho] = useState('');
   const loadRef = useRef(load);
@@ -73,7 +83,7 @@ export function TeamStatusPanel({ board, roster, mine, load, onView, onEdit }: P
       </div>
 
       {board.tasks.map((task) => {
-        const all = statusOfTask(task, roster, rows);
+        const all = statusOfTask(task, roster, rows, assignees[task.id]);
         const done = all.filter((m) => m.row).length;
         const isMine = (m: MemberStatus): boolean => m.ids.some((id) => mine.has(id));
         const list = all.filter((m) => (!who || m.name === who)
@@ -98,7 +108,7 @@ export function TeamStatusPanel({ board, roster, mine, load, onView, onEdit }: P
                     <span className="min-w-0 break-words font-bold">{m.name}</span>
                     {myId && <span className="chip bg-amber-100 text-amber-900 ring-amber-200">Của tôi</span>}
                     <span className={`chip ${s.tone}`}>{s.text}</span>
-                    {m.row && <span className="text-sm text-ink-2">{m.row.resubmittedAt ? 'Nộp lại' : 'Nộp'} lúc {formatDateTime(m.row.resubmittedAt ?? m.row.submittedAt)}</span>}
+                    {m.row && <span className="text-sm text-ink-2">{m.row.resubmittedAt ? 'Nộp lại' : 'Nộp'} lúc {formatFull(m.row.resubmittedAt ?? m.row.submittedAt)}</span>}
                     <span className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
                       {card && <button type="button" onClick={() => onView(card)} className="btn-ghost btn-sm max-lg:min-h-[44px]"><Eye className="h-3.5 w-3.5" aria-hidden /> Xem</button>}
                       {card && <DownloadFiles card={card} className="btn-ghost btn-sm max-lg:min-h-[44px]" />}

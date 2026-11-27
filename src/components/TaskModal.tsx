@@ -6,6 +6,7 @@ import { RepeatSelect } from './RepeatSelect';
 import { formatSize } from '../lib/media';
 import type { TaskInput } from '../lib/boardApi';
 import { KIND_LABEL, fromLocalInput, toLocalInput, unitsOf, wordsFor } from '../lib/lessons';
+import { assigneeKey } from '../lib/teamRoster';
 import { ModalShell } from './ModalShell';
 
 interface Props {
@@ -42,7 +43,22 @@ export function TaskModal({ board, task, defaultLessonId = null, otherBoards, on
   const [assignedAt, setAssignedAt] = useState(toLocalInput(task?.assignedAt));
   const [dueAt, setDueAt] = useState(toLocalInput(task?.dueAt));
   const [allowLate, setAllowLate] = useState(task?.allowLate ?? false);
-  const [targetAll, setTargetAll] = useState((task?.targetUnits ?? []).length === 0);
+  const [targetAll, setTargetAll] = useState((task?.targetUnits ?? []).length === 0 && (task?.assigneeEmails ?? []).length === 0);
+  // Bảng tổ: giao cho đúng những người được chọn.
+  const [byPerson, setByPerson] = useState((task?.assigneeEmails ?? []).length > 0);
+  const [people, setPeople] = useState<string[]>(task?.assigneeEmails ?? []);
+  const groups = useMemo(() => {
+    const list: { label: string; keys: string[] }[] = [];
+    const add = (label: string, key: string): void => {
+      const found = list.find((g) => g.label === label);
+      if (found) found.keys.push(key); else list.push({ label, keys: [key] });
+    };
+    for (const m of board.roster) {
+      for (const role of (m.role ?? '').split(',').map((x) => x.trim()).filter(Boolean)) add(role, assigneeKey(m));
+      if (m.homeroom?.trim()) add(`CN ${m.homeroom.trim()}`, assigneeKey(m));
+    }
+    return list;
+  }, [board.roster]);
   const [targets, setTargets] = useState<string[]>(task?.targetUnits ?? []);
   const [extraUnit, setExtraUnit] = useState('');
   const [others, setOthers] = useState<string[]>([]);
@@ -61,7 +77,8 @@ export function TaskModal({ board, task, defaultLessonId = null, otherBoards, on
   const submit = async (e: FormEvent): Promise<void> => {
     e.preventDefault();
     if (!label.trim()) { setError('Hãy nhập tên bài tập / yêu cầu.'); document.getElementById('tk-label')?.focus(); return; }
-    if (!targetAll && targets.length === 0) { setError(`Chọn ít nhất một ${w.unit} được giao, hoặc chọn “${w.everyone}”.`); return; }
+    if (!targetAll && !byPerson && targets.length === 0) { setError(`Chọn ít nhất một ${w.unit} được giao, hoặc chọn “${w.everyone}”.`); return; }
+    if (!targetAll && byPerson && people.length === 0) { setError(`Chọn ít nhất một người được giao, hoặc chọn “${w.everyone}”.`); return; }
     if (scheduled && !assignedAt) { setError('Hãy chọn thời điểm giao bài hoặc chọn “Giao ngay”.'); return; }
     setBusy(true);
     try {
@@ -70,7 +87,10 @@ export function TaskModal({ board, task, defaultLessonId = null, otherBoards, on
         ...(team ? { repeat: dueAt ? repeat : 'none', seriesId: task?.seriesId, ackOnly: ack, needsEvidence: !ack && evidenceRequired, attachments: keep, files, links: linkText.split(/\r?\n|\s{2,}/).map((x) => x.trim()).filter(Boolean) } : {}),
         assignedAt: scheduled ? fromLocalInput(assignedAt) : (task?.assignedAt && Date.parse(task.assignedAt) <= Date.now() ? task.assignedAt : new Date().toISOString()), // "giao ngay" ghi đúng lúc giao để chia 3 ngưỡng thời gian chính xác
         dueAt: fromLocalInput(dueAt), allowLate,
-        targetUnits: targetAll ? [] : targets,
+        targetUnits: targetAll || byPerson ? [] : targets,
+        assigneeEmails: !targetAll && byPerson ? people : [],
+        // Giữ nguyên các mục của việc đang sửa mà hộp này không có ô nhập.
+        ...(task ? { progress: task.progress, priority: task.priority, category: task.category, startAt: task.startAt, reportDueAt: task.reportDueAt, completedAt: task.completedAt, repeatUntil: task.repeatUntil } : {}),
       }, others);
     } catch (err) { setError(err instanceof Error ? err.message : 'Không lưu được.'); setBusy(false); }
   };
@@ -78,9 +98,32 @@ export function TaskModal({ board, task, defaultLessonId = null, otherBoards, on
   const targetBlock = (
         <fieldset className="space-y-2">
           <legend className="field-label">Giao cho</legend>
-          <label className="flex items-center gap-2 text-sm"><input type="radio" name="tk-target" className="h-4 w-4 accent-brand-600" checked={targetAll} onChange={() => setTargetAll(true)} /> {w.everyone}</label>
-          <label className="flex items-center gap-2 text-sm"><input type="radio" name="tk-target" className="h-4 w-4 accent-brand-600" checked={!targetAll} onChange={() => setTargetAll(false)} /> Chỉ một số {w.unit}</label>
-          {!targetAll && (
+          <label className="flex items-center gap-2 text-sm"><input type="radio" name="tk-target" className="h-4 w-4 accent-brand-600" checked={targetAll} onChange={() => { setTargetAll(true); setByPerson(false); }} /> {w.everyone}</label>
+          <label className="flex items-center gap-2 text-sm"><input type="radio" name="tk-target" className="h-4 w-4 accent-brand-600" checked={!targetAll && !byPerson} onChange={() => { setTargetAll(false); setByPerson(false); }} /> Chỉ một số {w.unit}</label>
+          {team && board.roster.length > 0 && <label className="flex items-center gap-2 text-sm"><input type="radio" name="tk-target" className="h-4 w-4 accent-brand-600" checked={!targetAll && byPerson} onChange={() => { setTargetAll(false); setByPerson(true); }} /> Chọn từng người</label>}
+          {!targetAll && byPerson && (
+            <div className="space-y-2 rounded-2xl border border-brand-100 p-3">
+              {groups.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs font-bold text-ink-2">Chọn nhanh:</span>
+                  {groups.map((g) => <button key={g.label} type="button" className="chip bg-brand-50 text-brand-800 ring-brand-200" onClick={() => setPeople((list) => [...new Set([...list, ...g.keys])])}>{g.label}</button>)}
+                  <button type="button" className="chip bg-white text-ink-2 ring-brand-200" onClick={() => setPeople([])}>Bỏ chọn hết</button>
+                </div>
+              )}
+              <ul className="grid max-h-48 gap-1 overflow-y-auto sm:grid-cols-2">
+                {board.roster.map((m) => (
+                  <li key={m.id}>
+                    <label className="flex items-start gap-2 rounded-xl px-2 py-1 text-sm hover:bg-brand-50">
+                      <input type="checkbox" className="mt-0.5 h-4 w-4 accent-brand-600" checked={people.includes(assigneeKey(m))} onChange={() => setPeople(toggle(people, assigneeKey(m)))} />
+                      <span className="min-w-0 break-words">{m.name}{m.role ? <span className="text-ink-2"> · {m.role}</span> : null}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-ink-2">Đã chọn {people.length} người.</p>
+            </div>
+          )}
+          {!targetAll && !byPerson && (
             <div className="space-y-2 rounded-2xl border border-brand-100 p-3">
               <div className="flex flex-wrap gap-2">
                 {knownUnits.length === 0 && <p className="text-xs text-ink-2">Chưa có danh sách. Hãy nhập tên {w.unit} bên dưới.</p>}

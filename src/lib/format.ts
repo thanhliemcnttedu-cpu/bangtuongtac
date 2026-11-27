@@ -21,6 +21,12 @@ export const PROGRESS_STYLE: Record<MemberProgress, string> = {
 
 const pad = (n: number): string => String(n).padStart(2, '0');
 
+/** Dấu thời gian đầy đủ cho hồ sơ nộp: giờ:phút:giây ngày/tháng/năm. */
+export function formatFull(iso: string): string {
+  const d = new Date(iso);
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+
 export function formatDateTime(iso: string): string {
   const d = new Date(iso);
   return `${pad(d.getHours())}:${pad(d.getMinutes())} · ${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;

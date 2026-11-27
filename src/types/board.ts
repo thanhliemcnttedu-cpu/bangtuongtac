@@ -265,6 +265,8 @@ export interface SubmissionCard {
   /** Giờ nộp lại mới nhất (bản sửa sau khi đã nộp) và số lần nộp lại. */
   resubmittedAt?: string;
   revisions?: number;
+  /** Từng lần nộp lại (giờ máy chủ) và tên tệp của bản đó. */
+  history?: { at: string; files: string[] }[];
 }
 
 export interface RosterMember {
@@ -277,6 +279,11 @@ export interface RosterMember {
   role?: string;
   /** Gmail (tùy chọn): để tổ phó làm đồng quản lý và để gom công việc về một chỗ. */
   email?: string;
+  /** Hồ sơ thành viên tổ chuyên môn; chỉ người quản lý tổ nhận được. */
+  gender?: string;
+  birthDate?: string;
+  homeroom?: string;
+  teaching?: string;
 }
 
 /** Cài đặt giao diện của một bảng; lưu thành một cột JSON `settings` trong bảng boards. */

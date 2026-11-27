@@ -42,6 +42,7 @@ const SlidesView = lazy(() => import('./views/SlidesView').then((m) => ({ defaul
 const CanvasView = lazy(() => import('./views/CanvasView').then((m) => ({ default: m.CanvasView })));
 const MindMapView = lazy(() => import('./views/MindMapView').then((m) => ({ default: m.MindMapView })));
 const VennView = lazy(() => import('./views/VennView').then((m) => ({ default: m.VennView })));
+const TeamRosterModal = lazy(() => import('./TeamRosterModal').then((m) => ({ default: m.TeamRosterModal })));
 const TeamStatusPanel = lazy(() => import('./TeamStatusPanel').then((m) => ({ default: m.TeamStatusPanel })));
 const QuickPostModal = lazy(() => import('./QuickPostModal').then((m) => ({ default: m.QuickPostModal })));
 const TeamSubmitModal = lazy(() => import('./TeamSubmitModal').then((m) => ({ default: m.TeamSubmitModal })));
@@ -445,7 +446,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
 
         {!canView && board.settings.scope === 'team' && (
           <Suspense fallback={null}>
-            <TeamStatusPanel board={visibleBoard} roster={rosterNames} mine={mineSet} load={() => store.loadTeamStatus(savedBoard.id)}
+            <TeamStatusPanel board={visibleBoard} roster={rosterNames} mine={mineSet} load={() => store.loadTeamStatus(savedBoard.id)} loadAssignees={() => store.loadTaskAssignees(savedBoard.id)}
               onView={setViewCard} onEdit={(cardId) => { setEditCodePick(myCodeOf[cardId]); setModal('edit-mine'); }} />
           </Suspense>
         )}
@@ -619,7 +620,9 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
       {modal === 'training' && <TrainingToolsModal board={savedBoard} store={store} initialTab={trainingTab} onClose={() => setModal(null)} />}
       {modal === 'period' && <PeriodReportModal board={savedBoard} onClose={() => setModal(null)} />}
       {modal === 'task-share' && shareTaskItem && <TaskShareModal board={savedBoard} task={shareTaskItem} onClose={() => setModal(null)} />}
-      {modal === 'roster' && <RosterImportModal board={board} onApply={applyRoster} onClose={() => setModal(null)} />}
+      {modal === 'roster' && (board.settings.scope === 'team'
+        ? <TeamRosterModal board={savedBoard} onApply={applyRoster} onInvite={isOwner ? (email) => store.inviteCollaborator(savedBoard.id, email, 'editor') : undefined} onClose={() => setModal(null)} />
+        : <RosterImportModal board={board} onApply={applyRoster} onClose={() => setModal(null)} />)}
       {modal === 'lesson' && <LessonModal mode={board.mode} lesson={editLesson} onClose={() => setModal(null)}
         onSave={async (input) => { await store.saveLesson(savedBoard.id, editLesson?.id ?? null, input); setModal(null); showToast(editLesson ? 'Đã lưu thay đổi.' : 'Đã thêm vào danh sách.'); }} />}
       {modal === 'task' && <TaskModal board={savedBoard} task={editTask} defaultLessonId={taskLesson} onClose={() => setModal(null)}
