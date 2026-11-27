@@ -5,7 +5,7 @@ import type { BoardData, SubmissionCard } from '../types/board';
 import { usePostDraft } from '../hooks/usePostDraft';
 import type { PostDraft } from '../hooks/usePostDraft';
 import { DRIVE_MAX_BYTES, gatewayOf } from '../lib/drive';
-import { normalize } from '../lib/boardLogic';
+import { findByName } from '../lib/boardLogic';
 import { checkSubmit, countdown, formatDateTime, taskPhase } from '../lib/lessons';
 import { ModalShell } from './ModalShell';
 import { AttachmentPicker } from './attach/AttachmentPicker';
@@ -36,7 +36,7 @@ type Errors = Partial<Record<'name' | 'task' | 'evidence' | 'submit', string>>;
 export function TeamSubmitModal({ board, roster, initialName = '', initialTaskId, onSubmit, findMine, onReplace, onClose }: Props) {
   const rosterOnly = !!board.settings.rosterOnly;
   const { draft, set, addFiles, addLinks, removeFile, removeLink, ingest, attachError } = usePostDraft({
-    authorName: roster.some((m) => normalize(m.name) === normalize(initialName)) ? initialName : '', unit: '', title: '', body: '', files: [], links: [], location: null, poll: null,
+    authorName: findByName(roster, initialName)?.name ?? '', unit: '', title: '', body: '', files: [], links: [], location: null, poll: null,
     taskId: initialTaskId ?? board.tasks[0]?.id ?? '',
   }, gatewayOf(board.settings) ? { maxFile: DRIVE_MAX_BYTES, maxTotal: DRIVE_MAX_BYTES } : undefined);
   const [errors, setErrors] = useState<Errors>({});
@@ -48,11 +48,11 @@ export function TeamSubmitModal({ board, roster, initialName = '', initialTaskId
   const task = board.tasks.find((t) => t.id === draft.taskId);
   const ack = !!task?.ackOnly;
   const timing = task ? checkSubmit({ ...task, targetUnits: [] }, '', now) : null;
-  const picked = roster.find((m) => normalize(m.name) === normalize(draft.authorName));
+  const picked = findByName(roster, draft.authorName);
 
   const pickName = (value: string): void => {
     set('authorName', value);
-    const m = roster.find((x) => normalize(x.name) === normalize(value));
+    const m = findByName(roster, value);
     set('unit', m?.unit || 'Tổ công tác');
   };
 

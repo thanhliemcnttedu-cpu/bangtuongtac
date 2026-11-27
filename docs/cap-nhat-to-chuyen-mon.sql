@@ -4,7 +4,7 @@
 -- Cần chạy docs/cap-nhat-tien-do-to.sql trước đó.
 -- =====================================================================
 
--- 1) Hồ sơ thành viên. Chỉ chủ bảng và đồng quản lý đọc được (quyền sẵn có của board_roster);
+-- 1) Hồ sơ thành viên. Chỉ chủ bảng và người được mời (quản lý, chỉ xem) đọc được (quyền sẵn có của board_roster);
 --    danh sách công khai (get_roster_public) KHÔNG trả các cột này.
 alter table public.board_roster add column if not exists gender text not null default '';
 alter table public.board_roster add column if not exists birth_date text not null default '';

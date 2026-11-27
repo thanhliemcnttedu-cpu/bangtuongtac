@@ -9,7 +9,7 @@ import { ModalShell } from './ModalShell';
 import { AttachmentPicker } from './attach/AttachmentPicker';
 import { RichEditor } from './RichEditor';
 import { TaskNote } from './TaskNote';
-import { classPart, normalize } from '../lib/boardLogic';
+import { classPart, findByName, nameKey, normalize } from '../lib/boardLogic';
 import { checkSubmit, countdown, formatDateTime, groupTasks, taskPhase } from '../lib/lessons';
 
 export type { PostDraft };
@@ -52,11 +52,12 @@ export function QuickPostModal({ board, initialName = '', initialUnit = '', init
   }, []);
 
   const now = Date.now();
-  const picked = roster.find((m) => normalize(m.name) === normalize(draft.authorName));
+  const picked = findByName(roster, draft.authorName);
   const nameUnknown = roster.length > 0 && draft.authorName.trim().length > 1 && !picked;
   const pickName = (value: string): void => {
     set('authorName', value);
-    const same = roster.filter((x) => normalize(x.name) === normalize(value));
+    const exact = roster.filter((x) => nameKey(x.name) === nameKey(value));
+    const same = exact.length > 0 ? exact : roster.filter((x) => normalize(x.name) === normalize(value));
     // Chỉ tự điền khi tên này là duy nhất; trùng tên ở nhiều lớp thì để em chọn lớp.
     if (same.length === 1 && same[0].unit) set('unit', same[0].unit);
   };

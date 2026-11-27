@@ -33,6 +33,17 @@ export function normalize(text: string): string {
     .trim();
 }
 
+/** Tên giữ nguyên dấu, không phân biệt hoa thường và khoảng trắng thừa. */
+export const nameKey = (name: string): string => name.normalize('NFC').toLowerCase().replace(/\s+/g, ' ').trim();
+
+/** Người trong danh sách có tên này: đúng dấu trước, không có thì so không dấu nếu chỉ trúng một người. */
+export function findByName<T extends { name: string }>(list: T[], name: string): T | undefined {
+  const found = list.find((m) => nameKey(m.name) === nameKey(name));
+  if (found) return found;
+  const near = list.filter((m) => normalize(m.name) === normalize(name));
+  return near.length === 1 ? near[0] : undefined;
+}
+
 /** Phần "lớp" của đơn vị: "Lớp 4A – Tổ 2" → "Lớp 4A". Đơn vị không có dấu ngăn thì giữ nguyên. */
 export function classPart(unit: string): string {
   return unit.split(/\s[–-]\s/)[0].trim();
@@ -43,11 +54,18 @@ export function classPart(unit: string): string {
  * Không rõ thì trả null (giáo viên có thể gán thủ công).
  */
 export function rosterMatcher(roster: RosterMember[]): (card: { authorName: string; unit: string }) => RosterMember | null {
-  const byName = new Map<string, RosterMember[]>();
-  for (const m of roster) { const k = normalize(m.name); byName.set(k, [...(byName.get(k) ?? []), m]); }
+  // Khớp đúng dấu trước ("Hà" khác "Hạ"); chỉ khi không thấy mới so không dấu (người nộp gõ thiếu dấu).
+  const exact = new Map<string, RosterMember[]>();
+  const loose = new Map<string, RosterMember[]>();
+  const put = (map: Map<string, RosterMember[]>, k: string, m: RosterMember): void => { map.set(k, [...(map.get(k) ?? []), m]); };
+  for (const m of roster) { put(exact, nameKey(m.name), m); put(loose, normalize(m.name), m); }
   return (card) => {
-    const list = byName.get(normalize(card.authorName));
-    if (!list) return null;
+    let list = exact.get(nameKey(card.authorName));
+    if (!list) {
+      list = loose.get(normalize(card.authorName));
+      // Không dấu mà trúng hai tên khác nhau: không đoán.
+      if (!list || new Set(list.map((m) => nameKey(m.name))).size > 1) return null;
+    }
     if (list.length === 1) return list[0];
     const u = normalize(card.unit);
     return list.find((m) => normalize(m.unit) === u) ?? list.find((m) => normalize(classPart(m.unit)) === normalize(classPart(card.unit)) && !!classPart(card.unit)) ?? null;

@@ -114,7 +114,7 @@ export function TeamRosterModal({ board, onApply, onInvite, onClose }: Props) {
           </ul>
         )}
 
-        <p className="text-xs text-ink-2">Giới tính, ngày sinh, lớp và nhiệm vụ chỉ người quản lý tổ xem được. Người nộp bài chỉ thấy họ tên, nhóm và chức vụ.</p>
+        <p className="text-xs text-ink-2">Giới tính, ngày sinh, lớp và nhiệm vụ chỉ người được mời vào bảng (quản lý hoặc chỉ xem) mới thấy. Người nộp bài chỉ thấy họ tên, nhóm và chức vụ.</p>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm font-bold">{named.length} người · {named.filter((m) => (m.email ?? '').trim()).length} có Gmail</p>
           <div className="flex gap-2">

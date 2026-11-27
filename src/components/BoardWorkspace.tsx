@@ -4,7 +4,7 @@ import type {
   BoardData, BoardRow, CardLayoutPatch, CardStatus, FilterState, Lesson, PinnedResource, RosterMember, SubmissionCard, TaskItem, ViewMode, ViewerRole,
 } from '../types/board';
 import type { BoardStore } from '../hooks/useBoardStore';
-import { EMPTY_FILTERS, applyFilters, buildRows, computeKpis, isFiltered, normalize, sortRows } from '../lib/boardLogic';
+import { EMPTY_FILTERS, applyFilters, buildRows, computeKpis, isFiltered, nameKey, sortRows } from '../lib/boardLogic';
 import { BACKGROUNDS, FONTS, ICONS, titleCss } from '../lib/boardSettings';
 import type { BoardMetaPatch } from '../lib/boardApi';
 import { DataBoardSummary } from './DataBoardSummary';
@@ -604,7 +604,7 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
         onDone={(msg) => { setModal(null); showToast(msg); }} onClose={() => setModal(null)} />}
       {codeShown && <EditCodeModal kid={board.mode === 'classroom'} code={codeShown.code} name={codeShown.name} title={codeShown.title} note={codeShown.note} onClose={() => setCodeShown(null)} />}
       {modal === 'post' && visibleBoard.settings.scope === 'team' && <TeamSubmitModal board={visibleBoard} roster={rosterNames} initialName={profile.name} initialTaskId={postTask} onSubmit={submitPost}
-        findMine={(name, taskId) => (canManage ? undefined : visibleBoard.cards.find((c) => mineSet.has(c.id) && !!c.editCode && c.taskId === taskId && normalize(c.authorName) === normalize(name)))}
+        findMine={(name, taskId) => (canManage ? undefined : visibleBoard.cards.find((c) => mineSet.has(c.id) && !!c.editCode && c.taskId === taskId && nameKey(c.authorName) === nameKey(name)))}
         onReplace={async (c, d) => { try { await store.saveCardByCode(savedBoard.id, c.editCode as string, { title: c.title, body: d.body.trim(), authorName: c.authorName, unit: c.unit, keep: [], files: d.files, links: d.links }); setModal(null); showToast('Đã thay bằng bản mới.'); return null; } catch (e) { return e instanceof Error ? e.message : 'Không thay được bài.'; } }} onClose={() => setModal(null)} />}
       {modal === 'post' && visibleBoard.settings.scope !== 'team' && <QuickPostModal board={visibleBoard} roster={rosterNames} initialName={profile.name} initialUnit={profile.unit} initialTaskId={postTask} onSubmit={submitPost} onClose={() => setModal(null)} />}
       {modal === 'share' && <ShareBoardModal board={board} canManage={canManage} access={access} myEmail={myEmail} initialTab={shareTab}
