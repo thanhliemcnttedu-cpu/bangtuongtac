@@ -310,7 +310,7 @@ export function BoardSettingsModal({ initial, onPreview, onSave, onCancel, showP
           {s.scope === 'team' && (
             <Section title="An toàn của tổ công tác">
               <Toggle label="Chỉ người có tên trong danh sách mới nộp được" hint="Người lạ có link cũng không nộp được. Máy chủ kiểm tra lại, không chỉ trang web." checked={!!s.rosterOnly} onChange={(v) => set('rosterOnly', v)} />
-              <Toggle label="Mỗi thành viên chỉ thấy bài của chính mình" hint="Người có link không xem được minh chứng của người khác. Chỉ tổ trưởng và người được mời quản lý xem tất cả." checked={!!s.privateView} onChange={(v) => set('privateView', v)} />
+              <Toggle label="Thành viên được xem tệp của nhau" hint="Tắt: thành viên chỉ thấy ai đã nộp, nộp lúc nào; bài của người khác không hiện. Đây là ẩn trên trang: ai gõ đúng tên người nộp vẫn mở, sửa được bài đó." checked={!s.privateView} onChange={(v) => set('privateView', !v)} />
             </Section>
           )}
 

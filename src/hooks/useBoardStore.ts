@@ -13,6 +13,7 @@ import { linkToAttachment } from '../lib/embeds';
 import { MAX_FILE_BYTES, attachmentTypeOf, baseMime, compressImage, docKindOf, formatSize, validateFile } from '../lib/media';
 import { removeStoredFiles, uploadAttachment } from '../lib/storage';
 import { pollDelay, tokensToCheck } from '../lib/pollPlan';
+import type { TeamStatusRow } from '../lib/teamStatus';
 import { DRIVE_MAX_BYTES, driveAttachment, gatewayDelete, gatewayOf, gatewaySend, getDrive, loadDefaultGateway } from '../lib/drive';
 import type { GatewayConfig } from '../lib/drive';
 import { ROOT_FOLDER, boardFolderName, safe } from '../lib/driveBackup';
@@ -148,6 +149,8 @@ export interface BoardStore {
   moveCards: (boardId: string, cardIds: string[], taskId: string) => Promise<void>;
   /** Danh sách tên để học sinh chọn khi nộp bài (không cần đăng nhập). */
   loadRosterNames: (boardId: string) => Promise<{ name: string; unit: string; role?: string }[]>;
+  /** Bảng tổ: ai đã nộp việc nào, lúc nào; null nếu máy chủ chưa cập nhật. */
+  loadTeamStatus: (boardId: string) => Promise<TeamStatusRow[] | null>;
   /** Giáo viên gán bài nộp cho một thành viên trong danh sách (sửa tên và tổ cho khớp). */
   reassignCard: (boardId: string, cardId: string, member: { name: string; unit: string }) => Promise<void>;
   /** Tìm bài theo tên người nộp (tên chính là chìa khóa để sửa). */
@@ -611,6 +614,13 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     if (!isReal) return b.roster.map((m) => ({ name: m.name, unit: m.unit, role: m.role ?? '' }));
     try { return await api.getRosterPublic(b.shareToken); } catch { return []; }
   }, [isReal, boards]);
+
+  const loadTeamStatus = useCallback(async (boardId: string): Promise<TeamStatusRow[] | null> => {
+    const b = boardsRef.current.find((x) => x.id === boardId);
+    if (!b) return null;
+    if (!isReal) return b.cards.map((c) => ({ id: c.id, taskId: c.taskId, author: c.authorName, unit: c.unit, status: c.status, late: !!c.late, submittedAt: c.submittedAt, resubmittedAt: c.resubmittedAt }));
+    return api.getTeamStatus(b.shareToken);
+  }, [isReal]);
 
   const reassignCard = useCallback(async (boardId: string, cardId: string, member: { name: string; unit: string }): Promise<void> => {
     if (isReal) await api.reassignCard(cardId, member.name, member.unit);
@@ -1178,7 +1188,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     boards: visibleBoards, loading, error, isReal, linkToken, watchBoard,
     rateCard, addComment, deleteOwnComment, setCommentStatus, deleteComment, setTeacherStars,
     inviteCollaborator, changeCollaboratorRole, removeCollaborator, leaveBoard,
-    createBoard, duplicateBoard, updateMeta, addCard, setCardLayout, setStatus, setGrade, vote, deleteCard, moveCards, loadRosterNames, reassignCard, findCardByCode, findCardsByName, saveCardByCode, clearSubmissions, updateCardAttachments, removeStoredAttachments,
+    createBoard, duplicateBoard, updateMeta, addCard, setCardLayout, setStatus, setGrade, vote, deleteCard, moveCards, loadRosterNames, loadTeamStatus, reassignCard, findCardByCode, findCardsByName, saveCardByCode, clearSubmissions, updateCardAttachments, removeStoredAttachments,
     setRoster, setSettings, saveLesson, removeLesson, saveTask, removeTask, regenerateLink, changeJoinCode, setJoinEnabled, resolveJoinCode, setTaskProgress, loadTaskItems, loadItemSummaries, saveTaskItem, addTaskItems, setTaskItemDeleted, reorderTaskItems, addTaskNote, ensurePersonalBoard, prepareFiles, rollRecurring, loadAttendance, addAttendanceSession, removeAttendanceSession, setAttendancePresent, addResource, removeResource, updateResource, reorderResources, assignToBoards, setProgram, setArchived, setTrashed, deleteForever, setTemplate, loadActivity,
   };
 }

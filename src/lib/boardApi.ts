@@ -2,6 +2,7 @@
 // Mọi hàm ném lỗi tiếng Việt khi Supabase từ chối (thường do RLS); App hiển thị lỗi đó cho người dùng.
 
 import { fetchAll } from './fetchAll';
+import type { TeamStatusRow } from './teamStatus';
 import type {
   AttendanceSession, CardComment, ActivityEntry, Attachment, BoardAccess, BoardData, CollabRole, Collaborator, CardLayoutPatch, CardLocation, VennRegion, BoardMode, CardStatus, LinkMode, Lesson, PinnedResource, PollOption, ResourceKind, RosterMember, SubmissionCard, TaskItem, TaskKind,
 } from '../types/board';
@@ -521,6 +522,15 @@ export async function getCardsByName(token: string, name: string): Promise<Submi
   const { data, error } = await db().rpc('get_cards_by_name', { p_token: token, p_name: normalizeName(name) });
   if (error) fail('Không tìm được bài', error.message);
   return ((data ?? []) as CardDb[]).map((c) => toSubmission(c, c.board_id ?? '', []));
+}
+
+/** Ai đã nộp việc nào, lúc nào (không có nội dung, tệp). Máy chủ chưa chạy docs/cap-nhat-tien-do-to.sql thì trả null. */
+export async function getTeamStatus(token: string): Promise<TeamStatusRow[] | null> {
+  const { data, error } = await db().rpc('get_team_status', { p_token: token });
+  if (error) return null;
+  return ((data ?? []) as { id: string; task_id: string | null; author_name: string; group_name: string | null; status: TeamStatusRow['status']; late: boolean | null; created_at: string; resubmitted_at: string | null }[]).map((r) => ({
+    id: r.id, taskId: r.task_id ?? '', author: r.author_name, unit: r.group_name ?? '', status: r.status, late: !!r.late, submittedAt: r.created_at, resubmittedAt: r.resubmitted_at ?? undefined,
+  }));
 }
 
 export interface CardEdit { title: string; body: string; authorName: string; unit: string; attachments: Attachment[] }

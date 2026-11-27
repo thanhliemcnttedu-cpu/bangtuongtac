@@ -5,6 +5,7 @@ import { PROGRESS_LABEL, formatDateTime } from '../lib/format';
 import { downloadCsv } from '../lib/csv';
 import { buildReport, reportFilename } from '../lib/report';
 import { StatusBadge } from './StatusBadge';
+import { DownloadFiles } from './DownloadFiles';
 import type { RowActions } from './GridAndColumnsView';
 
 interface Props extends RowActions {
@@ -68,6 +69,7 @@ export function SubmissionTableView({ rows, board, canManage, onOpen, onSetStatu
             {r.card && (
               <div className="flex flex-wrap gap-1.5">
                 <button type="button" onClick={() => onOpen(r.card!.id)} className="btn-ghost btn-sm"><Eye className="h-3.5 w-3.5" aria-hidden /> Xem nhanh</button>
+                {canManage && <DownloadFiles card={r.card} />}
                 {canManage && r.card.status === 'pending' && <button type="button" onClick={() => onSetStatus(r.card!.id, 'approved')} className="btn btn-sm bg-emerald-600 text-white"><CheckCheck className="h-3.5 w-3.5" aria-hidden /> Duyệt</button>}
                 {canManage && <button type="button" aria-pressed={r.card.status === 'featured'} onClick={() => onSetStatus(r.card!.id, r.card!.status === 'featured' ? 'approved' : 'featured')} className={`btn btn-sm ${r.card.status === 'featured' ? 'bg-yellow-400 text-ink' : 'border-[1.5px] border-yellow-300 bg-white text-yellow-800'}`}><Star className={`h-3.5 w-3.5 ${r.card.status === 'featured' ? 'fill-current' : ''}`} aria-hidden /> Tiêu biểu</button>}
               </div>
@@ -114,6 +116,7 @@ export function SubmissionTableView({ rows, board, canManage, onOpen, onSetStatu
                         <Eye className="h-3.5 w-3.5" aria-hidden /> Xem nhanh
                       </button>
                     )}
+                    {canManage && r.card && <DownloadFiles card={r.card} />}
                     {canManage && r.card && (
                       <>
                         {r.card.status === 'pending' && (

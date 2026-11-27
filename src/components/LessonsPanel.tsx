@@ -379,7 +379,7 @@ export function LessonsPanel({ board, canManage, canSubmit, now, actions }: Prop
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ink-2">
           <span className="chip bg-brand-50 text-ink-2 ring-brand-100"><Users className="h-3.5 w-3.5" aria-hidden /> {targets.length === 0 ? w.everyone : `Giao cho: ${targets.join(', ')}`}</span>
           {t.dueAt && <span className="chip bg-brand-50 text-ink-2 ring-brand-100"><CalendarClock className="h-3.5 w-3.5" aria-hidden /> Hạn: {formatDateTime(t.dueAt)}</span>}
-          <span>{submissions(t.id)} bài nộp</span>
+          {(canManage || !team) && <span>{submissions(t.id)} bài nộp</span>}
         </div>
         <TimeBar task={t} now={now} />
         {canManage && <ProgressBlock board={board} task={t} />}

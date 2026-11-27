@@ -42,6 +42,7 @@ const SlidesView = lazy(() => import('./views/SlidesView').then((m) => ({ defaul
 const CanvasView = lazy(() => import('./views/CanvasView').then((m) => ({ default: m.CanvasView })));
 const MindMapView = lazy(() => import('./views/MindMapView').then((m) => ({ default: m.MindMapView })));
 const VennView = lazy(() => import('./views/VennView').then((m) => ({ default: m.VennView })));
+const TeamStatusPanel = lazy(() => import('./TeamStatusPanel').then((m) => ({ default: m.TeamStatusPanel })));
 const QuickPostModal = lazy(() => import('./QuickPostModal').then((m) => ({ default: m.QuickPostModal })));
 const TeamSubmitModal = lazy(() => import('./TeamSubmitModal').then((m) => ({ default: m.TeamSubmitModal })));
 const ShareBoardModal = lazy(() => import('./ShareBoardModal').then((m) => ({ default: m.ShareBoardModal })));
@@ -131,6 +132,9 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
   /** Mã sửa bài vừa cấp cho học sinh sau khi nộp. */
   /** Bài của chính em này (tra bằng mã đã lưu trên máy): máy chủ không đưa bài chờ duyệt / cần sửa vào danh sách công khai. */
   const [mine, setMine] = useState<SubmissionCard[]>([]);
+  const [myCodeOf, setMyCodeOf] = useState<Record<string, string>>({});
+  /** Bài mở xem riêng từ khung "Tiến độ nộp của tổ" (không phụ thuộc bộ lọc bên dưới). */
+  const [viewCard, setViewCard] = useState<SubmissionCard | null>(null);
   /** Tên trong danh sách lớp, để học sinh chọn khi nộp bài. */
   const [rosterNames, setRosterNames] = useState<{ name: string; unit: string; role?: string }[]>([]);
   const [editCodePick, setEditCodePick] = useState<string | undefined>();
@@ -171,8 +175,13 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
   useEffect(() => {
     if (role !== 'guest') { setMine([]); return; }
     let alive = true;
-    void Promise.all(myCodes(savedBoard.shareToken).map((c) => store.findCardByCode(savedBoard.id, c.code).catch(() => null)))
-      .then((list) => { if (alive) setMine(list.filter((c): c is SubmissionCard => !!c)); });
+    const codes = myCodes(savedBoard.shareToken);
+    void Promise.all(codes.map((c) => store.findCardByCode(savedBoard.id, c.code).catch(() => null)))
+      .then((list) => {
+        if (!alive) return;
+        setMine(list.filter((c): c is SubmissionCard => !!c));
+        setMyCodeOf(Object.fromEntries(list.flatMap((c, i) => (c ? [[c.id, codes[i].code]] : []))));
+      });
     return () => { alive = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, savedBoard.id, savedBoard.cards, codeShown]);
@@ -421,6 +430,26 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
           </div>
         )}
 
+        {canManage && board.settings.scope === 'team' && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-brand-50 px-4 py-2">
+            <p className="min-w-0 text-sm text-ink-2">
+              <b className="text-ink">Thành viên xem tệp của nhau: {board.settings.privateView ? 'đang tắt' : 'đang bật'}.</b>{' '}
+              {board.settings.privateView ? 'Họ vẫn thấy ai đã nộp, ai chưa và nộp lúc nào.' : 'Ai có link đều xem và tải được bài đã duyệt.'}
+            </p>
+            <button type="button" aria-pressed={!board.settings.privateView} className="btn-ghost btn-sm max-lg:min-h-[44px]"
+              onClick={() => { void run(() => store.updateMeta(board.id, { title: board.title, goals: board.goals, settings: { ...board.settings, privateView: !board.settings.privateView } }), board.settings.privateView ? 'Đã bật xem tệp của nhau.' : 'Đã tắt xem tệp của nhau.'); }}>
+              {board.settings.privateView ? 'Bật cho xem' : 'Tắt xem'}
+            </button>
+          </div>
+        )}
+
+        {!canView && board.settings.scope === 'team' && (
+          <Suspense fallback={null}>
+            <TeamStatusPanel board={visibleBoard} roster={rosterNames} mine={mineSet} load={() => store.loadTeamStatus(savedBoard.id)}
+              onView={setViewCard} onEdit={(cardId) => { setEditCodePick(myCodeOf[cardId]); setModal('edit-mine'); }} />
+          </Suspense>
+        )}
+
         <LessonsPanel board={visibleBoard} canManage={canManage} canSubmit={role !== 'viewonly' && role !== 'viewer' && board.linkMode === 'guest_post' && !closed} now={now}
           actions={{
             onAddLesson: () => { setEditLesson(undefined); setModal('lesson'); },
@@ -652,6 +681,10 @@ export function BoardWorkspace({ board: savedBoard, store, role, onSelectBoard, 
           onConfirm={async () => { await store.removeResource(savedBoard.id, toDelete.resource!.id); setModal(null); showToast('Đã gỡ tài liệu.'); }}>
           <p>“{toDelete.resource.title}” sẽ không còn hiện cho {board.mode === 'classroom' ? 'học sinh' : 'học viên'}.</p>
         </ConfirmModal>
+      )}
+      {viewCard && (
+        <SlidePresentationModal items={[{ member: { id: `view-${viewCard.id}`, name: viewCard.authorName, unit: viewCard.unit }, card: viewCard, progress: viewCard.status, inRoster: false }]}
+          startCardId={viewCard.id} board={visibleBoard} canManage={false} onSetStatus={setStatus} feedback={feedback} onClose={() => setViewCard(null)} />
       )}
       {slideStart && slideItems.length > 0 && (
         <SlidePresentationModal items={slideItems} startCardId={slideStart} board={visibleBoard} canManage={canManage} onSetStatus={setStatus} onVote={onVote} feedback={feedback} onClose={() => setSlideStart(null)} />

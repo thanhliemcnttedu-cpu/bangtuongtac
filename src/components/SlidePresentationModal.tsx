@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useSlideCursor } from '../hooks/useSlideCursor';
-import { CheckCheck, ChevronLeft, ChevronRight, Download, ExternalLink, Maximize, Star, X } from 'lucide-react';
+import { CheckCheck, ChevronLeft, ChevronRight, ExternalLink, Maximize, Star, X } from 'lucide-react';
 import type { BoardData, BoardRow, CardStatus } from '../types/board';
 import { formatDateTime } from '../lib/format';
 import { StatusBadge } from './StatusBadge';
@@ -10,7 +10,7 @@ import { FeedbackPanel } from './FeedbackPanel';
 import type { FeedbackActions } from './FeedbackPanel';
 import { safeHref } from '../lib/safeUrl';
 import { renderRich } from '../lib/richText';
-import { downloadAllAsZip, zippable } from '../lib/downloadAll';
+import { DownloadFiles } from './DownloadFiles';
 
 interface Props {
   /** Chỉ các dòng đã có bài, đúng thứ tự đang hiển thị. */
@@ -28,8 +28,6 @@ interface Props {
 /** Trình chiếu từng bài như slide: chữ lớn, ít thanh thừa; ← → để chuyển bài, Esc để thoát. */
 export function SlidePresentationModal({ items, startCardId, board, canManage, onSetStatus, onVote, feedback, onClose }: Props) {
   const { item, index: safeIndex, total, go, goTo } = useSlideCursor(items, board, startCardId);
-  const [zipMsg, setZipMsg] = useState('');
-  useEffect(() => setZipMsg(''), [item?.card.id]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -52,12 +50,6 @@ export function SlidePresentationModal({ items, startCardId, board, canManage, o
   const media = card.attachments.filter((a) => a.type !== 'link');
   const links = card.attachments.filter((a) => a.type === 'link');
   const hasMedia = media.length > 0;
-  const packable = card.attachments.filter(zippable);
-  const downloadAll = (): void => {
-    setZipMsg('Đang gói tệp…');
-    void downloadAllAsZip(card.attachments, `${card.authorName} - ${card.title}`)
-      .then((n) => setZipMsg(`Đã tải ${n} tệp.`), (e) => setZipMsg(e instanceof Error ? e.message : 'Không tải được.'));
-  };
 
   const fullscreen = (): void => {
     void document.documentElement.requestFullscreen?.().catch(() => undefined);
@@ -77,12 +69,7 @@ export function SlidePresentationModal({ items, startCardId, board, canManage, o
       <main key={card.id} className={`pop-in grid min-h-0 flex-1 gap-6 overflow-y-auto p-4 sm:p-8 lg:gap-10 ${hasMedia ? 'lg:grid-cols-[1.15fr_1fr]' : 'mx-auto w-full max-w-4xl'}`}>
         {hasMedia && (
           <div className="flex min-h-[220px] flex-col gap-4">
-            {packable.length > 1 && (
-              <div className="flex flex-wrap items-center gap-2">
-                <button type="button" onClick={downloadAll} className="btn-ghost btn-sm"><Download className="h-4 w-4" aria-hidden /> Tải tất cả {packable.length} tệp (.zip)</button>
-                {zipMsg && <span role="status" className="text-sm font-bold text-brand-700">{zipMsg}</span>}
-              </div>
-            )}
+            <div className="flex flex-wrap items-center gap-2"><DownloadFiles key={card.id} card={card} /></div>
             {media.map((a, i) => <AttachmentView key={`${a.name}-${i}`} attachment={a} />)}
           </div>
         )}
