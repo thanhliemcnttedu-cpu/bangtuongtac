@@ -89,7 +89,7 @@ export function DriveBackupModal({ board, real, onSaveGateway, onUpdateAttachmen
         {editing ? (
           <section aria-label="Kết nối cổng Google Drive" className="space-y-3">
             <p className="text-sm leading-relaxed text-ink-2">
-              Làm <b className="text-ink">một lần, khoảng 3 phút</b>. Sau đó học sinh nộp tệp (ảnh, PDF, PowerPoint…) sẽ vào thẳng <b className="text-ink">Drive của bạn</b>, trong thư mục <b className="text-ink">Bảng tương tác lớp học / {board.title}</b>. Không cần Google Cloud.
+              Làm <b className="text-ink">một lần, khoảng 3 phút</b>. Sau đó tệp học sinh nộp và ảnh, tài liệu bạn tải lên (ảnh, video, PDF, PowerPoint…) sẽ vào thẳng <b className="text-ink">Drive của bạn</b> (ai có liên kết thì xem được), trong thư mục <b className="text-ink">Bảng tương tác lớp học / {board.title}</b>. Không cần Google Cloud.
             </p>
 
             <div className="rounded-2xl border-2 border-brand-100 p-3">

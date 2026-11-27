@@ -239,8 +239,8 @@ export interface BoardStore {
  */
 async function prepareAttachments(
   input: { boardId: string; files: File[]; links: string[] }, real: boolean, allowArchive = false,
-  /** Có cổng Drive thì tệp đi thẳng vào Drive của giáo viên (lỗi cổng thì quay về kho Supabase để học sinh vẫn nộp được). */
-  drive?: { cfg: GatewayConfig; folder: string[]; author: string; /** all = mọi tệp vào Drive (bài nộp); big = chỉ tệp lớn hơn giới hạn của kho (tài liệu giáo viên) */ mode: 'all' | 'big' },
+  /** Có cổng Drive thì mọi tệp (bài nộp, tài liệu, minh chứng, hồ sơ) đi thẳng vào Drive của giáo viên; lỗi cổng thì quay về kho Supabase để việc đang làm không bị chặn. */
+  drive?: { cfg: GatewayConfig; folder: string[]; author: string },
 ): Promise<Attachment[]> {
   // Báo tiến độ theo số tệp đã tải xong để biểu mẫu hiển thị "Đang tải tệp 2/5".
   let done = 0;
@@ -251,7 +251,7 @@ async function prepareAttachments(
     const problem = validateFile(file, allowArchive, drive ? DRIVE_MAX_BYTES : undefined);
     if (problem) throw new Error(`${raw.name}: ${problem}`);
     const base = { type: attachmentTypeOf(file), name: file.name, mime: baseMime(file), size: file.size };
-    if (drive && (drive.mode === 'all' || file.size > MAX_FILE_BYTES)) {
+    if (drive) {
       try {
         const up = await gatewaySend(drive.cfg, drive.folder, `${safe(drive.author, 30)} - ${safe(file.name, 60)}`, file);
         return driveAttachment({ ...base }, up.id);
@@ -504,7 +504,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     }
     const gb = boards.find((b) => b.id === input.boardId);
     const cfg = gatewayOf(gb?.settings);
-    const attachments = await prepareAttachments(input, isReal, false, gb && cfg ? { cfg, folder: [ROOT_FOLDER, boardFolderName(gb), 'Bài nộp'], author: input.authorName, mode: 'all' } : undefined);
+    const attachments = await prepareAttachments(input, isReal, false, gb && cfg ? { cfg, folder: [ROOT_FOLDER, boardFolderName(gb), 'Bài nộp'], author: input.authorName } : undefined);
     // off: hiện ngay · manual: chờ giáo viên · auto: hệ thống đọc chữ, sạch thì duyệt luôn, nghi ngờ thì giữ lại.
     const status: CardStatus = asManager || moderation === 'off' ? 'approved'
       : moderation === 'manual' ? 'pending'
@@ -635,7 +635,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     const cfg = gatewayOf(b.settings);
     let attachments = input.keep;
     if (!del) {
-      const added = await prepareAttachments({ boardId, files: input.files, links: input.links }, isReal, false, cfg ? { cfg, folder: [ROOT_FOLDER, boardFolderName(b), 'Bài nộp'], author: input.authorName, mode: 'all' } : undefined);
+      const added = await prepareAttachments({ boardId, files: input.files, links: input.links }, isReal, false, cfg ? { cfg, folder: [ROOT_FOLDER, boardFolderName(b), 'Bài nộp'], author: input.authorName } : undefined);
       attachments = [...input.keep, ...added];
     }
     let status: CardStatus = old.status;
@@ -743,7 +743,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     // Tài liệu / liên kết của công việc: tệp mới được tải lên (Drive của giáo viên nếu có cổng, không thì kho hệ thống).
     const tcfg = gatewayOf(board.settings);
     const added = (input.files?.length ?? 0) + (input.links?.length ?? 0) > 0
-      ? await prepareAttachments({ boardId, files: input.files ?? [], links: input.links ?? [] }, isReal, true, tcfg ? { cfg: tcfg, folder: [ROOT_FOLDER, boardFolderName(board), 'Công việc'], author: 'Tài liệu', mode: 'big' as const } : undefined)
+      ? await prepareAttachments({ boardId, files: input.files ?? [], links: input.links ?? [] }, isReal, true, tcfg ? { cfg: tcfg, folder: [ROOT_FOLDER, boardFolderName(board), 'Công việc'], author: 'Tài liệu' } : undefined)
       : [];
     const clean: TaskInput = { ...input, files: undefined, links: undefined, attachments: [...(input.attachments ?? []), ...added], label: input.label.trim(), instructions: input.instructions.trim(), targetUnits: [...new Set(input.targetUnits.map((u) => u.trim()).filter(Boolean))] };
     const view = (id: string): TaskItem => ({ id, label: clean.label, lessonId: clean.lessonId ?? undefined, kind: clean.kind, instructions: clean.instructions, assignedAt: clean.assignedAt, dueAt: clean.dueAt, allowLate: clean.allowLate, targetUnits: clean.targetUnits, attachments: clean.attachments, needsEvidence: !!clean.needsEvidence, ackOnly: !!clean.ackOnly, progress: clean.progress ?? 'todo', priority: clean.priority ?? 'normal', assigneeEmails: (clean.assigneeEmails ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean), repeat: clean.repeat ?? 'none', seriesId: clean.seriesId, category: clean.category, startAt: clean.startAt ?? null, reportDueAt: clean.reportDueAt ?? null, completedAt: clean.completedAt ?? null, repeatUntil: clean.repeatUntil ?? null });
@@ -863,7 +863,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     if (!board) throw new Error('Không tìm thấy bảng.');
     const gw = gatewayOf(board.settings);
     const added = input.files.length + input.links.length > 0
-      ? (await prepareAttachments({ boardId, files: input.files, links: input.links }, isReal, true, gw ? { cfg: gw, folder: [ROOT_FOLDER, boardFolderName(board), 'Minh chứng'], author: 'Minh chứng', mode: 'big' as const } : undefined))
+      ? (await prepareAttachments({ boardId, files: input.files, links: input.links }, isReal, true, gw ? { cfg: gw, folder: [ROOT_FOLDER, boardFolderName(board), 'Minh chứng'], author: 'Minh chứng' } : undefined))
         .map((a) => (input.group ? { ...a, group: input.group } : a))
       : [];
     const now = new Date().toISOString();
@@ -931,7 +931,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     if (files.length + links.length === 0) return [];
     const board = boardsRef.current.find((b) => b.id === boardId);
     const gw = board ? gatewayOf(board.settings) : null;
-    return prepareAttachments({ boardId, files, links }, isReal, true, gw && board ? { cfg: gw, folder: [ROOT_FOLDER, boardFolderName(board), folder], author: folder, mode: 'big' as const } : undefined);
+    return prepareAttachments({ boardId, files, links }, isReal, true, gw && board ? { cfg: gw, folder: [ROOT_FOLDER, boardFolderName(board), folder], author: folder } : undefined);
   }, [isReal]);
 
   const ensurePersonalBoard = useCallback(async (): Promise<BoardData> => {
@@ -957,7 +957,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     if (input.files.length + input.links.length === 0) throw new Error('Hãy tải lên tệp hoặc dán ít nhất một liên kết.');
     const rb = boards.find((b) => b.id === boardId);
     const rcfg = gatewayOf(rb?.settings);
-    const drive = rb && rcfg ? { cfg: rcfg, folder: [ROOT_FOLDER, boardFolderName(rb), 'Tài liệu'], author: 'Giáo viên', mode: 'big' as const } : undefined;
+    const drive = rb && rcfg ? { cfg: rcfg, folder: [ROOT_FOLDER, boardFolderName(rb), 'Tài liệu'], author: 'Giáo viên' } : undefined;
     const prepared = await prepareAttachments({ boardId, files: input.files, links: input.links }, isReal, true, drive);
     const attachments = withLabels(prepared, input.fileLabels, input.linkLabels, input.files.length);
     const kind: ResourceKind = input.kind === 'auto' ? inferKind(attachments) : input.kind;
@@ -977,7 +977,7 @@ export function useBoardStore(userId: string | null, actor: string): BoardStore 
     if (kept.length + input.files.length + input.links.length === 0) throw new Error('Tài liệu cần ít nhất một tệp hoặc một liên kết.');
     const ub = boards.find((b) => b.id === boardId);
     const ucfg = gatewayOf(ub?.settings);
-    const udrive = ub && ucfg ? { cfg: ucfg, folder: [ROOT_FOLDER, boardFolderName(ub), 'Tài liệu'], author: 'Giáo viên', mode: 'big' as const } : undefined;
+    const udrive = ub && ucfg ? { cfg: ucfg, folder: [ROOT_FOLDER, boardFolderName(ub), 'Tài liệu'], author: 'Giáo viên' } : undefined;
     const added = withLabels(await prepareAttachments({ boardId, files: input.files, links: input.links }, isReal, true, udrive), input.fileLabels, input.linkLabels, input.files.length);
     const attachments = [...kept, ...added];
     const kind: ResourceKind = input.kind === 'auto' ? inferKind(attachments) : input.kind;
